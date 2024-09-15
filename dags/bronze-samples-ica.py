@@ -18,7 +18,7 @@ S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
-    'start_date': datetime(2024, 7, 15),
+    'start_date': datetime(2024, 9, 14),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
