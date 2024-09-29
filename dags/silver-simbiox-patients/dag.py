@@ -17,7 +17,7 @@ bronze_prefix="simbiox/tbl_data_patients/"
 default_args = {
     'owner': 'data',
     'depends_on_past': False,
-    'start_date': datetime(2024, 9, 24),
+    'start_date': datetime(2024, 9, 30),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,

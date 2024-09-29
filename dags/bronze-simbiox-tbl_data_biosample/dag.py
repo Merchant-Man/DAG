@@ -14,7 +14,7 @@ SIMBIOX_APIKEY=Variable.get("SIMBIOX_APIKEY")
 default_args = {
     'owner': 'bgsi_data',
     'depends_on_past': False,
-    'start_date': datetime(2024, 9, 24),
+    'start_date': datetime(2024, 9, 30),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
