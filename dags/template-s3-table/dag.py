@@ -4,9 +4,9 @@ import io
 import ast
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.models import Variable
 
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 S3_DWH_SILVER=Variable.get("S3_DWH_SILVER")

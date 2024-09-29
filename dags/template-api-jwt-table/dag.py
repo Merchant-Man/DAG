@@ -4,6 +4,7 @@ from io import StringIO
 import json
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
