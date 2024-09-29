@@ -3,12 +3,17 @@ import pandas as pd
 from io import StringIO
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
+ICA_APIKEY=Variable.get("ICA_APIKEY")
+ICA_PROJECT=Variable.get("ICA_PROJECT")
+
 default_args = {
-    'owner': 'bgsi_data',
+    'owner': 'bgsi-data',
     'depends_on_past': False,
     'start_date': datetime(2024, 9, 24),
     'email_on_failure': False,
@@ -18,17 +23,18 @@ default_args = {
 }
 
 dag = DAG(
-    'bronze-simbiox-biosample',
+    'bronze-ica-analysis',
     default_args=default_args,
-    description='ETL pipeline using an API',
-    schedule_interval=timedelta(days=10),
+    description='ETL pipeline using a public API',
+    schedule_interval=timedelta(days=1),
 )
+
 
 def extract_transform_data(**kwargs):
     api_response = kwargs['ti'].xcom_pull(task_ids='fetch_data_from_api')
-    
-    if 'data' in api_response:
-        data_value = api_response['data']
+
+    if 'items' in api_response:
+        data_value = api_response['items']
     else:
         raise ValueError("Response does not contain 'data' key.")
     
@@ -48,22 +54,27 @@ def load_data(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
-    s3_key = f'airflow/samples/biosample-{data_interval_start.isoformat()}.csv'
+    s3_key = f'ica/analysis/{data_interval_start.isoformat()}.csv'
     
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
     s3.load_string(
         string_data=transformed_data,
         key=s3_key,
-        bucket_name='bgsi-data-dev',  # replace with your S3 bucket name
+        bucket_name=S3_DWH_BRONZE,  # replace with your S3 bucket name
         replace=True
     )
+
 
 fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
-    http_conn_id='simbiox-prod',
-    endpoint='index.php/api/Table/get/tbl_data_biosample',
+    http_conn_id='ica',
+    endpoint=f'/ica/rest/api/projects/{ICA_PROJECT}/analyses?pageOffset=0&pageSize=500&sort=endDate%20desc',
+    headers={
+        "accept": "application/vnd.illumina.v3+json",
+        "X-API-Key": ICA_APIKEY
+    },
     response_filter=lambda response: response.json(),
     dag=dag,
 )

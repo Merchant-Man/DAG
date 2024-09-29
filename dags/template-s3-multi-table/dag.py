@@ -23,7 +23,7 @@ default_args = {
 }
 
 dag = DAG(
-    'silver-ica-analysis',
+    'template_s3_multi',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3',
     schedule_interval=timedelta(days=1),
@@ -50,20 +50,40 @@ def fetch_data(**kwargs):
     # Merge all DataFrames into one
     merged_df = pd.concat(all_data_frames, ignore_index=True)
 
+    # Fetch df2, df3, df4 CSVs from S3
+    df2 = pd.read_csv(io.BytesIO(s3.get_key(key=df2_key, bucket_name=S3_DWH_BRONZE).get()['Body'].read()))
+    df3 = pd.read_csv(io.BytesIO(s3.get_key(key=df3_key, bucket_name=S3_DWH_BRONZE).get()['Body'].read()))
+    df4 = pd.read_csv(io.BytesIO(s3.get_key(key=df4_key, bucket_name=S3_DWH_BRONZE).get()['Body'].read()))
+    
     # Convert merged DataFrame to CSV format
     csv_buffer = io.StringIO()
     merged_df.to_csv(csv_buffer, index=False)
 
-    return csv_buffer.getvalue()
+    # Return the data and additional DataFrames for merging
+    return {
+        'merged_data': csv_buffer.getvalue(),
+        'df2': df2.to_csv(index=False),
+        'df3': df3.to_csv(index=False),
+        'df4': df4.to_csv(index=False),
+    }
 
-def transform_data(merged_data: str, **kwargs):
-    # Read the CSV data into a DataFrame
-    df = pd.read_csv(io.StringIO(merged_data))
+def transform_data(merged_data: dict, **kwargs):
+    # Extract the merged data and additional DataFrames from kwargs
+    merged_csv = merged_data['merged_data']
+    
+    # Read all CSV data into DataFrames
+    df = pd.read_csv(io.StringIO(merged_csv))
+    df2 = pd.read_csv(io.StringIO(merged_data['df2']))
+    # df3 = pd.read_csv(io.StringIO(merged_data['df3']))
+    # df4 = pd.read_csv(io.StringIO(merged_data['df4']))
 
-    # Remove duplicates
+    # Remove duplicates from the main DataFrame
     df = df.drop_duplicates()
 
-    # Clean up
+    # Merge with df2, df3, and df4
+    df = df.merge(df2, on='common_column', how='inner')
+    # df = df.merge(df3, on='common_column', how='inner')
+    # df = df.merge(df4, on='common_column', how='inner')
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
@@ -126,3 +146,4 @@ upload_to_s3_task = PythonOperator(
 
 # Set task dependencies
 fetch_data_task >> transform_data_task >> upload_to_s3_task
+

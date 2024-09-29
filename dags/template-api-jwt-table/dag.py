@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import pandas as pd
 from io import StringIO
+import json
 
 from airflow import DAG
 from airflow.operators.http_operator import SimpleHttpOperator
@@ -8,21 +9,22 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 default_args = {
-    'owner': 'bgsi_data',
+    'owner': 'data',
     'depends_on_past': False,
     'start_date': datetime(2024, 9, 24),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=10),
+    'retry_delay': timedelta(minutes=1),
 }
 
 dag = DAG(
-    'bronze-simbiox-patients',
+    'template_http_with_jwt',
     default_args=default_args,
-    description='ETL pipeline using an API',
+    description='ETL pipeline using a public API with JWT authentication',
     schedule_interval=timedelta(days=1),
 )
+
 
 def extract_transform_data(**kwargs):
     api_response = kwargs['ti'].xcom_pull(task_ids='fetch_data_from_api')
@@ -48,7 +50,7 @@ def load_data(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
-    s3_key = f'airflow/samples/patients-{data_interval_start.isoformat()}.csv'
+    s3_key = f'airflow/samples/posts-{data_interval_start.isoformat()}.csv'
     
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
@@ -59,12 +61,32 @@ def load_data(**kwargs):
         replace=True
     )
 
+
+# Task to retrieve JWT token
+fetch_jwt_token = SimpleHttpOperator(
+    task_id='fetch_jwt_token',
+    method='POST',
+    http_conn_id='your_auth_connection',  # Replace with your HTTP connection ID
+    endpoint='auth/login',  # Adjust endpoint based on your auth API
+    headers={"Content-Type": "application/json"},
+    data=json.dumps({
+        "username": "your_username",  # Replace with actual username
+        "password": "your_password"   # Replace with actual password
+    }),
+    response_filter=lambda response: response.json().get("token"),
+    log_response=True,
+    dag=dag,
+)
+
+# Task to fetch data from API using the JWT token
 fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
-    http_conn_id='simbiox-prod',
-    endpoint='index.php/api/Table/get/tbl_data_patients',
+    http_conn_id='jsonplaceholder',
+    endpoint='posts',
+    headers={"Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='fetch_jwt_token') }}"},
     response_filter=lambda response: response.json(),
+    log_response=True,
     dag=dag,
 )
 
@@ -82,4 +104,4 @@ upload_to_s3 = PythonOperator(
     dag=dag,
 )
 
-fetch_data >> transform_data >> upload_to_s3
+fetch_jwt_token >> fetch_data >> transform_data >> upload_to_s3

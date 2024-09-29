@@ -64,6 +64,15 @@ def transform_data(merged_data: str, **kwargs):
     df = df.drop_duplicates()
 
     # Clean up
+    df['id_repository'] = df['userReference'].str.split('_').str[0]
+    df['id_batch']      = df['tags'].apply(lambda x: ast.literal_eval(x)['userTags'][4] if len(ast.literal_eval(x)['userTags']) > 4 else None)
+    df['date_start']    = df['startDate']
+    df['date_end']      = df['endDate']
+    df['pipeline_name'] = df['pipeline'].apply(lambda x: ast.literal_eval(x)['code'])
+    df['pipeline_type'] = 'secondary'
+    df['run_name']      = df['userReference']
+    df['run_status']    = df['status']
+    df                  = df[['id_repository', 'id_batch', 'date_start', 'date_end', 'pipeline_name', 'pipeline_type', 'run_name', 'run_status']].copy()
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
@@ -71,13 +80,7 @@ def transform_data(merged_data: str, **kwargs):
 
     return csv_buffer.getvalue()
 
-def upload_to_s3(**kwargs):
-    # Get merged data from previous task
-    merged_data = kwargs['ti'].xcom_pull(task_ids='fetch_data')
-
-    # Clean and remap the DataFrame
-    cleaned_data = transform_data(merged_data)
-
+def upload_to_s3(cleaned_data, **kwargs):
     # Use data_interval_start for timestamp
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
     s3_key = f'{prefix}{data_interval_start.isoformat()}.csv'
@@ -121,6 +124,7 @@ upload_to_s3_task = PythonOperator(
     task_id='upload_to_s3',
     python_callable=upload_to_s3,
     provide_context=True,  # To pass kwargs
+    op_kwargs={'cleaned_data': '{{ task_instance.xcom_pull(task_ids="transform_data") }}'},
     dag=dag,
 )
 

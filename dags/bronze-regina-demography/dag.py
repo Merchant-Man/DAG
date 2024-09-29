@@ -1,11 +1,17 @@
 from datetime import datetime, timedelta
 import pandas as pd
 from io import StringIO
+import json
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+REGINA_USERNAME=Variable.get("REGINA_USERNAME")
+REGINA_PASSWORD=Variable.get("REGINA_PASSWORD")
+S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 
 default_args = {
     'owner': 'bgsi_data',
@@ -48,22 +54,39 @@ def load_data(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
-    s3_key = f'airflow/samples/demography-{data_interval_start.isoformat()}.csv'
+    s3_key = f'regina/demography/{data_interval_start.isoformat()}.csv'
     
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
     s3.load_string(
         string_data=transformed_data,
         key=s3_key,
-        bucket_name='bgsi-data-dev',  # replace with your S3 bucket name
+        bucket_name=S3_DWH_BRONZE,  # replace with your S3 bucket name
         replace=True
     )
+
+# Task to retrieve JWT token
+fetch_jwt_token = SimpleHttpOperator(
+    task_id='fetch_jwt_token',
+    method='POST',
+    http_conn_id='regina-prod',  # Replace with your HTTP connection ID
+    endpoint='api/v1/user/login',  # Adjust endpoint based on your auth API
+    headers={"Content-Type": "application/json"},
+    data=json.dumps({
+        "username": REGINA_USERNAME,  # Replace with actual username
+        "password": REGINA_PASSWORD   # Replace with actual password
+    }),
+    response_filter=lambda response: response.json().get("data", {}).get("access_token"),
+    log_response=True,
+    dag=dag,
+)
 
 fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
     http_conn_id='regina-prod',
     endpoint='api/v2/registry/demography/list?limit=10000',
+    headers={"Authorization": "Bearer {{ task_instance.xcom_pull(task_ids='fetch_jwt_token') }}"},
     response_filter=lambda response: response.json(),
     dag=dag,
 )
@@ -82,4 +105,4 @@ upload_to_s3 = PythonOperator(
     dag=dag,
 )
 
-fetch_data >> transform_data >> upload_to_s3
+fetch_jwt_token >> fetch_data >> transform_data >> upload_to_s3

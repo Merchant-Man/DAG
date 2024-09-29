@@ -10,7 +10,7 @@ from airflow.models import Variable
 
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 S3_DWH_SILVER=Variable.get("S3_DWH_SILVER")
-prefix="ica/analysis/"
+prefix="illumina/qc/"
 
 default_args = {
     'owner': 'data',
@@ -23,7 +23,7 @@ default_args = {
 }
 
 dag = DAG(
-    'silver-ica-analysis',
+    'silver-illumina-qc',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3',
     schedule_interval=timedelta(days=1),
@@ -41,10 +41,10 @@ def fetch_data(**kwargs):
     all_data_frames = []
 
     for file_key in files:
-        if file_key.endswith('.csv'):
+        if file_key.endswith('.txt'):
             # Read each CSV file into a DataFrame
             csv_obj = s3.get_key(key=file_key, bucket_name=S3_DWH_BRONZE)
-            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()), sep='\t')
             all_data_frames.append(df)
 
     # Merge all DataFrames into one
@@ -63,21 +63,39 @@ def transform_data(merged_data: str, **kwargs):
     # Remove duplicates
     df = df.drop_duplicates()
 
-    # Clean up
-
+    cols = {
+        'Sample': 'id_repository',
+        'dragen_mapping-Number_of_duplicate_marked_reads_pct': 'percent_dups',
+        # 'dragen_mapping-Q30_bases_pct': 'percent_gc', 
+        'dragen_mapping-Total_input_reads': 'total_seqs',
+        # 'dragen_mapping-Reads_with_mate_sequenced_pct': 'm_seqs',
+        # 'dragen_mapping-Estimated_sample_contamination': 'error_rate',
+        'dragen_mapping-Secondary_alignments_pct': 'non_primary',
+        'dragen_mapping-Mapped_reads_pct': 'percent_mapped',
+        'dragen_mapping-Properly_paired_reads_pct': 'percent_proper_pairs',
+        'dragen_mapping-Total_alignments': 'reads_mapped',
+        'dragen_coverage-wgs_pct_of_genome_with_coverage_50x_inf': 'at_least_50x',
+        # 'dragen_coverage-wgs_pct_of_genome_with_coverage_30x_inf': 'at_least_30x',
+        'dragen_coverage-wgs_pct_of_genome_with_coverage_20x_inf': 'at_least_20x',
+        'dragen_coverage-wgs_pct_of_genome_with_coverage_10x_inf': 'at_least_10x',
+        'dragen_coverage-wgs_median_autosomal_coverage_over_genome': 'median_coverage',
+        'dragen_variant_calling-Total': 'vars',
+        'dragen_variant_calling-SNPs_pct': 'snp',
+        'dragen_variant_calling-Indels_pct': 'indel',
+        'dragen_variant_calling-Ti_Tv_ratio': 'ts_tv',
+        # 'dragen_coverage-wgs_average_alignment_coverage_over_genome': 'depth',
+        'dragen_ploidy_estimation-Ploidy_estimation': 'ploidy_estimation'
+    }
+    df.rename(columns=cols, inplace=True)
+    df = df[list(cols.values())]
+        
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
     df.to_csv(csv_buffer, index=False)
 
     return csv_buffer.getvalue()
 
-def upload_to_s3(**kwargs):
-    # Get merged data from previous task
-    merged_data = kwargs['ti'].xcom_pull(task_ids='fetch_data')
-
-    # Clean and remap the DataFrame
-    cleaned_data = transform_data(merged_data)
-
+def upload_to_s3(cleaned_data, **kwargs):
     # Use data_interval_start for timestamp
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
     s3_key = f'{prefix}{data_interval_start.isoformat()}.csv'
@@ -121,6 +139,7 @@ upload_to_s3_task = PythonOperator(
     task_id='upload_to_s3',
     python_callable=upload_to_s3,
     provide_context=True,  # To pass kwargs
+    op_kwargs={'cleaned_data': '{{ task_instance.xcom_pull(task_ids="transform_data") }}'},
     dag=dag,
 )
 

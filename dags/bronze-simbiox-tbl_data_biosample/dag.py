@@ -3,14 +3,16 @@ import pandas as pd
 from io import StringIO
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
+SIMBIOX_APIKEY=Variable.get("SIMBIOX_APIKEY")
 
 default_args = {
-    'owner': 'data',
+    'owner': 'bgsi_data',
     'depends_on_past': False,
     'start_date': datetime(2024, 9, 24),
     'email_on_failure': False,
@@ -20,16 +22,15 @@ default_args = {
 }
 
 dag = DAG(
-    'template_http',
+    'bronze-simbiox-tbl_data_biosample',
     default_args=default_args,
-    description='ETL pipeline using a public API',
-    schedule_interval=timedelta(days=1),
+    description='ETL pipeline using an API',
+    schedule_interval=timedelta(days=10),
 )
-
 
 def extract_transform_data(**kwargs):
     api_response = kwargs['ti'].xcom_pull(task_ids='fetch_data_from_api')
-
+    
     if 'data' in api_response:
         data_value = api_response['data']
     else:
@@ -51,7 +52,7 @@ def load_data(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
-    s3_key = f'airflow/samples/posts-{data_interval_start.isoformat()}.csv'
+    s3_key = f'simbiox/tbl_data_biosample/{data_interval_start.isoformat()}.csv'
     
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
@@ -62,12 +63,12 @@ def load_data(**kwargs):
         replace=True
     )
 
-
 fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
-    http_conn_id='jsonplaceholder',
-    endpoint='posts',
+    http_conn_id='simbiox-prod',
+    endpoint='index.php/api/Table/get/tbl_data_biosample',
+    headers={"api-key": SIMBIOX_APIKEY},
     response_filter=lambda response: response.json(),
     dag=dag,
 )

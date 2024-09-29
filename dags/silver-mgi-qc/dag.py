@@ -10,7 +10,7 @@ from airflow.models import Variable
 
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 S3_DWH_SILVER=Variable.get("S3_DWH_SILVER")
-prefix="ica/analysis/"
+prefix="mgi/qc/"
 
 default_args = {
     'owner': 'data',
@@ -23,7 +23,7 @@ default_args = {
 }
 
 dag = DAG(
-    'silver-ica-analysis',
+    'silver-mgi-qc',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3',
     schedule_interval=timedelta(days=1),
@@ -41,10 +41,10 @@ def fetch_data(**kwargs):
     all_data_frames = []
 
     for file_key in files:
-        if file_key.endswith('.csv'):
+        if file_key.endswith('.txt'):
             # Read each CSV file into a DataFrame
             csv_obj = s3.get_key(key=file_key, bucket_name=S3_DWH_BRONZE)
-            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()), sep='\t')
             all_data_frames.append(df)
 
     # Merge all DataFrames into one
@@ -63,21 +63,37 @@ def transform_data(merged_data: str, **kwargs):
     # Remove duplicates
     df = df.drop_duplicates()
 
-    # Clean up
+    cols = {
+        'Sample': 'id_repository',
+        'fastqc_raw-percent_duplicates': 'percent_dups',
+        'fastqc_raw-percent_gc': 'percent_gc',
+        'fastqc_raw-total_sequences': 'total_seqs',
+        'samtools_flagstat_stats-non_primary_alignments': 'non_primary',
+        'samtools_flagstat_stats-reads_mapped_percent': 'percent_mapped',
+        'samtools_flagstat_stats-reads_properly_paired_percent': 'percent_proper_pairs',
+        'samtools_flagstat_stats-reads_mapped': 'reads_mapped',
+        'mosdepth-50_x_pc': 'at_least_50x',
+        'mosdepth-20_x_pc': 'at_least_20x',
+        'mosdepth-10_x_pc': 'at_least_10x',
+        'mosdepth-median_coverage': 'median_coverage',
+        'bcftools_stats-number_of_records': 'vars',
+        'bcftools_stats-number_of_SNPs': 'snp',
+        'bcftools_stats-number_of_indels': 'indel',
+        'bcftools_stats-tstv': 'ts_tv',
+        'peddy-predicted_sex_sex_check': 'ploidy_estimation'
+    }
 
+    df.rename(columns=cols, inplace=True)
+    df = df[list(cols.values())]
+    df = df[~df['id_repository'].str.contains(r' R[12]$', regex=True)]
+        
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
     df.to_csv(csv_buffer, index=False)
 
     return csv_buffer.getvalue()
 
-def upload_to_s3(**kwargs):
-    # Get merged data from previous task
-    merged_data = kwargs['ti'].xcom_pull(task_ids='fetch_data')
-
-    # Clean and remap the DataFrame
-    cleaned_data = transform_data(merged_data)
-
+def upload_to_s3(cleaned_data, **kwargs):
     # Use data_interval_start for timestamp
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
     s3_key = f'{prefix}{data_interval_start.isoformat()}.csv'
@@ -121,6 +137,7 @@ upload_to_s3_task = PythonOperator(
     task_id='upload_to_s3',
     python_callable=upload_to_s3,
     provide_context=True,  # To pass kwargs
+    op_kwargs={'cleaned_data': '{{ task_instance.xcom_pull(task_ids="transform_data") }}'},
     dag=dag,
 )
 
