@@ -27,7 +27,7 @@ dag = DAG(
     'bronze-regina-demography',
     default_args=default_args,
     description='ETL pipeline using an API',
-    schedule_interval=timedelta(days=30),
+    schedule_interval=timedelta(days=5),
 )
 
 def extract_transform_data(**kwargs):

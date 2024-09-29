@@ -27,7 +27,7 @@ dag = DAG(
     'silver-phenovar-participants',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=timedelta(days=5),
 )
 
 def fetch_data(**kwargs):

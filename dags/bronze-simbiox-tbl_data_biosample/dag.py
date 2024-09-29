@@ -25,7 +25,7 @@ dag = DAG(
     'bronze-simbiox-tbl_data_biosample',
     default_args=default_args,
     description='ETL pipeline using an API',
-    schedule_interval=timedelta(days=10),
+    schedule_interval=timedelta(days=5),
 )
 
 def extract_transform_data(**kwargs):

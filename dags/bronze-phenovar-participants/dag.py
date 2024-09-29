@@ -27,7 +27,7 @@ dag = DAG(
     'bronze-phenovar-participants',
     default_args=default_args,
     description='ETL pipeline using an API',
-    schedule_interval=timedelta(days=10),
+    schedule_interval=timedelta(days=5),
 )
 
 def extract_transform_data(**kwargs):
@@ -92,7 +92,7 @@ fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
     http_conn_id='phenovar-prod',
-    endpoint='api/v1/participants?perpage=1404',
+    endpoint='api/v1/participants?perpage=10000',
     headers={
         "Authorization": "{{ task_instance.xcom_pull(task_ids='fetch_jwt_token')['Authorization'] }}",
         "Cookie": "{{ task_instance.xcom_pull(task_ids='fetch_jwt_token')['Cookie'] }}"

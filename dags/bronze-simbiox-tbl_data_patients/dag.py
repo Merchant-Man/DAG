@@ -18,14 +18,14 @@ default_args = {
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=10),
+    'retry_delay': timedelta(minutes=1),
 }
 
 dag = DAG(
     'bronze-simbiox-tbl_data_patients',
     default_args=default_args,
     description='ETL pipeline using an API',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=timedelta(days=5),
 )
 
 def extract_transform_data(**kwargs):

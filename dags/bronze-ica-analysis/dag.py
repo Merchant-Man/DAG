@@ -70,7 +70,7 @@ fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
     http_conn_id='ica',
-    endpoint=f'/ica/rest/api/projects/{ICA_PROJECT}/analyses?pageOffset=0&pageSize=500&sort=endDate%20desc',
+    endpoint=f'/ica/rest/api/projects/{ICA_PROJECT}/analyses?pageOffset=0&pageSize=10000&sort=endDate%20desc',
     headers={
         "accept": "application/vnd.illumina.v3+json",
         "X-API-Key": ICA_APIKEY
