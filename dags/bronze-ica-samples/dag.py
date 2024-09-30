@@ -11,6 +11,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 ICA_APIKEY=Variable.get("ICA_APIKEY")
 ICA_REGION=Variable.get("ICA_REGION")
+ICA_OFFSET=Variable.get("ICA_OFFSET")
 
 default_args = {
     'owner': 'bgsi-data',
@@ -70,7 +71,7 @@ fetch_data = SimpleHttpOperator(
     task_id='fetch_data_from_api',
     method='GET',
     http_conn_id='ica',
-    endpoint=f'/ica/rest/api/samples?region={ICA_REGION}&pageOffset=0&pageSize=10000&sort=timeCreated%20desc',
+    endpoint=f'/ica/rest/api/samples?region={ICA_REGION}&pageOffset={ICA_OFFSET}&pageSize=1000&sort=timeCreated%20desc',
     headers={
         "accept": "application/vnd.illumina.v3+json",
         "X-API-Key": ICA_APIKEY
