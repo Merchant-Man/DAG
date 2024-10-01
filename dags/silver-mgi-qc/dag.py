@@ -44,7 +44,7 @@ def fetch_data(**kwargs):
         if file_key.endswith('.csv'):
             # Read each CSV file into a DataFrame
             csv_obj = s3.get_key(key=file_key, bucket_name=S3_DWH_BRONZE)
-            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()), sep='\t')
+            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
             all_data_frames.append(df)
 
     # Merge all DataFrames into one
