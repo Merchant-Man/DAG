@@ -41,7 +41,7 @@ def fetch_data(**kwargs):
     all_data_frames = []
 
     for file_key in files:
-        if file_key.endswith('.txt'):
+        if file_key.endswith('.csv'):
             # Read each CSV file into a DataFrame
             csv_obj = s3.get_key(key=file_key, bucket_name=S3_DWH_BRONZE)
             df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()), sep='\t')
