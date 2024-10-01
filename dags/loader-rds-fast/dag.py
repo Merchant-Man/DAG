@@ -15,6 +15,7 @@ S3_DWH_SILVER = Variable.get("S3_DWH_SILVER")
 keys = [
     'ica/analysis/latest.csv',
     'illumina/qc/latest.csv',
+    'mgi/analysis/latest.csv',
     'mgi/qc/latest.csv'
 ]
 
