@@ -15,7 +15,7 @@ S3_DWH_SILVER = Variable.get("S3_DWH_SILVER")
 keys = [
     'phenovar/participants/latest.csv',
     'regina/demography/latest.csv',
-    'simbiox/biosample/latest.csv',
+    'simbiox/biosamples/latest.csv',
     'simbiox/patients/latest.csv'
 ]
 
