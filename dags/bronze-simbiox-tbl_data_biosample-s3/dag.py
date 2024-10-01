@@ -39,7 +39,7 @@ def etl_to_s3(**kwargs):
     api_response = response.json()
     
     # TRANSFORM
-    df = pd.DataFrame(api_response)
+    df = pd.DataFrame(api_response['data'])
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
     
