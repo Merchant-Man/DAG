@@ -66,7 +66,7 @@ def transform_data(merged_data: str, **kwargs):
 
     df['id_subject'] = df['id']
     df['sex'] = df['gender'].replace({'female': 'FEMALE', 'male': 'MALE'})
-    df = df[['id_subject', 'nik', 'sex']]
+    df = df[['id_subject', 'sex']]
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
