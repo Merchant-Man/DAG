@@ -67,6 +67,7 @@ def transform_data(merged_data: str, **kwargs):
     df['id_repository']  = df['name']
     df['date_create']    = df['timeCreated']
     df['date_modify']    = df['timeModified']
+    df                   = df[['id_repository', 'date_create', 'date_modify']]
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
