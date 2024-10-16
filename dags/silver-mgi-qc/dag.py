@@ -76,6 +76,7 @@ def transform_data(merged_data: str, **kwargs):
         'mosdepth-20_x_pc': 'at_least_20x',
         'mosdepth-10_x_pc': 'at_least_10x',
         'mosdepth-median_coverage': 'median_coverage',
+        'mosdepth-mean_coverage': 'depth',
         'bcftools_stats-number_of_records': 'vars',
         'bcftools_stats-number_of_SNPs': 'snp',
         'bcftools_stats-number_of_indels': 'indel',
