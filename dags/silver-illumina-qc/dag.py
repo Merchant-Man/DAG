@@ -66,10 +66,10 @@ def transform_data(merged_data: str, **kwargs):
     cols = {
         'Sample': 'id_repository',
         'dragen_mapping-Number_of_duplicate_marked_reads_pct': 'percent_dups',
-        # 'dragen_mapping-Q30_bases_pct': 'percent_gc', 
+        'dragen_mapping-Q30_bases_pct': 'percent_q30_bases', 
         'dragen_mapping-Total_input_reads': 'total_seqs',
         # 'dragen_mapping-Reads_with_mate_sequenced_pct': 'm_seqs',
-        # 'dragen_mapping-Estimated_sample_contamination': 'error_rate',
+        'dragen_mapping-Estimated_sample_contamination': 'contam',
         'dragen_mapping-Secondary_alignments_pct': 'non_primary',
         'dragen_mapping-Mapped_reads_pct': 'percent_mapped',
         'dragen_mapping-Properly_paired_reads_pct': 'percent_proper_pairs',
@@ -83,7 +83,7 @@ def transform_data(merged_data: str, **kwargs):
         'dragen_variant_calling-SNPs_pct': 'snp',
         'dragen_variant_calling-Indels_pct': 'indel',
         'dragen_variant_calling-Ti_Tv_ratio': 'ts_tv',
-        # 'dragen_coverage-wgs_average_alignment_coverage_over_genome': 'depth',
+        'dragen_coverage-wgs_average_alignment_coverage_over_genome': 'depth',
         'dragen_ploidy_estimation-Ploidy_estimation': 'ploidy_estimation'
     }
     df.rename(columns=cols, inplace=True)
