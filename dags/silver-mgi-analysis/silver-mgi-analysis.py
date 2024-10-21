@@ -32,7 +32,7 @@ dag = DAG(
 )
 
 def fetch_s3_data(**kwargs):
-    s3_hook = S3Hook(aws_conn_id='aws_default')
+    s3_hook = S3Hook(aws_conn_id='aws')
     bucket = S3_DWH_BRONZE
 
     try:
