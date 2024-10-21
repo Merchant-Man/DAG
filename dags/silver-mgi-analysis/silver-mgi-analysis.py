@@ -176,7 +176,7 @@ def upload_to_s3(**kwargs):
     ti = kwargs['ti']
     cleaned_data = ti.xcom_pull(task_ids='process_data')
     
-    s3_hook = S3Hook(aws_conn_id='aws_default')
+    s3_hook = S3Hook(aws_conn_id='aws')
     
     # Generate timestamp for the filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
