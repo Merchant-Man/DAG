@@ -78,6 +78,13 @@ def transform_data(merged_data: str, **kwargs):
     df['id_index'] = pd.to_numeric(df['id_index'], errors='coerce').astype('Int64')
     df = df[list(cols.values())]
 
+    # Filter dataframe if 'id_repository' contains specified patterns
+    patterns = r'(?i)Test|test|tes|^BC|SAMPLE|^DNB'
+    df = df[~df['id_repository'].str.contains(patterns, na=False)]
+
+    # Remove everything after either '-' or '_' character in 'id_repository'
+    df['id_repository'] = df['id_repository'].str.split(r'[-_]').str[0]
+
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
     df.to_csv(csv_buffer, index=False)
