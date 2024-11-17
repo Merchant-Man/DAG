@@ -23,7 +23,7 @@ default_args = {
 }
 
 dag = DAG(
-    'silver-ica-analysis-doppelganger',
+    'silver-ica-analysis-simple',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3',
     schedule_interval=timedelta(days=1),
