@@ -66,15 +66,12 @@ def fetch_from_rds(**context):
             LEFT JOIN combined_qc q ON a.id_repository = q.id_repository
         """
         df = pd.read_sql(query, engine)
-        
         context['task_instance'].xcom_push(
             key='rds_data', 
             value=df.to_dict(orient='records')
         )
-        print(f"Fetched {len(df)} records from RDS")
     except Exception as e:
-        print(f"Error fetching from RDS: {e}")
-        raise
+        raise e
 
 def load_to_dynamo(**context):
     try:
@@ -83,30 +80,12 @@ def load_to_dynamo(**context):
             key='rds_data'
         )
         
+        if not records:
+            raise ValueError("No records retrieved from XCom")
+        
         dynamodb = boto3.resource('dynamodb')
-        
-        existing_tables = dynamodb.meta.client.list_tables()['TableNames']
-        if 'satudna-dev' not in existing_tables:
-            table = dynamodb.create_table(
-                TableName='satudna-dev',
-                KeySchema=[
-                    {
-                        'AttributeName': 'id_subject',
-                        'KeyType': 'HASH'
-                    }
-                ],
-                AttributeDefinitions=[
-                    {
-                        'AttributeName': 'id_subject',
-                        'AttributeType': 'S'
-                    }
-                ],
-                BillingMode='PAY_PER_REQUEST'
-            )
-            table.meta.client.get_waiter('table_exists').wait(TableName='satudna-dev')
-            print("Created DynamoDB table 'satudna-dev'")
-        
         table = dynamodb.Table('satudna-dev')
+        
         with table.batch_writer() as batch:
             for record in records:
                 item = {
@@ -115,11 +94,8 @@ def load_to_dynamo(**context):
                     'qc_pass': str(record['qc_pass'])
                 }
                 batch.put_item(Item=item)
-        
-        print(f"Loaded {len(records)} items to DynamoDB")
     except Exception as e:
-        print(f"Error loading to DynamoDB: {e}")
-        raise
+        raise e
 
 fetch_rds_data = PythonOperator(
     task_id='fetch_rds_data',
