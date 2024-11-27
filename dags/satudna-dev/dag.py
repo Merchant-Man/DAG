@@ -41,6 +41,11 @@ def fetch_from_rds(**context):
                     UNION ALL
                     SELECT id_repository, run_status FROM superset_dev.mgi_analysis_latest
                 ) all_analysis
+                GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
+                    CASE 
+                        WHEN run_status = 'SUCCEEDED' THEN 'SUCCEEDED'
+                        ELSE 'FAILED'
+                    END
             ),
             combined_qc AS (
                 SELECT 
@@ -57,6 +62,12 @@ def fetch_from_rds(**context):
                     SELECT id_repository, at_least_10x, median_coverage
                     FROM superset_dev.illumina_qc_latest
                 ) all_qc
+                GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
+                    CASE 
+                        WHEN at_least_10x >= 80 
+                        AND median_coverage >= 30 THEN TRUE
+                        ELSE FALSE
+                    END
             )
             SELECT 
                 a.id_repository,
@@ -66,6 +77,8 @@ def fetch_from_rds(**context):
             LEFT JOIN combined_qc q ON a.id_repository = q.id_repository
         """
         df = pd.read_sql(query, engine)
+        # Drop duplicates if any still exist after the SQL-level deduplication
+        df = df.drop_duplicates(subset=['id_repository'])
         context['task_instance'].xcom_push(
             key='rds_data', 
             value=df.to_dict(orient='records')
@@ -86,10 +99,19 @@ def load_to_dynamo(**context):
         dynamodb = boto3.resource('dynamodb')
         table = dynamodb.Table('satudna-dev')
         
+        # Create a set to track processed IDs
+        processed_ids = set()
+        
         with table.batch_writer() as batch:
             for record in records:
+                id_subject = str(record['id_repository'])
+                # Skip if we've already processed this ID
+                if id_subject in processed_ids:
+                    continue
+                    
+                processed_ids.add(id_subject)
                 item = {
-                    'id_subject': str(record['id_repository']),
+                    'id_subject': id_subject,
                     'analysis_secondary': str(record['analysis_secondary']),
                     'qc_pass': str(record['qc_pass'])
                 }
