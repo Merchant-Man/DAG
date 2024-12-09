@@ -62,8 +62,29 @@ def etl_to_s3(**kwargs):
     df['pipeline_type'] = 'secondary'
     df['run_name']      = df['userReference']
     df['run_status']    = df['status']
-    df                  = df[['id_repository', 'id_batch', 'date_start', 'date_end', 'pipeline_name', 'pipeline_type', 'run_name', 'run_status']].copy()
+    df['cram']          = df['reference'].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.cram")
+    df['vcf']           = df["reference"].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
+    # df['vcf_cnv_sv']    = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.cnv_sv.vcf.gz")
+    # df['vcf_cnv']       = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.cnv.vcf.gz")
+    # df['vcf_sv']        = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.sv.vcf.gz")
+    # df['vcf_repeats']   = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.repeats.vcf.gz")
+    # df['vcf_targeted']   = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.targeted.vcf.gz")
 
+
+    # Add file sizes
+    def get_file_size(file_path):
+        try:
+            obj = s3.get_key(key=file_path, bucket_name=S3_DWH_BRONZE)
+            size_in_bytes = obj.content_length
+            size_in_gb = size_in_bytes / (1024 ** 3)
+            return f"{size_in_gb:.2f}GB"
+        except Exception:
+            return None
+        
+    df['cram_size']        = df['cram'].apply(get_file_size)
+    df['vcf_size']         = df['vcf'].apply(get_file_size)
+    df = df[['id_repository', 'id_batch', 'date_start', 'date_end', 'pipeline_name', 'pipeline_type', 'run_name', 'run_status','cram', 'cram_size', 'vcf', 'vcf_size']].copy()
+    
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
     df.to_csv(csv_buffer, index=False)
