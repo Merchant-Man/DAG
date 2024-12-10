@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import io
 import ast
+import boto3
+from urllib.parse import urlparse
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -64,21 +66,21 @@ def etl_to_s3(**kwargs):
     df['run_status']    = df['status']
     df['cram']          = df['reference'].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.cram")
     df['vcf']           = df["reference"].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
-    # df['vcf_cnv_sv']    = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.cnv_sv.vcf.gz")
-    # df['vcf_cnv']       = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.cnv.vcf.gz")
-    # df['vcf_sv']        = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.sv.vcf.gz")
-    # df['vcf_repeats']   = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.repeats.vcf.gz")
-    # df['vcf_targeted']   = df["reference"].apply(lambda x: f"{x}/{x.split('_')[0]}/{x.split('_')[0]}.targeted.vcf.gz")
 
-
+    s3_size = boto3.client('s3')
     # Add file sizes
-    def get_file_size(file_path):
+    def get_file_size(s3_path):
         try:
-            obj = s3.get_key(key=file_path, bucket_name=S3_DWH_BRONZE)
-            size_in_bytes = obj.content_length
-            size_in_gb = size_in_bytes / (1024 ** 3)
-            return f"{size_in_gb:.2f}GB"
-        except Exception:
+            # Parse the S3 URL
+            parsed_url = urlparse(s3_path)
+            bucket_name = parsed_url.netloc
+            key = parsed_url.path.lstrip('/')  # Extract key (path inside the bucket)
+
+            # Get the size of the object
+            response = s3_size.head_object(Bucket=bucket_name, Key=key)
+            return response['ContentLength']  # Size in bytes
+        except Exception as e:
+            # print(f"Error fetching size for {s3_path}: {e}")
             return None
         
     df['cram_size']        = df['cram'].apply(get_file_size)
