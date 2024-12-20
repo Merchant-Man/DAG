@@ -13,8 +13,8 @@ S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 S3_DWH_IRON = Variable.get("S3_DWH_IRON")
 
 keys = [
-    'phenovar/participants/latest.csv',
-    'regina/demography/latest.csv',
+    'phenovar/participants/latest_temp.csv',
+    'regina/demography/latest_temp.csv',
 ]
 
 RDS_SECRET = Variable.get("RDS_SECRET")

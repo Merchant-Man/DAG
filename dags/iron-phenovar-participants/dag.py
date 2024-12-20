@@ -93,7 +93,7 @@ def upload_to_s3(cleaned_data, **kwargs):
     )
 
     # Upload the same file as 'latest.csv'
-    s3_key_latest = f'{prefix}latest.csv'
+    s3_key_latest = f'{prefix}latest_temp.csv'
     s3.load_string(
         string_data=cleaned_data,
         key=s3_key_latest,
