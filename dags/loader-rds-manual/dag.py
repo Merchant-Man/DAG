@@ -31,7 +31,7 @@ default_args = {
 }
 
 dag = DAG(
-    'loader-rds-slow',
+    'loader-rds-manual',
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3 to RDS',
     schedule_interval=timedelta(days=5),
