@@ -3,10 +3,17 @@ import pandas as pd
 import io
 import ast
 
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+import binascii
+
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.models import Variable
+
+SECRET_KEY = Variable.get("SECRET_KEY").encode('utf-8')
+IV = Variable.get("IV").encode('utf-8')
 
 S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
 S3_DWH_SILVER=Variable.get("S3_DWH_IRON")
@@ -29,6 +36,20 @@ dag = DAG(
     description='ETL pipeline to merge CSV files from S3',
     schedule_interval=timedelta(days=5),
 )
+
+def aes_decrypt(encrypted_hex, key, iv):
+    try:
+        # Convert hex string to bytes
+        encrypted_bytes = binascii.unhexlify(encrypted_hex)
+        
+        # Initialize AES cipher
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        
+        # Decrypt and unpad
+        decrypted = unpad(cipher.decrypt(encrypted_bytes), AES.block_size)
+        return decrypted.decode('utf-8')
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 def fetch_data(**kwargs):
     s3 = S3Hook(aws_conn_id='aws')
@@ -65,8 +86,9 @@ def transform_data(merged_data: str, **kwargs):
     df = df.drop_duplicates()
 
     df['id_subject'] = df['id']
-    df['name_full'] = df['full_name']
-    df['date_birth'] = df['dob']
+    df['nik'] = df['nik'].apply(lambda x: aes_decrypt(x, SECRET_KEY, IV))
+    df['name_full'] = df['full_name'].apply(lambda x: aes_decrypt(x, SECRET_KEY, IV))
+    df['date_birth'] = df['dob'].apply(lambda x: aes_decrypt(x, SECRET_KEY, IV))
 
     df = df[['id_subject', 'nik', 'name_full', 'date_birth']]
 
