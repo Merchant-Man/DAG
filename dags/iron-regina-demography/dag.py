@@ -62,10 +62,11 @@ def transform_data(merged_data: str, **kwargs):
 
     # Remove duplicates
     df = df.drop_duplicates()
-    
+
+    df['id_subject'] = df['ehr_id']    
     df['name_full'] = df['nama']
 
-    df = df[['nik']]
+    df = df[['id_subject', 'nik', 'name_full']]
     
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
