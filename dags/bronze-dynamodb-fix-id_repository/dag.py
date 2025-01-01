@@ -23,7 +23,7 @@ default_args = {
 }
 
 dag = DAG(
-    'bronze-dynamo-fix',
+    'bronze-dynamodb-fix-id_repository',
     default_args=default_args,
     description='ETL pipeline using a public API',
     schedule_interval=timedelta(days=1),
@@ -62,7 +62,7 @@ def load_data(**kwargs):
     
     # Generate S3 key using data_interval_start
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
-    s3_key = f'dynamodb/fix/{data_interval_start.isoformat()}.csv'
+    s3_key = f'dynamodb/fix/id_repository/{data_interval_start.isoformat()}.csv'
     
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
