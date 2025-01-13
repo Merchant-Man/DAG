@@ -8,10 +8,9 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.models import Variable
 
-S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
-S3_DWH_SILVER=Variable.get("S3_DWH_SILVER")
-prefix="zlims/samples/"
-
+S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
+S3_DWH_SILVER = Variable.get("S3_DWH_SILVER")
+prefix = "zlims/samples/"
 
 default_args = {
     'owner': 'data',
@@ -26,7 +25,7 @@ default_args = {
 dag = DAG(
     'silver-zlims-samples',
     default_args=default_args,
-    description='ETL pipeline to merge CSV files from S3',
+    description='ETL pipeline to process latest ZLIMS samples file from S3',
     schedule_interval=timedelta(days=5),
 )
 
@@ -39,31 +38,35 @@ def fetch_data(**kwargs):
     if not files:
         raise ValueError(f"No files found in {prefix}")
     
-    all_data_frames = []
-
-    for file_key in files:
-        if file_key.endswith('.csv'):
-            # Read each CSV file into a DataFrame
-            csv_obj = s3.get_key(key=file_key, bucket_name=S3_DWH_BRONZE)
-            df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-            all_data_frames.append(df)
-
-    # Merge all DataFrames into one
-    merged_df = pd.concat(all_data_frames, ignore_index=True)
-
-    # Convert merged DataFrame to CSV format
+    # Filter for CSV files and get the latest one by timestamp
+    csv_files = [f for f in files if f.endswith('.csv')]
+    if not csv_files:
+        raise ValueError(f"No CSV files found in {prefix}")
+        
+    latest_file = sorted(csv_files)[-1]
+    print(f"Processing latest file: {latest_file}")
+    
+    # Read only the latest CSV file
+    csv_obj = s3.get_key(key=latest_file, bucket_name=S3_DWH_BRONZE)
+    df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+    print(f"Loaded {len(df)} rows from {latest_file}")
+    
+    # Convert DataFrame to CSV format
     csv_buffer = io.StringIO()
-    merged_df.to_csv(csv_buffer, index=False)
-
+    df.to_csv(csv_buffer, index=False)
+    
     return csv_buffer.getvalue()
 
 def transform_data(merged_data: str, **kwargs):
     # Read the CSV data into a DataFrame
     df = pd.read_csv(io.StringIO(merged_data))
-
+    print(f"Initial rows in transform: {len(df)}")
+    
     # Remove duplicates
     df = df.drop_duplicates()
+    print(f"Rows after deduplication: {len(df)}")
 
+    # Rename columns
     cols = {
         'Sample ID(*)': 'id_repository',
         'Flowcell ID': 'id_library',
@@ -75,15 +78,21 @@ def transform_data(merged_data: str, **kwargs):
     }
 
     df.rename(columns=cols, inplace=True)
+    
+    # Convert index to numeric, handling errors
     df['id_index'] = pd.to_numeric(df['id_index'], errors='coerce').astype('Int64')
+    
+    # Select only the columns we want
     df = df[list(cols.values())]
 
-    # Filter dataframe if 'id_repository' contains specified patterns
+    # Filter out test/sample data
     patterns = r'(?i)Test|test|tes|^BC|SAMPLE|^DNB'
     df = df[~df['id_repository'].str.contains(patterns, na=False)]
 
-    # Remove everything after either '-' or '_' character in 'id_repository'
+    # Clean id_repository field
     df['id_repository'] = df['id_repository'].str.split(r'[-_]').str[0]
+    
+    print(f"Final rows after transformation: {len(df)}")
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
@@ -115,6 +124,8 @@ def upload_to_s3(cleaned_data, **kwargs):
         bucket_name=S3_DWH_SILVER,
         replace=True
     )
+    
+    print(f"Successfully uploaded to {s3_key} and {s3_key_latest}")
 
 # Define tasks
 fetch_data_task = PythonOperator(
@@ -126,7 +137,7 @@ fetch_data_task = PythonOperator(
 transform_data_task = PythonOperator(
     task_id='transform_data',
     python_callable=transform_data,
-    provide_context=True,  # To pass kwargs
+    provide_context=True,
     op_kwargs={'merged_data': '{{ task_instance.xcom_pull(task_ids="fetch_data") }}'},
     dag=dag,
 )
@@ -134,7 +145,7 @@ transform_data_task = PythonOperator(
 upload_to_s3_task = PythonOperator(
     task_id='upload_to_s3',
     python_callable=upload_to_s3,
-    provide_context=True,  # To pass kwargs
+    provide_context=True,
     op_kwargs={'cleaned_data': '{{ task_instance.xcom_pull(task_ids="transform_data") }}'},
     dag=dag,
 )
