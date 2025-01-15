@@ -84,6 +84,9 @@ def transform_data(merged_data: str, **kwargs):
     grouped_df['sum_of_bam_size'] = grouped_df['bam_size'].apply(
         lambda x: sum(filter(None, [int(i) for i in x if pd.notnull(i)]))
     ).astype(str)
+    
+    # Create a new column `id_library` where the value is just one item from the list
+    grouped_df['id_batch'] = grouped_df['id_library'].apply(lambda x: x[0] if x else None)
 
     # Convert cleaned DataFrame to CSV format
     csv_buffer = io.StringIO()
