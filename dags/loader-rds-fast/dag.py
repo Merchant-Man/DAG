@@ -20,7 +20,9 @@ keys = [
     'zlims/samples/latest.csv',
     'mgi/analysis/latest.csv',
     'mgi/qc/latest.csv',
-    'dynamodb/fix/id_repository/latest.csv'
+    'dynamodb/fix/id_repository/latest.csv',
+    'wfhv/analysis/latest.csv',
+    'wfhv/qc/latest.csv'
 ]
 
 RDS_SECRET = Variable.get("RDS_SECRET")
