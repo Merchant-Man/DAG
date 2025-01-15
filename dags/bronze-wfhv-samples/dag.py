@@ -15,7 +15,7 @@ DYNAMODB_TABLE='bgsi-upload-ont'
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
-    'start_date': datetime(2025, 1, 14),
+    'start_date': datetime(2025, 1, 13),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,

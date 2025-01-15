@@ -15,7 +15,7 @@ prefix = "wfhv/samples/"
 default_args = {
     'owner': 'data',
     'depends_on_past': False,
-    'start_date': datetime(2025, 1, 14),
+    'start_date': datetime(2025, 1, 13),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
