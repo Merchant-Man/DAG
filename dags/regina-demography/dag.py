@@ -63,8 +63,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     return df
 
-
-with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
+# In local should be: with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
 
 bronze_fetch_jwt_and_data_task = PythonOperator(

@@ -65,7 +65,8 @@ dag = DAG(
     catchup=False,
 )
 
-with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
+# In local should be: with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
 
 
