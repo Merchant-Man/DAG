@@ -5,6 +5,8 @@ import os
 from io import StringIO
 from airflow import DAG
 from airflow.models import Variable
+from urllib.parse import urlparse
+from airflow.models import Connection
 from airflow.operators.python_operator import PythonOperator
 from utils.utils import fetch_and_dump, silver_transform_to_db
 import json
@@ -95,7 +97,9 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     }
     df.rename(columns=rename_map, inplace=True)
 
-    s3_size = boto3.client("s3")
+    s3_size = boto3.client("s3",
+         aws_access_key_id=Connection.get_connection_from_secrets(AWS_CONN_ID).login,
+         aws_secret_access_key= Connection.get_connection_from_secrets(AWS_CONN_ID).password)
     # Add file sizes
     # NOTE: IF YOUR AWS ACCOUNT DON'T HAVE ACCESS IT WILL GIVE 0.
     def get_file_size(s3_path):
