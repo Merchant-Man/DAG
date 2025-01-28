@@ -29,7 +29,9 @@ id VARCHAR(30) UNSIGNED PRIMARY KEY comment 'ID of the speciment', --biosample_s
 id_type_specimen	VARCHAR(8) NOT NULL,
 specimen_type_name	VARCHAR(32) NOT NULL,
 specimen_kode VARCHAR(8), 	
-specimen_type_repo VARCHAR(8)
+specimen_type_repo VARCHAR(8),
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+creationDate DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar'
 );
 
 
@@ -38,13 +40,17 @@ id SMALLINT UNSIGNED PRIMARY KEY,
 sample_name	VARCHAR(32),
 active	BOOLEAN, 
 id_biobank VARCHAR(128),
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+creationDate DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar'
 );
 
 
 CREATE TABLE master_status (
 id SMALLINT UNSIGNED PRIMARY KEY,
 status_name	VARCHAR(32),
-status_color	VARCHAR(32)
+status_color	VARCHAR(32),
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+creationDate DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar'
 );
 
 
@@ -57,7 +63,9 @@ biobank_no_kontak VARCHAR(50),
 biobank_email VARCHAR(100),
 biobank_alamat text,
 biobank_penanggung_jawab VARCHAR(100),
-biobank_repo VARCHAR(8)
+biobank_repo VARCHAR(8),
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+creationDate DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar'
 );
 	
 
@@ -71,3 +79,50 @@ id_biobank VARCHAR(128) comment 'ID of the biobank',
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 );
+	
+
+CREATE TABLE  simbiox_biosamples(
+id_patient VARCHAR(128) PRIMARY KEY  comment'ID (PK) of the record from simbiox patient data',
+code_repository VARCHAR(32) comment 'Code of the repository',
+code_box VARCHAR(10),
+code_position VARCHAR(10),
+date_received DATETIME, 
+date_enumerated DATETIME,
+id_biobank VARCHAR(64),
+origin_code_repository VARCHAR(32),
+origin_code_box VARCHAR(10),
+biosample_type VARCHAR(16),
+biosample_specimen VARCHAR(16),
+type_case VARCHAR(16),
+sub_cell_specimen VARCHAR(16),
+biosample_volume MEDIUMINT UNSIGNED,
+biosample_status VARCHAR(16),
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+CREATE INDEX code_repository_idx
+ON simbiox_biosamples (code_repository);
+
+
+
+CREATE TABLE ica_samples(
+id VARCHAR(128) PRIMARY KEY comment 'ID of the record from ICA samples',
+id_library VARCHAR(32) comment 'ID of the library of the sample',
+time_created DATETIME comment 'Timestamp when the record is created on ICA side',
+time_modified DATETIME comment 'Timestamp when the record is modified on ICA side',
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+owner_id VARCHAR(128), 
+tenant_id VARCHAR(128),
+tenant_name VARCHAR(128),
+`name` VARCHAR(128),
+`status` VARCHAR(32),
+tag_technical_tags text,
+tag_user_tags text,
+tag_connetor_tags text,
+tag_run_in_tags text,
+application_id VARCHAR(128),
+application_name VARCHAR(128)
+);
+CREATE INDEX id_library_idx
+ON ica_samples (id_library);

@@ -1,0 +1,173 @@
+from requests import Response
+from datetime import datetime, timedelta
+import pandas as pd
+import os
+from io import StringIO
+from airflow import DAG
+from airflow.models import Variable
+from airflow.operators.python_operator import PythonOperator
+from utils.utils import fetch_and_dump, silver_transform_to_db
+import json
+from typing import Dict, Any
+import ast
+import boto3
+
+AWS_CONN_ID="aws"
+ICA_CONN_ID="ica"
+ICA_APIKEY=Variable.get("ICA_APIKEY")
+ICA_REGION=Variable.get("ICA_REGION")
+ICA_OFFSET=Variable.get("ICA_OFFSET")
+ICA_PROJECT=Variable.get("ICA_PROJECT")
+DATA_END_POINT=f"/ica/rest/api/projects/{ICA_PROJECT}/analyses"
+ICA_PAYLOAD={
+    "pageSize": 1000, #Max page size of ICA API
+    "pageToken": ""
+    # The pageToken will be added to get the next page data
+}
+ICA_HEADERS={
+    "accept": "application/vnd.illumina.v3+json", 
+    "X-API-Key": ICA_APIKEY
+}
+OBJECT_PATH = "AF/ica/analysis" # SHOULD CHANGE TODO
+# OBJECT_PATH = "ica/analysis" # SHOULD CHANGE TODO
+S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
+RDS_SECRET = Variable.get("RDS_SECRET")
+LOADER_QEURY = "ica_analysis_loader.sql"
+
+default_args = {
+    'owner': 'bgsi-data',
+    'depends_on_past': False,
+    'start_date': datetime(2024, 9, 30),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=1)
+}
+
+dag = DAG(
+    'ica-analysis',
+    default_args=default_args,
+    description='ETL pipeline for fetching ICA analyses data using ICA API',
+    schedule_interval=timedelta(days=1),
+    catchup=False
+)
+
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
+    loader_query = f.read()
+
+
+def ica_paginate(response: Dict[str, Any]) ->  str:
+    """
+    Paginating function for ICA API. It consumes request.Response object where it checks the next token request. If the token can't be found or there is no more token, it will return empty string.
+    """
+    pageToken = ""
+    try:
+        pageToken = response["nextPageToken"]
+    except json.JSONDecodeError as e:
+        print(e)
+        raise ValueError("The response can't be parsed to JSON file. Please check the response payload!")
+    
+    return pageToken
+    
+
+def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+
+    # Remove duplicates from the main DataFrame
+    df = df.drop_duplicates()
+
+    # Clean up
+    df["id_repository"] = df["userReference"].str.split("_").str[0]
+    df["id_batch"]      = df["tags"].apply(lambda x: ast.literal_eval(x)["userTags"][4] if len(ast.literal_eval(x)["userTags"]) > 4 else None)
+    df["pipeline_name"] = df["pipeline"].apply(lambda x: ast.literal_eval(x)["code"])
+    df["pipeline_type"] = "secondary"
+    df["cram"]          = df["reference"].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.cram")
+    df["vcf"]           = df["reference"].apply(lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
+
+    rename_map = {
+    #old: new
+    "timeCreated": "time_created",
+    "timeModified": "time_modified",
+    "startDate": "date_start",
+    "endDate": "date_end",
+    "userReference": "run_name",
+    "status": "run_status",
+    }
+    df.rename(columns=rename_map, inplace=True)
+
+    s3_size = boto3.client("s3")
+    # Add file sizes
+    # NOTE: IF YOUR AWS ACCOUNT DON'T HAVE ACCESS IT WILL GIVE 0.
+    def get_file_size(s3_path):
+        try:
+            # Parse the S3 URL
+            parsed_url = urlparse(s3_path)
+            bucket_name = parsed_url.netloc
+            key = parsed_url.path.lstrip("/")  # Extract key (path inside the bucket)
+
+            # Get the size of the object
+            response = s3_size.head_object(Bucket=bucket_name, Key=key)
+            return response["ContentLength"]  # Size in bytes
+        except Exception as e:
+            # print(f"Error fetching size for {s3_path}: {e}")
+            return None
+       
+    df["cram_size"] = df["cram"].apply(get_file_size)
+    df["vcf_size"] = df["vcf"].apply(get_file_size)
+    
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+
+    # Need to fillna so that the mysql connector can insert the data.
+    df.fillna(value="", inplace=True)
+        
+    df = df[["id", "time_created", "time_modified", "created_at", "updated_at", "id_repository", "id_batch", "date_start", "date_end", "pipeline_name", "pipeline_type", "run_name", "run_status","cram", "cram_size", "vcf", "vcf_size"]]
+
+    # Even we remove duplicates, API might contain duplicate records for an id_subject
+    # So, we will keep the latest record by id (unique)
+    df['time_modified'] = pd.to_datetime(df['time_modified'])
+    df = df.sort_values('time_modified').groupby('id').tail(1)
+    return df
+    
+
+fetch_and_dump_task = PythonOperator(
+    task_id="bronze_ica_analysis", 
+    python_callable=fetch_and_dump,
+    dag=dag,
+    op_kwargs={
+        "api_conn_id":ICA_CONN_ID,
+        "data_end_point":DATA_END_POINT, 
+        "aws_conn_id":AWS_CONN_ID, 
+        "bucket_name":S3_DWH_BRONZE,
+        "object_path":OBJECT_PATH, 
+        "headers":ICA_HEADERS, 
+        "data_payload": ICA_PAYLOAD,
+        "response_key_data":"items",
+        "pagination_function":ica_paginate,
+        "cursor_token_param": "pageToken",
+        "curr_ds": "{{ ds }}" # curr_ds for file naming
+        # "limit_param":"pageSize", # limit as default (1000)
+        # "limit": 1000
+    },
+    provide_context=True
+)
+
+silver_transform_to_db_task = PythonOperator(
+    task_id="silver_transform_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID, 
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": OBJECT_PATH,
+        "transform_func": transform_data, 
+        "db_secret_url": RDS_SECRET,
+        "curr_ds": "{{ ds }}"
+    },
+    templates_dict={"insert_query": loader_query},
+    provide_context=True
+)
+
+fetch_and_dump_task >> silver_transform_to_db_task

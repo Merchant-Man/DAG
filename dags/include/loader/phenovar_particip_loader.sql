@@ -1,3 +1,3 @@
 INSERT INTO phenovar_participants(id_subject, encrypt_full_name, encrypt_nik, encrypt_birth_date, sex, source, province, district, created_at, updated_at, creation_date, updation_date)
 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-ON DUPLICATE KEY UPDATE encrypt_full_name = VALUES(encrypt_full_name), encrypt_nik = VALUES(encrypt_nik), encrypt_birth_date = VALUES(encrypt_birth_date), sex = VALUES(sex), source = VALUES(source), province = VALUES(province), district = VALUES(district), updation_date=VALUES(updation_date)
+ON DUPLICATE KEY UPDATE encrypt_full_name = VALUES(encrypt_full_name), encrypt_nik = VALUES(encrypt_nik), encrypt_birth_date = VALUES(encrypt_birth_date), sex = VALUES(sex), source = VALUES(source), province = VALUES(province), district = VALUES(district), updation_date=VALUES(updation_date), updated_at = '{{ ts }}'

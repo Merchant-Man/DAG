@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Dict, Any, Tuple
+from typing import Callable, Optional, Dict, Any, Tuple, List, Union
 from airflow.hooks.http_hook import HttpHook
 import tenacity
 from requests.exceptions import ConnectionError, HTTPError
@@ -14,11 +14,14 @@ import mysql.connector as sql
 import re
 
 
+from airflow.hooks.base_hook import BaseHook
+
+
 default_retry_args = dict(
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=64),
-    stop=tenacity.stop_after_attempt(5),
-    retry=ConnectionError
-    )
+    wait=tenacity.wait_exponential(),
+    stop=tenacity.stop_after_attempt(10),
+    retry=tenacity.retry_if_exception_type(Exception),
+)
 
 def extract_db_url(db_secret:str) -> Tuple[str, str, str, str]:
     """
@@ -45,14 +48,14 @@ def extract_db_url(db_secret:str) -> Tuple[str, str, str, str]:
     db_name = groups.group(6)
     return user_name, passwd, host, port, db_name
 
-def dict_csv_buf_transform(data:pd.DataFrame) -> str:
+def dict_csv_buf_transform(data:Dict[str, Any]) -> str:
     """
     Transfrom the dictionary data to CSV buffer and return as string of csv.
 
     Parameters
     ----------
-    data : dict
-        The data to be transformed
+    data : Dict[str, Any]
+        The data in Dict to be transformed
 
     Retruns
     ----------
@@ -78,197 +81,191 @@ def s3_csv_to_pd(aws_conn_id, file_name, bucket_name):
     df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
     return df
 
-def fetch_jwt_and_dump(api_conn_id:str, data_end_point:str, jwt_end_point:str, aws_conn_id:str, bucket_name:str, object_path:str, data_payload:Optional[Dict[str, Any]] = {}, jwt_payload:Optional[Dict[str, Any]] = {}, is_using_cookie:Optional[bool] = False, response_key_data:str = "", transform_func:Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = dict_csv_buf_transform, max_retries=5, retry_delay=3,**kwargs) -> bool:
-    """
-    Fetch daily data from JWT API (POST to get the token and GET the data) and dump it to S3. User can also transform the data by passing a function. The function should transform the dictionary input and return it in the dict form.
-    
-    Parameters
-    ----------
-    conn_id : str
-        The connection id to be used to connect to the API
-    data_end_point : str
-        The endpoint to get the data
-    jwt_end_point : str
-        The endpoint to get the JWT token
-    data_payload : Dict[str, Any]
-        The payload to be sent to the data endpoint
-    jwt_payload : Dict[str, Any]
-        The payload to be sent to the JWT endpoint
-    transform_func : Callable[dict, dict]
-        The function to transform the data. Expected to have a function with have dict as input and output as csv buffer
-    aws_conn_id : str
-        The connection id to be used to connect to the S3 bucket
-    
-    Returns
-    -------
-    bool
-        True if there is any data, False otherwise
-    """
-    http_hook = HttpHook(method="POST", http_conn_id=api_conn_id)
 
-    # Using Airflowhook retrying mechanism
-    # response = http_hook.run_with_advanced_retry(
-    #     endpoint=jwt_end_point,
-    #     headers={"Content-Type": "application/json"},
-    #     data=json.dumps(jwt_payload),
-    #     _retry_args=default_retry_args
-    # )
-    for i in range(max_retries):
-        try:
-            response = http_hook.run(
-                endpoint=jwt_end_point,
-                data=json.dumps(jwt_payload),
-                headers={"Content-Type": "application/json"}
-            )
-        except HTTPError as e:
-            if 500 <= e.status_code < 600:
-                delay = retry_delay + random.random()
-                print(f"Retrying in {delay}")
-                time.sleep(delay)
-                retry_delay *= 2
-            
-            if i==max_retries-1:
-                raise Exception(f"Failed to retrieve JWT token. Response: {response.text}")
-
-    try:
-        access_token = response.json().get("data", {}).get("access_token")
-    except JSONDecodeError as e:
-        print(f"Decoding into JSON failed: {e}")
-        print(f"Failed response: {response}")
-        raise ValueError("Failed to decode the response")
-
-    if not access_token:
-        raise ValueError("Access token is empty!")
-
-
-    http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
-    headers = {"Authorization": f"Bearer {access_token}"}
-    if is_using_cookie:
-        cookie = response.headers.get('Set-Cookie')
-        headers["Cookie"] = f"{cookie}"
-    
-    # Load data
-    for i in range(max_retries):
-        try:
-            response = http_hook.run(
-                endpoint=data_end_point,
-                headers=headers
-            )
-        except HTTPError as e:
-            if 500 <= e.status_code < 600:
-                delay = retry_delay + random.random()
-                print(f"Retrying in {delay}")
-                time.sleep(delay)
-                retry_delay *= 2
-            if i==max_retries-1:
-                raise Exception(f"Failed to retrieve Data. Response: {e.text}")
-
-    try:
-        # no data key
-        if "data" not in response.json():
-            return False
-
-        data = response.json()["data"]
-        if response_key_data!="":
-            if response_key_data not in data:
-                return False
-            data = response.json()["data"][response_key_data]
+def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, bucket_name: str, 
+    object_path: str, headers: Optional[Dict[str, Any]] = {}, 
+    jwt_end_point: str = "", jwt_headers: Optional[Dict[str, Any]] = {}, 
+    data_payload: Optional[Dict[str, Any]] = {},  
+    jwt_payload: Optional[Dict[str, Any]] = {},
+    get_token_function: Optional[Callable[[Dict[str, Any]], str]] = None, 
+    retry_args: Dict[str, Any] = default_retry_args, 
+    response_key_data: Union[List[str], str] = "data", transform_func: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = dict_csv_buf_transform, 
+    pagination_function: Optional[Callable[[Dict[str, Any]], str]] = None, 
+    offset_pagination: Optional[bool] = False, cursor_token_param: str = "pageToken", offset_param: str = "offset",
+    limit_param: str = "limit", limit: Union[int, None] = None, **kwargs) -> bool: 
+        """
+        Fetch daily data from API and dump it to S3. User can also transform the data by passing a function. The function should transform the dictionary input and return it in the dict form.
         
-        # Data might be empty - i.e. No update in the data.
-        if not data:
+        Parameters
+        ----------
+        api_conn_id : str
+            The connection id to be used to connect to the API
+        data_end_point : str
+            The endpoint to get the data
+        aws_conn_id : str
+            The connection id to be used to connect to the S3 bucket
+        bucket_name : str
+            S3 bucket name
+        object_path : str
+            The path to store the object in the bucket
+        headers : Dict[str, Any]
+            Dictionary that will be sent as headers to the request
+        jwt_end_point : str
+            The end point to get the JWT token
+        jwt_headers : Dict[str, Any]
+            Dictionary that will be sent as headers to the JWT to get the auth token
+        data_payload : Dict[str, Any]
+            The payload to be sent to the data endpoint (parameters)
+        jwt_payload : Dict[str, Any]
+            The payload to be sent to the JWT to get the auth token
+        get_token_function : Callable[Dic[str, any], str]
+            Function to parse the token from the JWT response
+        retry_args : [Dict[str, Any]]
+            Retry arguments that will be fed to the _retry_args of the Airflow http_hook
+        response_key_data : str|List[str]
+            Key to get the data from the API. It can be either string or list. If list is given, it will iterate through all the elements of the list.
+        transform_func : Callable[Dict[str, Any], Dict[str, Any]]
+            The function to transform the data. Expected to have a function with have dict as input and output as csv buffer
+        pagination_function : Callable[[Dict[str, Any]], str]
+            The function for paginating the API. It NEEDS TO ACCEPT requests.Response object and returning the next page token!  to get the next page endpoint from the response.
+        offset_pagination : bool
+            Whether to use offset pagination
+        offset_param : str
+            The parameter name for offset in the API request
+        limit_param : str
+            The parameter name for limit in the API request
+        limit : int
+            The number of records to fetch per request/page
+        
+        Returns
+        -------
+        bool
+            True if there is any data and successfully dumped. False otherwise.
+        """
+        access_token = {}
+        # If need auth, jwt is called 
+        if jwt_end_point and get_token_function and (jwt_headers or jwt_payload): 
+            print("=== Fetching JWT token ===")
+            http_hook = HttpHook(method="POST", http_conn_id=api_conn_id)
+            # print(f"===\nURI: {BaseHook.get_connection(api_conn_id).get_uri()}\nEnd Point: {jwt_end_point}\nJWT payload: {jwt_payload}\nJWT headers: {jwt_headers}\n===")
+
+            response = http_hook.run_with_advanced_retry(
+                endpoint=jwt_end_point,
+                headers=jwt_headers,
+                data=json.dumps(jwt_payload), # In POST method, the http_hook will pass to the BODY of the request. Therefore it should be JSON stringified!
+                _retry_args=retry_args
+            )
+            try:
+                response_header = response.headers
+                response = response.json()
+                access_token = get_token_function(response, response_header) # The get_token_function should return a dictionary containing either "headers" or "params" key. i.e. {"headers": {"Authorization": "<token>"}}
+            except json.JSONDecodeError as e:
+                print(f"Decoding into JSON failed: {e}")
+                print(f"Failed response: {response}")
+                raise ValueError("Failed to decode the response")
+        
+        if access_token: 
+            if "headers" in access_token: 
+                headers.update(access_token["headers"])
+            elif "params" in access_token: 
+                data_payload.update(access_token["params"])
+            else:
+                raise ValueError("get_token_function doesn't return 'headers' or 'params'! which is required to be integrated for subsequence response to get the data.")
+        http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
+
+        # Whether using cursor, offset, or bulk, if the API provide limit parameter. 
+        if limit and limit_param:
+            data_payload[limit_param] = limit
+
+        print("=== Fetching Data ===")
+        all_data = []
+        offset = 0
+        if offset_pagination:
+            data_payload[offset_param] = offset
+        while True:        
+            print(f"===\nURI: {BaseHook.get_connection(api_conn_id).get_uri()}\nEnd Point: {data_end_point}\nData payload: {data_payload}\nheaders: {headers}\n===")
+            response = http_hook.run_with_advanced_retry(
+                endpoint=data_end_point,
+                headers=headers,
+                data=data_payload, # In GET, the data will be directed to the params which shoul be okay to have python Dict. This fixes the bug with ICA token where previously we have json.dumps(data_payload)!
+                _retry_args=retry_args
+            )
+            try:
+                response_json = response.json()
+                # Since every API has their own response key, we need to handle it! 
+                # In case it is not in the root level, we need to go deeper. 
+                if response_key_data and isinstance(response_key_data, str):
+                    if response_key_data not in response_json:
+                        print("Data key not found in the response!")
+                        return False
+                    data = response_json[response_key_data]
+                elif response_key_data and isinstance(response_key_data, list):
+                    for key in response_key_data:
+                        key = str(key) # Forcing key to be str for handle non-string key
+                        if key in response_json:
+                            response_json = response_json[key]
+                        else:
+                            print(f"Data key {key} not found in the response!")
+                            return False
+                    data = response_json
+                else:
+                    raise ValueError("Invalid response_key_data! It should be either string or list of string!")
+
+                # Handle the case when the key is found but the value is empty.
+                # If yeas, let's just leave the loop.
+                if not data:
+                    if ((not pagination_function) or (pagination_function and (not all_data))):
+                        # break if data is not found for non-pagination API OR 
+                        # paginated API (with pagination function) which not found any data in the first page.
+                        print(f"No data! on the response from the {response_key_data}")
+                    elif (pagination_function and all_data):
+                        # No more data to be traversed
+                        print(f"There is no more additional data! Ending the loop.")
+                    break
+                all_data.extend(data)
+                if pagination_function and (not offset_pagination):
+                    print("=== PAGINATING ===")
+                    nextPageToken = pagination_function(response_json) # Next page should be the change in the param. nextToken for cursor pagination or the increased offset for offset pagination.
+                    if not nextPageToken:
+                        # If next cursor pagination token not found, terminated 
+                        break
+                    data_payload[cursor_token_param] = nextPageToken
+                    print(f'Next cursor token: {nextPageToken}')
+                elif pagination_function and offset_pagination:
+                    print("=== PAGINATING ===")
+                    # if cur_data less than limit, then there will be no more data for the nexzt offset pagination page!
+                    if len(data) < limit:
+                        break
+                    offset += limit
+                    print(f'Next offset: {offset}')
+                else: # The case where the bulk request occurs!
+                    break
+
+            except json.JSONDecodeError as e:
+                print(f"Decoding into JSON failed: {e}")
+                print(f"Failed response: {response}")
+                raise ValueError("Failed to decode the response")
+
+        if not all_data:
             print("No data to update")
             return False
-    except JSONDecodeError as e:
-        print(f"Decoding into JSON failed: {e}")
-        print(f"Failed response: {response}")
-        raise ValueError("Failed to decode the response")
-    
-    if transform_func:
-        data = transform_func(data)
 
-    file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
-    
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3.load_string(
-        string_data = data,
-        key=file_name,
-        bucket_name=bucket_name,
-        replace=True
-    )
+        if transform_func:
+            all_data = transform_func(all_data)
 
-    return True
-
-def fetch_and_dump(api_conn_id:str, data_end_point:str,  aws_conn_id:str, bucket_name:str, object_path:str, headers:Optional[Dict[str, Any]] = {},  data_payload:Optional[Dict[str, Any]] = {}, retry_args:[Dict[str, Any]] = {}, response_key_data:str = "", transform_func:Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = dict_csv_buf_transform,**kwargs) -> bool: 
-    """
-    Fetch daily data from API and dump it to S3. User can also transform the data by passing a function. The function should transform the dictionary input and return it in the dict form.
-    
-    Parameters
-    ----------
-    api_conn_id : str
-        The connection id to be used to connect to the API
-    data_end_point : str
-        The endpoint to get the data
-    aws_conn_id : str
-        The connection id to be used to connect to the S3 bucket
-    bucket_name : str
-        S3 bucket name
-    object_path : str
-        The path to store the object in the bucket
-    data_payload : Dict[str, Any]
-        The payload to be sent to the data endpoint
-    transform_func : Callable[dict, dict]
-        The function to transform the data. Expected to have a function with have dict as input and output as csv buffer
-    
-    Returns
-    -------
-    bool
-        True if there is any data, False otherwise
-    """
-
-    http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
-
-    # Using Airflowhook retrying mechanism
-    response = http_hook.run_with_advanced_retry(
-        endpoint=data_end_point,
-        headers=headers,
-        _retry_args=retry_args
-    )
-
-    try:
-        if "data" not in response.json():
-            return False
+        file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
         
-        data = response.json()["data"]
-        if response_key_data!="":
-            if response_key_data not in data:
-                return False
-            data = response.json()["data"][response_key_data]
-    except JSONDecodeError as e:
-        print(f"Decoding into JSON failed: {e}")
-        print(f"Failed response: {response}")
-        raise ValueError("Failed to decode the response")
+        s3 = S3Hook(aws_conn_id=aws_conn_id)
+        s3.load_string(
+            string_data = all_data,
+            key=file_name,
+            bucket_name=bucket_name,
+            replace=True
+        )
 
-    if not data:
-        print("No data to update")
-        return False
-    
-    if transform_func:
-        data = transform_func(data)
+        return True
 
-    file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
-    
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3.load_string(
-        string_data = data,
-        key=file_name,
-        bucket_name=bucket_name,
-        replace=True
-    )
-
-    return True
-
-
-def silver_transform_to_db(aws_conn_id:str, bucket_name:str, object_path:str, transform_func:Callable[[pd.DataFrame], pd.DataFrame], db_secret_url:str, insert_query:str, **kwargs) -> None: 
+def silver_transform_to_db(aws_conn_id:str, bucket_name:str, object_path:str, transform_func:Callable[[pd.DataFrame], pd.DataFrame], db_secret_url:str, **kwargs) -> None: 
     """
     Transforming s3 data and insert into db.
 
@@ -304,6 +301,7 @@ def silver_transform_to_db(aws_conn_id:str, bucket_name:str, object_path:str, tr
 
     conn = sql.connect(db=db,user=user,host=host,password=passwd,use_unicode=True)
     cur = conn.cursor()
+    insert_query = kwargs["templates_dict"]["insert_query"]
     print("====START INSERTING====")
     print(f"Data Points: {df.shape[0]}")
     print(f"QUERY:\n{insert_query}")
@@ -325,4 +323,3 @@ def silver_transform_to_db(aws_conn_id:str, bucket_name:str, object_path:str, tr
             raise ValueError(e)
 
     print("====FINISHED====")
-    

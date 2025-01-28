@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import Variable
-from utils.utils import fetch_jwt_and_dump, silver_transform_to_db
+from utils.utils import fetch_and_dump, silver_transform_to_db
 from airflow.operators.python_operator import PythonOperator
 import pandas as pd
 import os
 from io import StringIO
+from typing import Dict, Any
 
 AWS_CONN_ID="aws"
 PHENOVAR_CONN_ID="phenovar-prod"
@@ -40,6 +41,17 @@ dag = DAG(
     catchup=False
 )
 
+def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) -> Dict[str, Any]: 
+    """
+    Get token data from RegINA response.
+    """
+    return {
+        "headers": {
+            "Authorization": f"Bearer {resp['data']['access_token']}",
+            "Cookie": f"{response_header['Set-Cookie']}"
+        }
+    }
+
 def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
@@ -69,17 +81,25 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df.fillna(value=values, inplace=True)
     return df
 
-# In local should be: with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
+
 with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
 
-
 bronze_fetch_jwt_and_dump_data_task = PythonOperator(
     task_id="bronze_fetch_jwt_and_dump_data",
-    python_callable=fetch_jwt_and_dump,
+    python_callable=fetch_and_dump,
     dag=dag,
-    op_args=[PHENOVAR_CONN_ID, DATA_END_POINT, JWT_END_POINT, AWS_CONN_ID, S3_DWH_BRONZE, OBJECT_PATH, {}, JWT_PAYLOAD, True], # conn_id, data_end_point, jwt_end_point, aws_conn_id, s3_bucket, data_payload, jwt_payload, is_using_cookie, transform_func
     op_kwargs={
+        "api_conn_id": PHENOVAR_CONN_ID,
+        "data_end_point": DATA_END_POINT,
+        "jwt_end_point": JWT_END_POINT,
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": OBJECT_PATH,
+        "jwt_payload": JWT_PAYLOAD,
+        "jwt_headers": {"Content-Type": "application/json"},
+        "get_token_function": get_token_function,
+        "response_key_data": "data",
         "curr_ds": "{{ ds }}",
         "prev_ds": "{{ prev_ds }}"
     }
@@ -89,10 +109,16 @@ silver_transform_to_db_task = PythonOperator(
     task_id="silver_transform_to_db",
     python_callable=silver_transform_to_db,
     dag=dag,
-    op_args=[AWS_CONN_ID, S3_DWH_BRONZE, OBJECT_PATH, transform_data, RDS_SECRET, loader_query], # aws_conn_id, s3_bucket, object_path, loader_query
     op_kwargs={
+        "aws_conn_id": AWS_CONN_ID, 
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": OBJECT_PATH,
+        "transform_func": transform_data, 
+        "db_secret_url": RDS_SECRET, 
         "curr_ds": "{{ ds }}"
-    }
+    },
+    templates_dict={"insert_query": loader_query},
+    provide_context=True
 )
 
 bronze_fetch_jwt_and_dump_data_task >> silver_transform_to_db_task

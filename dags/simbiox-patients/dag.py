@@ -62,10 +62,8 @@ dag = DAG(
     catchup=False
 )
 
-# In local should be with open(os.path.join("dags/include/loader", LOADER_QEURY)) as f:
 with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
-
 
 # tenacy max({min}, min(2^{try} * 1, {max})
 # will do 32 secs 5 times and then 64, 128, 256, 512, 1024.
@@ -75,11 +73,22 @@ retry_args = dict(
     retry=ConnectionError
     )
 
-fetch_and_dump_task = PythonOperator(
-    task_id="bronze_fetch_and_dump_data",
+fetch_and_dump_task =  PythonOperator(
+    task_id="bronze_simbiox_patients", 
     python_callable=fetch_and_dump,
     dag=dag,
-    op_args=[SIMBIOX_CONN_ID, DATA_END_POINT, AWS_CONN_ID, S3_DWH_BRONZE, OBJECT_PATH, {"api-key":SIMBIOX_APIKEY}, {}, retry_args],
+    op_kwargs={
+        "api_conn_id":SIMBIOX_CONN_ID,
+        "data_end_point":DATA_END_POINT, 
+        "aws_conn_id":AWS_CONN_ID, 
+        "bucket_name":S3_DWH_BRONZE,
+        "object_path":OBJECT_PATH, 
+        "headers":{"api-key":SIMBIOX_APIKEY}, 
+        "response_key_data":"data",
+        "curr_ds": "{{ ds }}" ,
+        "retry_args": retry_args,
+        "limit": None # bulk
+    },
     provide_context=True
 )
 
@@ -87,18 +96,16 @@ silver_transform_to_db_task = PythonOperator(
     task_id="silver_transform_to_db",
     python_callable=silver_transform_to_db,
     dag=dag,
-    op_args=[AWS_CONN_ID, S3_DWH_BRONZE, OBJECT_PATH, transform_data, RDS_SECRET, loader_query],
     op_kwargs={
+        "aws_conn_id": AWS_CONN_ID, 
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": OBJECT_PATH,
+        "transform_func": transform_data, 
+        "db_secret_url": RDS_SECRET,
         "curr_ds": "{{ ds }}"
     },
+    templates_dict={"insert_query": loader_query},
     provide_context=True
 )
-
-
     
-fetch_and_dump_task >> silver_transform_to_db_task
-
-
-    
-    
-    
+fetch_and_dump_task >> silver_transform_to_db_task    

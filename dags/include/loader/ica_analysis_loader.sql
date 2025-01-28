@@ -1,0 +1,3 @@
+INSERT INTO ica_analysis(id,time_created,time_modified,created_at,updated_at,id_repository,id_batch,date_start,date_end,pipeline_name,pipeline_type,run_name,run_status,cram,cram_size,vcf,vcf_size)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE time_modified = VALUES(time_modified), created_at = VALUES(created_at), updated_at = VALUES(updated_at), id_repository = VALUES(id_repository), date_start = VALUES(date_start), date_end = VALUES(date_end), pipeline_name = VALUES(pipeline_name), pipeline_type = VALUES(pipeline_type), run_name = VALUES(run_name), run_status = VALUES(run_status), cram = VALUES(cram), cram_size = VALUES(cram_size), vcf = VALUES(vcf), vcf_size = VALUES(vcf_size), updated_at = '{{ ts }}'
