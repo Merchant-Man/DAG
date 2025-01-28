@@ -74,10 +74,10 @@ def ica_paginate(response: Dict[str, Any]) ->  str:
 
 def fetch_runname(id, headers):
     """Fetch runname from API."""
-    url = f"https://ica.illumina.com/ica/rest/api/projects/87be74d8-dc18-4780-a96a-f976d380cc2e/samples/{id}/data?filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-    for _ in range(3):  # Retry up to 3 times
+    url = f"https://ica.illumina.com/ica/rest/api/projects/{ICA_PROJECT}/samples/{id}/data?filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
+    for i in range(3):  # Retry up to 3 times
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=15)  # add timeout to handle connection issue
             if response.status_code == 200:
                 data = response.json()
                 for item in data.get("items", []):
@@ -85,23 +85,27 @@ def fetch_runname(id, headers):
                     project_name_tag = next((tag for tag in tags if "bssh.project.name" in tag), None)
                     if project_name_tag:
                         return project_name_tag.split(":")[1]  # Extract part after colon
-                    else:
-                        path = item["details"].get("path", "")
-                        if "fastq.gz" in path:
-                            match = re.search(r"(LP\d+-P\d+)", path)
-                            if match:
-                                return match.group(1)
+                    path = item["details"].get("path", "")
+                    if "fastq.gz" in path:
+                        match = re.search(r"(LP\d+-P\d+)", path)
+                        if match:
+                            return match.group(1)
             else:
-                print(f"API responded with status code {response.status_code}")
+                print(f"API responded with status code {response.status_code} for id {id} with details: {response.json().get('detail')}")
+                break
         except requests.RequestException as e:
-            print(f"Error fetching runname for {id}: {e}")
+            time_to_sleep = 32 * (2 ** i)
+            print(f"Error fetching runname for {id}: {e}. Trying exponential backoff for {time_to_sleep} seconds")
+            time.sleep(time_to_sleep)  # Exponential backoff
     return None
 
 def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
 
+    print("=== Starting to fetch the id library ===")
     df["id_library"] = [fetch_runname(id, ICA_HEADERS) for id in df["id"]]
+    print("=== Fetching id library is finished ===")
 
     df["application"] = df["application"].apply(ast.literal_eval)
     df = df.join(pd.json_normalize(df["application"]).add_prefix("application_"))
@@ -131,13 +135,14 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-        
-    df = df[["id", "id_library", "time_created", "time_modified", "created_at", "updated_at", "owner_id", "tenant_id", "tenant_name", "name", "status", "tag_technical_tags", "tag_user_tags", "tag_connetor_tags", "tag_run_in_tags", "application_id", "application_name"]]
+    df = df[["id", "id_library", "time_created", "time_modified", "created_at", "updated_at", "owner_id", "tenant_id", "tenant_name", "id_repository", "status", "tag_technical_tags", "tag_user_tags", "tag_connetor_tags", "tag_run_in_tags", "application_id", "application_name"]]
 
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record by id (unique)
     df['time_modified'] = pd.to_datetime(df['time_modified'])
     df = df.sort_values('time_modified').groupby('id').tail(1)
+
+    df = df.astype(str)
     return df
     
 
