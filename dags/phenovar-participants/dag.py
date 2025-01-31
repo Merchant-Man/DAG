@@ -2,23 +2,22 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import Variable
 from utils.utils import fetch_and_dump, silver_transform_to_db
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 import pandas as pd
 import os
-from io import StringIO
 from typing import Dict, Any
 
-AWS_CONN_ID="aws"
-PHENOVAR_CONN_ID="phenovar-prod"
-JWT_END_POINT="api/v1/institution/login"
-DATA_END_POINT="api/v1/participants?perpage=20000"
-JWT_PAYLOAD={
+AWS_CONN_ID = "aws"
+PHENOVAR_CONN_ID = "phenovar-prod"
+JWT_END_POINT = "api/v1/institution/login"
+DATA_END_POINT = "api/v1/participants?perpage=20000"
+JWT_PAYLOAD = {
     "email": Variable.get("PHENOVAR_EMAIL"),
     "password": Variable.get("PHENOVAR_PASSWORD")
-    }
-OBJECT_PATH = "AF/phenovar/participants" # SHOULD CHANGE TODO
+}
+OBJECT_PATH = "AF/phenovar/participants"  # SHOULD CHANGE TODO
 # OBJECT_PATH = "phenovar/demography" # SHOULD CHANGE TODO
-S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
+S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 LOADER_QEURY = "phenovar_particip_loader.sql"
 
@@ -41,7 +40,8 @@ dag = DAG(
     catchup=False
 )
 
-def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) -> Dict[str, Any]: 
+
+def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) -> Dict[str, Any]:
     """
     Get token data from RegINA response.
     """
@@ -52,31 +52,34 @@ def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) ->
         }
     }
 
+
 def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
 
     df['gender'].replace({'female': 'FEMALE', 'male': 'MALE'}, inplace=True)
     df.rename(columns={'id': 'id_subject', 'created_at': 'creation_date',
-    'updated_at': 'updation_date', 'gender': 'sex', 'nik': 'encrypt_nik', 'full_name': 'encrypt_full_name', 'dob': 'encrypt_birth_date'}, inplace=True)
-        
+                       'updated_at': 'updation_date', 'gender': 'sex', 'nik': 'encrypt_nik', 'full_name': 'encrypt_full_name', 'dob': 'encrypt_birth_date'}, inplace=True)
+
     if "created_at" not in df.columns:
         df["created_at"] = ts
     if "updated_at" not in df.columns:
         df["updated_at"] = ts
 
-    df = df[["id_subject", "encrypt_full_name", "encrypt_nik", "encrypt_birth_date", "sex", "source", "province", "district", "created_at", "updated_at", "creation_date", "updation_date"]]
+    df = df[["id_subject", "encrypt_full_name", "encrypt_nik", "encrypt_birth_date", "sex", "source",
+             "province", "district", "created_at", "updated_at", "creation_date", "updation_date"]]
 
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record
     df['updation_date'] = pd.to_datetime(df['updation_date'])
     df = df.sort_values('updation_date').groupby('id_subject').tail(1)
 
-    df['updation_date'] = df["updation_date"].dt.strftime('%Y-%m-%d %H:%M:%S').astype('str')
+    df['updation_date'] = df["updation_date"].dt.strftime(
+        '%Y-%m-%d %H:%M:%S').astype('str')
 
     # Need to fillna so that the mysql connector can insert the data.
     values = {
-        "id_subject": "", "encrypt_full_name": "", "encrypt_nik": "", "encrypt_birth_date": "", "sex": "", "source": "", "province": "", "district": "", "creation_date": "", "updation_date": "" 
+        "id_subject": "", "encrypt_full_name": "", "encrypt_nik": "", "encrypt_birth_date": "", "sex": "", "source": "", "province": "", "district": "", "creation_date": "", "updation_date": ""
     }
     df.fillna(value=values, inplace=True)
     return df
@@ -110,11 +113,11 @@ silver_transform_to_db_task = PythonOperator(
     python_callable=silver_transform_to_db,
     dag=dag,
     op_kwargs={
-        "aws_conn_id": AWS_CONN_ID, 
+        "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": OBJECT_PATH,
-        "transform_func": transform_data, 
-        "db_secret_url": RDS_SECRET, 
+        "transform_func": transform_data,
+        "db_secret_url": RDS_SECRET,
         "curr_ds": "{{ ds }}"
     },
     templates_dict={"insert_query": loader_query},

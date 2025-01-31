@@ -2,10 +2,9 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import Variable
 from utils.utils import fetch_and_dump, silver_transform_to_db
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 import pandas as pd
 import os
-from io import StringIO
 from typing import Dict, Any
 
 AWS_CONN_ID="aws"
