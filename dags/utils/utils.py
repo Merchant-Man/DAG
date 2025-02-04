@@ -8,6 +8,7 @@ import io
 import mysql.connector as sql
 import re
 from airflow.hooks.base import BaseHook
+import logging
 
 
 default_retry_args = dict(
@@ -272,7 +273,7 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
     return True
 
 
-def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, **kwargs) -> None:
+def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool = False, **kwargs) -> None:
     """
     Transforming s3 data and insert into db.
 
@@ -288,19 +289,50 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
         The function to transform the data
     db_secret_url : str
         The database secret url
-    insert_query : str
-        The query to insert the data. Should handling the multiple insertions.
+    multi_files : bool 
+        Flag to indicates whether to process exact file with '{ds}.csv' or multiple files with '{ds}' in the name.
     """
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
+    curr_ds = kwargs["curr_ds"]
+ 
+    # Build the prefix ensuring it ends with /
+    prefix = object_path if object_path.endswith('/') else object_path + '/'
+    file_keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
+    print(file_keys)
 
-    # Check whether the file is present (means the data is updated)
-    if not s3.check_for_key(file_name, bucket_name):
-        print(f"=== Can't find {file_name} ===")
+    if not file_keys:
+        logging.warning(f"=== No files found in bucket {bucket_name} with prefix {prefix} ===")
         return
 
-    csv_obj = s3.get_key(key=file_name, bucket_name=bucket_name)
-    df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+    if multi_files:
+        # Regex pattern matching any file that has curr_ds in its name and ends with .csv
+        df = pd.DataFrame()
+        pattern = re.compile(rf".*{re.escape(curr_ds)}.*\.csv")
+        matched_file_list = []
+        for key in file_keys:
+            print(f"checking {key}")
+            if pattern.match(key):
+                matched_file_list.append(key)
+        
+        if not matched_file_list:
+            logging.warning(f"=== Can't find any file with {curr_ds} in S3 ===")
+            return
+        
+        print(f"Matched files: {matched_file_list}")
+        
+        for file_name in matched_file_list:
+            csv_obj = s3.get_key(key=file_name, bucket_name=bucket_name)
+            temp_df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+            df = pd.concat([df, temp_df], ignore_index=True)
+    else:
+        file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
+        # Check whether the file is present (means the data is updated to the s3)
+        if not s3.check_for_key(file_name, bucket_name):
+            logging.warning(f"=== Can't find {file_name} in S3 ===")
+            return
+
+        csv_obj = s3.get_key(key=file_name, bucket_name=bucket_name)
+        df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
 
     df = transform_func(df, kwargs['curr_ds'])
 
@@ -329,5 +361,17 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
         except (sql.Error, sql.Warning) as e:
             conn.close()
             raise ValueError(e)
-
     print("====FINISHED====")
+
+    if "dedup_query" in kwargs["templates_dict"]:
+        dedup_query = kwargs["templates_dict"]["dedup_query"]
+        print("====START DEDUPLICATION====")
+        try:
+            cur.execute(dedup_query)
+            conn.commit()
+            print("====FINISHED DEDUPLICATION====")
+        except (sql.Error, sql.Warning) as e:
+            conn.close()
+            raise ValueError(e)
+        
+    conn.close()
