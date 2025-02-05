@@ -27,7 +27,8 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-    df = df[["id_repository""index""index2""read_number""yield""yield_q30""quality_score_sum""mean_quality_score_pf""percent_q30""created_at""updated_at"]]
+    new_cols = list(cols.values()) + ["created_at", "updated_at"]
+    df = df[new_cols]
 
     return df
 

@@ -273,7 +273,7 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
     return True
 
 
-def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool = False, **kwargs) -> None:
+def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool = False, all_files=False, **kwargs) -> None:
     """
     Transforming s3 data and insert into db.
 
@@ -303,8 +303,18 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
     if not file_keys:
         logging.warning(f"=== No files found in bucket {bucket_name} with prefix {prefix} ===")
         return
+    
+    if all_files: # for the current case of illumina QS
+        print(f"All file keys that will be appended: {file_keys}")
+        df = pd.DataFrame()
+        for file_key in file_keys:
+            if file_key.endswith('.csv'):
+                # Read each CSV file into a DataFrame
+                csv_obj = s3.get_key( bucket_name=bucket_name, key=file_key)
+                temp_df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+                df = pd.concat([df, temp_df], ignore_index=True)
 
-    if multi_files:
+    elif multi_files:
         # Regex pattern matching any file that has curr_ds in its name and ends with .csv
         df = pd.DataFrame()
         pattern = re.compile(rf".*{re.escape(curr_ds)}.*\.csv")
