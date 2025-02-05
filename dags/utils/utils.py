@@ -346,6 +346,10 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
 
     df = transform_func(df, kwargs['curr_ds'])
 
+    if df.empty:
+        logging.warning(f"=== No data to update ===")
+        return
+
     user, passwd, host, port, db = extract_db_url(db_secret_url)
 
     conn = sql.connect(db=db, user=user, host=host,

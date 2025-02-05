@@ -111,6 +111,21 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
 
+    # Convert timeModified to datetime and filter out rows before today
+    print(f"Rows before filter: {len(df)}")
+    df["timeModified"] = pd.to_datetime(df["timeModified"])
+    df["timeCreated"] = pd.to_datetime(df["timeCreated"])
+    ts = pd.to_datetime(ts).tz_localize("UTC") # From ICA API the timeModified is in UTC and the Airflow run in UTC
+    td = pd.Timedelta(1, "days")
+    ts_1 = ts - td
+    print(f"ts: {ts}, td: {td}, ts_1: {ts_1}")
+    df = df.loc[(((df["timeModified"] <= ts) & (df["timeModified"] >= ts_1)) | ((df["timeCreated"] <= ts) & (df["timeCreated"] >= ts_1)))]
+    print(f"Rows after filter: {len(df)}")
+
+    # Check if filtered_df is not empty before processing
+    if df.empty:
+        return pd.DataFrame()
+
     print("=== Starting to fetch the id library ===")
     df["id_library"] = [fetch_runname(id, ICA_HEADERS) for id in df["id"]]
     print("=== Fetching id library is finished ===")
