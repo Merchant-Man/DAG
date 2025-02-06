@@ -81,8 +81,10 @@ updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMEN
 );
 	
 
+
 CREATE TABLE  simbiox_biosamples(
-id_patient VARCHAR(128) PRIMARY KEY  comment'ID (PK) of the record from simbiox patient data',
+id VARCHAR(64) PRIMARY KEY comment 'ID (PK) Uniqueness from simbiox',
+id_patient VARCHAR(128) comment'ID of the record from simbiox patient data',
 code_repository VARCHAR(32) comment 'Code of the repository',
 code_box VARCHAR(10),
 code_position VARCHAR(10),
@@ -100,8 +102,12 @@ biosample_status VARCHAR(16),
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 );
+CREATE INDEX id_patient_idx
+ON simbiox_biosamples (id_patient);
 CREATE INDEX code_repository_idx
 ON simbiox_biosamples (code_repository);
+CREATE INDEX id_patient_code_repository_idx
+ON simbiox_biosamples (id_patient, code_repository);
 
 
 CREATE TABLE ica_samples(

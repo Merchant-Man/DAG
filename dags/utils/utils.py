@@ -272,6 +272,9 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
 
     return True
 
+def dynamo_and_dump() -> bool: 
+    pass
+
 
 def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool = False, all_files=False, **kwargs) -> None:
     """
