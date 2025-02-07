@@ -93,9 +93,6 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
     df["tags"] = df["tags"].apply(ast.literal_eval)
     df = df.join(pd.json_normalize(df["tags"]).add_prefix("tags_"))
-    print(df.head())
-    print(df["tags"])
-    # print(f'Columns after normalization: {pd.json_normalize(df["tags"]).add_prefix("tags_")}')
 
     rename_map = {
         # old: new
