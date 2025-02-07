@@ -325,3 +325,10 @@ CREATE INDEX id_repository_idx
 ON zlims_samples(id_repository);
 ALTER TABLE zlims_samples
 ADD CONSTRAINT PK_sampeles PRIMARY KEY (id_repository, id_flowcell, id_pool, id_dnb, id_index);
+
+
+-- ALTERATION AFTER CREATION 
+ALTER TABLE ica_analysis 
+ADD COLUMN tag_technical_tags text,
+ADD COLUMN tag_user_tags text,
+ADD COLUMN tag_reference_tags text;

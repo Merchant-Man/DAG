@@ -301,7 +301,7 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
     # Build the prefix ensuring it ends with /
     prefix = object_path if object_path.endswith('/') else object_path + '/'
     file_keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
-    print(file_keys)
+    # print(file_keys)
 
     if not file_keys:
         logging.warning(f"=== No files found in bucket {bucket_name} with prefix {prefix} ===")
