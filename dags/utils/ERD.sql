@@ -120,7 +120,7 @@ CREATE TABLE ica_samples(
   owner_id VARCHAR(128), 
   tenant_id VARCHAR(128),
   tenant_name VARCHAR(128),
-  `name` VARCHAR(128),
+  id_repository VARCHAR(128),
   `status` VARCHAR(32),
   tag_technical_tags text,
   tag_user_tags text,
