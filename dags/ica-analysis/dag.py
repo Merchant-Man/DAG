@@ -78,6 +78,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates from the main DataFrame
     df = df.drop_duplicates()
 
+    # TODO It might good to filter the delta based on timeModified and/or timeCreated
+
     # Clean up
     df["id_repository"] = df["userReference"].str.split("_").str[0]
     df["id_batch"] = df["tags"].apply(lambda x: ast.literal_eval(
@@ -89,6 +91,11 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.cram")
     df["vcf"] = df["reference"].apply(
         lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
+    df["tags"] = df["tags"].apply(ast.literal_eval)
+    df = df.join(pd.json_normalize(df["tags"]).add_prefix("tags_"))
+    print(df.head())
+    print(df["tags"])
+    # print(f'Columns after normalization: {pd.json_normalize(df["tags"]).add_prefix("tags_")}')
 
     rename_map = {
         # old: new
@@ -98,6 +105,9 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         "endDate": "date_end",
         "userReference": "run_name",
         "status": "run_status",
+        "tags_technicalTags": "tag_technical_tags",
+        "tags_userTags": "tag_user_tags",
+        "tags_referenceTags": "tag_reference_tags"
     }
     df.rename(columns=rename_map, inplace=True)
 
@@ -135,12 +145,13 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df.fillna(value="", inplace=True)
 
     df = df[["id", "time_created", "time_modified", "created_at", "updated_at", "id_repository", "id_batch", "date_start",
-             "date_end", "pipeline_name", "pipeline_type", "run_name", "run_status", "cram", "cram_size", "vcf", "vcf_size"]]
-
+             "date_end", "pipeline_name", "pipeline_type", "run_name", "run_status", "cram", "cram_size", "vcf", "vcf_size", "tag_technical_tags", "tag_user_tags", "tag_reference_tags"]]
+    
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record by id (unique)
     df['time_modified'] = pd.to_datetime(df['time_modified'])
     df = df.sort_values('time_modified').groupby('id').tail(1)
+    df = df.astype(str)
     return df
 
 
