@@ -3,7 +3,6 @@ import os
 from airflow import DAG
 from airflow.models import Variable
 from airflow.sensors.external_task import ExternalTaskSensor
-from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
@@ -33,55 +32,28 @@ dag = DAG(
 with open(os.path.join("dags/repo/dags/include/gold_query", QC_QUERY)) as f:
     qc_query = f.read()
 
-def pp():
- print('Second Dependent Task')
-
-
 with dag:
     with TaskGroup('loader_sensors') as loader_sensors:
         # By default, each of the task will poke in the interval of 60 seconds based on the BaseSensorOperator
-        zlims_sample = ExternalTaskSensor(
-            task_id="zlims_sample",
+        # Currently, we need to manually defined each sensor and the timedelta for the waited task to be exactly matched the execution time of the external DAG
+        zlims_pl = ExternalTaskSensor(
+            task_id="zlims_pl",
             external_dag_id="zlims-pl",
-            external_task_id="samples_silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
-        wfhv_sample = ExternalTaskSensor(
-            task_id="wfhv_sample",
+        wfhv_pl = ExternalTaskSensor(
+            task_id="wfhv_pl",
             external_dag_id="wfhv-pl",
-            external_task_id="samples_silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
-        )
-
-        wfhv_analysis = ExternalTaskSensor(
-            task_id="wfhv_analysis",
-            external_dag_id="wfhv-pl",
-            external_task_id="analysis_silver_transform_to_db",
-            check_existence=True,
-            timeout=60*60*2, # 2 hours
-            exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
-        )
-
-        wfhv_qc = ExternalTaskSensor(
-            task_id="wfhv_qc",
-            external_dag_id="wfhv-pl",
-            external_task_id="qc_silver_transform_to_db",
-            check_existence=True,
-            timeout=60*60*2, # 2 hours
-            exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
         simbiox_patients = ExternalTaskSensor(
@@ -89,10 +61,10 @@ with dag:
             external_dag_id="simbiox-patients",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success", "failed"] # failed is allowed since regina api is not stable.
         )
 
         simbiox_biosamples = ExternalTaskSensor(
@@ -100,10 +72,10 @@ with dag:
             external_dag_id="simbiox-biosamples",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success", "failed"] # failed is allowed since simbiox api is not stable.
         )
 
         regina_demography = ExternalTaskSensor(
@@ -111,10 +83,10 @@ with dag:
             external_dag_id="regina-demography",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success", "failed"] # failed is allowed since regina api is not stable. 
         )
 
         phenovar_participants = ExternalTaskSensor(
@@ -122,74 +94,52 @@ with dag:
             external_dag_id="phenovar-participants",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
-        mgi_analysis = ExternalTaskSensor(
-            task_id="mgi_analysis",
+        mgi_pl = ExternalTaskSensor(
+            task_id="mgi_pl",
             external_dag_id="mgi-pl",
-            external_task_id="analysis_silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
-        mgi_qc = ExternalTaskSensor(
-            task_id="mgi_qc",
-            external_dag_id="mgi-pl",
-            external_task_id="qc_silver_transform_to_db",
-            check_existence=True,
-            timeout=60*60*2, # 2 hours
-            exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
-        )
-        illumina_qc = ExternalTaskSensor(
-            task_id="illumina_qc",
+        illumina = ExternalTaskSensor(
+            task_id="illumina",
             external_dag_id="illumina",
-            external_task_id="qc_silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
-        illumina_qs = ExternalTaskSensor(
-            task_id="illumina_qs",
-            external_dag_id="illumina",
-            external_task_id="qs_silver_transform_to_db",
-            check_existence=True,
-            timeout=60*60*2, # 2 hours
-            exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
-        )
         ica_analysis = ExternalTaskSensor(
             task_id="ica_analysis",
             external_dag_id="ica-analysis",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
-        
+
         ica_samples = ExternalTaskSensor(
             task_id="ica_samples",
             external_dag_id="ica-samples",
             external_task_id="silver_transform_to_db",
             check_existence=True,
-            timeout=60*60*2, # 2 hours
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
             exponential_backoff=True,
-            allowed_states=["success"],
-            failed_states=["failed", "skipped"]
+            allowed_states=["success"]
         )
 
     with TaskGroup('queries') as queries:
@@ -202,4 +152,4 @@ with dag:
         # foo >> foo2
 
 # Please addd the source if applicable
-[zlims_sample, wfhv_sample, wfhv_analysis, wfhv_qc] >> queries
+loader_sensors >> queries
