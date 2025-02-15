@@ -59,7 +59,6 @@ with dag:
         simbiox_patients = ExternalTaskSensor(
             task_id="simbiox-patients",
             external_dag_id="simbiox-patients",
-            external_task_id="silver_transform_to_db",
             check_existence=True,
             timeout=60*60*2,  # 2 hours
             execution_delta=timedelta(minutes=30, hours=1),
@@ -70,7 +69,6 @@ with dag:
         simbiox_biosamples = ExternalTaskSensor(
             task_id="simbiox-biosamples",
             external_dag_id="simbiox-biosamples",
-            external_task_id="silver_transform_to_db",
             check_existence=True,
             timeout=60*60*2,  # 2 hours
             execution_delta=timedelta(minutes=30),
@@ -81,7 +79,6 @@ with dag:
         regina_demography = ExternalTaskSensor(
             task_id="regina-demography",
             external_dag_id="regina-demography",
-            external_task_id="silver_transform_to_db",
             check_existence=True,
             timeout=60*60*2,  # 2 hours
             execution_delta=timedelta(minutes=30, hours=1),
