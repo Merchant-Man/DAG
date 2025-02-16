@@ -237,6 +237,8 @@ CREATE TABLE mgi_analysis(
 );
 CREATE INDEX id_repository_idx
 ON mgi_analysis(id_repository);
+CREATE INDEX run_status_idx
+ON mgi_analysis(run_status);
 ALTER TABLE mgi_analysis
 ADD CONSTRAINT PK_analysis PRIMARY KEY (id_repository, run_name);
 
@@ -329,8 +331,135 @@ ALTER TABLE zlims_samples
 ADD CONSTRAINT PK_sampeles PRIMARY KEY (id_repository, id_flowcell, id_pool, id_dnb, id_index);
 
 
--- ALTERATION AFTER CREATION 
-ALTER TABLE ica_analysis 
-ADD COLUMN tag_technical_tags text,
-ADD COLUMN tag_user_tags text,
-ADD COLUMN tag_reference_tags text;
+CREATE TABLE ica_analysis (
+  `id` varchar(128)  PRIMARY KEY,
+  time_created datetime,
+  time_modified datetime,
+  created_at datetime,
+  updated_at datetime,
+  id_repository varchar(128),
+  id_batch varchar(128),
+  date_start datetime,
+  date_end datetime,
+  pipeline_name varchar(255),
+  pipeline_type varchar(255),
+  run_name varchar(255),
+  run_status varchar(32),
+  cram text,
+  cram_size bigint UNSIGNED,
+  vcf text,
+  vcf_size bigint UNSIGNED,
+  tag_technical_tags text,
+  tag_user_tags text,
+  tag_reference_tags text
+);
+CREATE INDEX id_repository_idx
+ON ica_analysis(id_repository);
+CREATE INDEX run_status_idx
+ON ica_analysis(run_status);
+
+CREATE TABLE staging_illumina_sec (
+	date_start datetime,
+	id_repository varchar(32),
+	id_batch varchar(32),
+	pipeline_name varchar(255),
+	run_name varchar(255),
+	cram text,
+	cram_size bigint UNSIGNED,
+	vcf text,
+	vcf_size bigint UNSIGNED,
+	tag_user_tags text,
+	percent_dups float,
+	percent_q30_bases float,
+	total_seqs double,
+	median_coverage float,
+	contamination float,
+	at_least_10x float,
+	at_least_20x float,
+	ploidy_estimation varchar(6),
+	snp float,
+	indel double,
+	ts_tv float,
+	yield decimal(42, 0),
+	yield_q30 decimal(42, 0)
+);
+CREATE INDEX id_repository_idx
+ON staging_illumina_sec(id_repository);
+
+CREATE TABLE staging_mgi_sec (
+	date_start datetime,
+	id_repository varchar(32),
+	id_batch varchar(32),
+	pipeline_name varchar(255),
+	run_name varchar(255),
+	cram text,
+	cram_size bigint UNSIGNED,
+	vcf text,
+	vcf_size bigint UNSIGNED,
+	tag_user_tags binary(0),
+	percent_dups double,
+	percent_q30_bases binary(0),
+	total_seqs double,
+	median_coverage float,
+	contamination binary(0),
+	at_least_10x float,
+	at_least_20x float,
+	ploidy_estimation varchar(2),
+	snp float,
+	indel double,
+	ts_tv float
+);
+CREATE INDEX id_repository_idx
+ON staging_mgi_sec(id_repository);
+
+CREATE TABLE staging_ont_sec (
+	date_start datetime,
+	id_repository varchar(32),
+	id_batch binary(0),
+	pipeline_name varchar(255),
+	run_name varchar(255),
+	cram text,
+	cram_size bigint UNSIGNED,
+	vcf text,
+	vcf_size bigint UNSIGNED,
+	tag_user_tags binary(0),
+	percent_dups binary(0),
+	percent_q30_bases binary(0),
+	total_seqs bigint UNSIGNED,
+	median_coverage float,
+	contamination float,
+	at_least_10x double,
+	at_least_20x double,
+	ploidy_estimation varchar(6),
+	snp binary(0),
+	indel int UNSIGNED,
+	ts_tv float,
+	yield bigint UNSIGNED
+);
+CREATE INDEX id_repository_idx
+ON staging_ont_sec(id_repository);
+
+CREATE TABLE staging_seq (
+  id_repository varchar(32), 
+  id_library varchar(32), 
+  sequencer varchar(8), 
+  date_primary datetime, 
+  sum_of_total_passed_bases mediumtext, 
+  sum_of_bam_size mediumtext, 
+  id_index double
+);
+CREATE INDEX id_repository_idx
+ON staging_seq(id_repository);
+
+
+CREATE TABLE staging_simbiox_biosamples_patients (
+  id_patient varchar(128), 
+  code_repository varchar(32), 
+  id_mpi longtext, 
+  id_subject longtext, 
+  biobank_nama varchar(255)
+);
+CREATE INDEX id_patient_idx
+ON staging_simbiox_biosamples_patients(id_patient);
+CREATE INDEX code_repository_idx
+ON staging_simbiox_biosamples_patients(code_repository);
