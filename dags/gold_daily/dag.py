@@ -10,7 +10,6 @@ from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 AWS_CONN_ID = "aws"
 RDS_SECRET = Variable.get("RDS_SECRET")
 QC_QUERY = "qc.sql"
-TEMP_QC = "temp_qc.sql"
 ILLUMINA_SEC="staging_illumina_sec.sql"
 MGI_SEC="staging_mgi_sec.sql"
 ONT_SEC="staging_ont_sec.sql"
@@ -52,9 +51,6 @@ with open(os.path.join("dags/repo/dags/include/staging_query", SEQ)) as f:
 
 with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX)) as f:
     staging_simbiox_query = f.read()
-
-with open(os.path.join("dags/repo/dags/include/gold_query", TEMP_QC)) as f:
-    temp_qc_query = f.read()
 
 with dag:
     with TaskGroup('loader_sensors') as loader_sensors:
@@ -164,11 +160,6 @@ with dag:
         )
 
     with TaskGroup('queries') as queries:
-        qc = SQLExecuteQueryOperator(
-            task_id="qc",
-            conn_id="bgsi-rds-mysql-prod-superset_dev",
-            sql=qc_query
-        )
         staging_illumina_sec_task = SQLExecuteQueryOperator(
             task_id="staging_illumina_sec",
             conn_id="bgsi-rds-mysql-prod-superset_dev",
@@ -194,14 +185,14 @@ with dag:
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=staging_simbiox_query
         )
-        temp_qc_task = SQLExecuteQueryOperator(
-            task_id="temp_qc",
+        qc_task = SQLExecuteQueryOperator(
+            task_id="qc",
             conn_id="bgsi-rds-mysql-prod-superset_dev",
-            sql=temp_qc_query
-        )
+            sql=qc_query
+        ) 
         # If you want to create dependencies between queries
         # foo >> foo2
-        [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> temp_qc_task
+        [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> qc_task
 
 # Please addd the source if applicable
 loader_sensors >> queries
