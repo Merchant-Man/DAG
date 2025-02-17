@@ -8,9 +8,9 @@
 */
 
 -- Your SQL code goes here 
-DROP TABLE IF EXISTS qc;
+DROP TABLE IF EXISTS gold_qc;
 
-CREATE TABLE qc
+CREATE TABLE gold_qc
 (
 WITH cte AS (
     SELECT *,
