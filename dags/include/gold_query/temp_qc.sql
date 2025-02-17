@@ -29,7 +29,7 @@ WITH cte AS (
 			sbp.id_subject,
 		    sbp.biobank_nama origin_biobank,
 			# null sex means we can't find the simbiox data on both registries.
-			COALESCE(rd.sex, pd.sex) sex,
+			sbp.registry_sex sex,
 			seq.date_primary,
 			seq.id_library,
 			seq.sequencer,
@@ -58,17 +58,15 @@ WITH cte AS (
 			illumina_sec.yield_q30,
 			UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) ploidy_estimation,
 			CASE
-				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XX' AND UPPER(COALESCE(rd.sex, pd.sex)) = 'FEMALE' THEN 'Match'
-				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XY' AND UPPER(COALESCE(rd.sex, pd.sex)) = 'MALE' THEN 'Match'
-				WHEN COALESCE(rd.sex, pd.sex) IS NULL THEN 'No Data'
+				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XX' AND UPPER(COALESCE(sbp.registry_sex)) = 'FEMALE' THEN 'Match'
+				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XY' AND UPPER(COALESCE(sbp.registry_sex)) = 'MALE' THEN 'Match'
+				WHEN COALESCE(sbp.registry_sex) IS NULL THEN 'No Data'
 				WHEN COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) IS NULL THEN 'No Data'
 				ELSE 'Mismatch'
 			END sex_ploidy_category
 		FROM
 			staging_seq seq
 			LEFT JOIN staging_simbiox_biosamples_patients sbp ON seq.id_repository = sbp.code_repository
-			LEFT JOIN regina_demography rd ON sbp.id_subject = rd.id_subject
-			LEFT JOIN phenovar_participants pd ON sbp.id_subject = pd.id_subject
 			# Started from here, the number of rows can be duplicated i.e. an id_repository can have multiple secondary analysis run with different run_name.
 			# Unless we do window functino on id_repo ONLY based on datetime available.
 			LEFT JOIN
