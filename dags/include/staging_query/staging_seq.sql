@@ -43,25 +43,33 @@ FROM
 			) dbt2 ON dbt1.id_repository = dbt2.id_repository
 	) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
 UNION ALL
-SELECT
-	COALESCE(db_ica.new_repository, seq_ica.id_repository) id_repository,
-	id_library,
-	'Illumina' sequencer,
-	time_modified date_primary,
-	NULL sum_of_total_passed_bases,
-	NULL sum_of_bam_size,
-	NULL id_index
-FROM
-	ica_samples seq_ica
-	LEFT JOIN (
-		SELECT DISTINCT
-			id_repository,
-			new_repository
-		FROM
-			dynamodb_fix_id_repository_latest
-		WHERE
-			sequencer = "Illumina"
-	) db_ica ON seq_ica.id_repository = db_ica.id_repository
+SELECT 
+	*
+FROM (
+	SELECT
+		-- This windowing is needed due to reupload the same file within BSSH.
+		ROW_NUMBER() OVER(PARTITION BY seq_ica.id_repository, seq_ica.id_library ORDER BY seq_ica.time_modified DESC) rn,
+		COALESCE(db_ica.new_repository, seq_ica.id_repository) id_repository,
+		seq_ica.id_library,
+		'Illumina' sequencer,
+		time_modified date_primary,
+		NULL sum_of_total_passed_bases,
+		NULL sum_of_bam_size,
+		NULL id_index
+	FROM
+		ica_samples seq_ica
+		LEFT JOIN (
+			SELECT DISTINCT
+				id_repository,
+				new_repository
+			FROM
+				dynamodb_fix_id_repository_latest
+			WHERE
+				sequencer = "Illumina"
+		) db_ica ON seq_ica.id_repository = db_ica.id_repository
+)t
+WHERE
+	rn=1
 UNION ALL
 SELECT
 	COALESCE(db_wfhv.new_repository, seq_wfhv.id_repository) id_repository,
