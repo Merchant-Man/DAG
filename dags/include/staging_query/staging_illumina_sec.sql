@@ -3,7 +3,7 @@ INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
 	COALESCE(db_ic_sec.new_repository, ica_sec.id_repository) id_repository,
-	ica_sec.id_batch,
+	ica_sec.new_id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
 	ica_sec.cram,
@@ -41,7 +41,18 @@ FROM
 					date_end DESC
 			) AS rn
 		FROM
-			ica_analysis
+			(
+			--     df["id_batch"] = df["tags"].apply(lambda x: ast.literal_eval(
+			--         x)["userTags"][4] if len(ast.literal_eval(x)["userTags"]) > 4 else None)
+			-- If the length of the tags less than or equal to 4, the above script is not valid. 
+			-- this is alsoe the case, when the location of tag is not in the fifth position.
+			-- It is way better to use regex to get the id_batch!!!!!!
+				SELECT
+					*,
+					TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", "")) new_id_batch
+				FROM
+					ica_analysis
+			) t
 		WHERE
 			run_status = "SUCCEEDED"
 	) ica_sec
