@@ -96,7 +96,7 @@ def fetch_runname(id:str, headers:str) -> Optional[Tuple[Optional[Any], List[str
                     reference_tags = item["details"].get(
                         "tags", {}).get("referenceTags", [])
                     project_name_tag = next(
-                        (tag for tag in technical_tags if "bssh.runname" in tag), None)
+                        (tag for tag in technical_tags if "bssh.run.name" in tag), None)
                     return project_name_tag, technical_tags, user_tags, connector_tags, run_in_tags, run_out_tags, reference_tags
             else:
                 print(
