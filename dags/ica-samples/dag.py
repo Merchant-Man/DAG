@@ -8,7 +8,7 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from utils.utils import fetch_and_dump, silver_transform_to_db
 import json
-from typing import Dict, Any
+from typing import Any, Dict, Tuple, Optional, List
 import ast
 import re
 import time
@@ -73,7 +73,7 @@ def ica_paginate(response: Dict[str, Any]) -> str:
     return pageToken
 
 
-def fetch_runname(id, headers):
+def fetch_runname(id:str, headers:str) -> Optional[Tuple[Optional[Any], List[str], List[str], List[str], List[str], List[str], List[str]]]:
     """Fetch runname from API."""
     url = f"https://ica.illumina.com/ica/rest/api/projects/{ICA_PROJECT}/samples/{id}/data?filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
     for i in range(3):  # Retry up to 3 times
@@ -83,18 +83,21 @@ def fetch_runname(id, headers):
             if response.status_code == 200:
                 data = response.json()
                 for item in data.get("items", []):
-                    tags = item["details"].get(
+                    technical_tags = item["details"].get(
                         "tags", {}).get("technicalTags", [])
+                    user_tags = item["details"].get(
+                        "tags", {}).get("userTags", [])
+                    connector_tags = item["details"].get(
+                        "tags", {}).get("connectorTags", [])
+                    run_in_tags = item["details"].get(
+                        "tags", {}).get("runInTags", [])
+                    run_out_tags = item["details"].get(
+                        "tags", {}).get("runOutTags", [])
+                    reference_tags = item["details"].get(
+                        "tags", {}).get("referenceTags", [])
                     project_name_tag = next(
-                        (tag for tag in tags if "bssh.project.name" in tag), None)
-                    if project_name_tag:
-                        # Extract part after colon
-                        return project_name_tag.split(":")[1]
-                    path = item["details"].get("path", "")
-                    if "fastq.gz" in path:
-                        match = re.search(r"(LP\d+-P\d+)", path)
-                        if match:
-                            return match.group(1)
+                        (tag for tag in technical_tags if "bssh.runname" in tag), None)
+                    return project_name_tag, technical_tags, user_tags, connector_tags, run_in_tags, run_out_tags, reference_tags
             else:
                 print(
                     f"API responded with status code {response.status_code} for id {id} with details: {response.json().get('detail')}")
@@ -127,8 +130,30 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     print("=== Starting to fetch the id library ===")
-    df["id_library"] = [fetch_runname(id, ICA_HEADERS) for id in df["id"]]
+    def safe_fetch(sample_id):  
+        result = fetch_runname(sample_id, ICA_HEADERS)
+        if result is None:
+            # Return a tuple of Nones for the 7 expected values
+            return (None, None, None, None, None, None, None)
+        return result
+
+    temp_api = [safe_fetch(sample_id) for sample_id in df["id"]]
+
+    temp_api = pd.DataFrame(
+        temp_api,
+        columns=[
+            "id_library",
+            "sample_list_technical_tags",
+            "sample_list_user_tags",
+            "sample_list_connector_tags",
+            "sample_list_run_in_tags",
+            "sample_list_run_out_tags",
+            "sample_list_reference_tags",
+        ],
+        index=df.index
+    )
     print("=== Fetching id library is finished ===")
+    df = pd.concat([df, temp_api], axis=1)
 
     df["application"] = df["application"].apply(ast.literal_eval)
     df = df.join(pd.json_normalize(
@@ -160,7 +185,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
     df = df[["id", "id_library", "time_created", "time_modified", "created_at", "updated_at", "owner_id", "tenant_id", "tenant_name",
-             "id_repository", "status", "tag_technical_tags", "tag_user_tags", "tag_connetor_tags", "tag_run_in_tags", "application_id", "application_name"]]
+             "id_repository", "status", "tag_technical_tags", "tag_user_tags", "tag_connetor_tags", "tag_run_in_tags", "application_id", "application_name",
+            "sample_list_technical_tags","sample_list_user_tags","sample_list_connector_tags","sample_list_run_in_tags","sample_list_run_out_tags","sample_list_reference_tags"]]
 
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record by id (unique)

@@ -122,12 +122,18 @@ CREATE TABLE ica_samples(
   tenant_name VARCHAR(128),
   id_repository VARCHAR(128),
   `status` VARCHAR(32),
-  tag_technical_tags text,
-  tag_user_tags text,
-  tag_connetor_tags text,
-  tag_run_in_tags text,
+  tag_technical_tags TEXT,
+  tag_user_tags TEXT,
+  tag_connetor_tags TEXT,
+  tag_run_in_tags TEXT,
   application_id VARCHAR(128),
-  application_name VARCHAR(128)
+  application_name VARCHAR(128),
+  sample_list_technical_tags TEXT,
+  sample_list_user_tags TEXT,
+  sample_list_connector_tags TEXT,
+  sample_list_run_in_tags TEXT,
+  sample_list_run_out_tags TEXT,
+  sample_list_reference_tags TEXT
 );
 CREATE INDEX id_library_idx
 ON ica_samples (id_library);
