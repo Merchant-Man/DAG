@@ -66,7 +66,7 @@ WITH cte AS (
 				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XX' AND UPPER(COALESCE(sbp.registry_sex)) = 'FEMALE' THEN 'Match'
 				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XY' AND UPPER(COALESCE(sbp.registry_sex)) = 'MALE' THEN 'Match'
 				WHEN COALESCE(sbp.registry_sex) IS NULL THEN 'No Data'
-				WHEN COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) IS NULL THEN 'No Data'
+				WHEN COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) IS NULL OR COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) = 'nan' OR  COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) = '' THEN 'No Data'
 				ELSE 'Mismatch'
 			END sex_ploidy_category
 		FROM
