@@ -12,6 +12,7 @@ import json
 from typing import Dict, Any
 import ast
 import boto3
+import re
 
 AWS_CONN_ID = "aws"
 ICA_CONN_ID = "ica"
@@ -81,9 +82,21 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # TODO It might good to filter the delta based on timeModified and/or timeCreated
 
     # Clean up
-    df["id_repository"] = df["userReference"].str.split("_").str[0]
-    df["id_batch"] = df["tags"].apply(lambda x: ast.literal_eval(
-        x)["userTags"][4] if len(ast.literal_eval(x)["userTags"]) > 4 else None)
+    # Split the user_reference into id_repository basede on conditoin
+    def split_user(ref:str):
+        if re.match(r"^SKI", ref):
+            # For SKI_XXX_YYY get the SKI_XXXX
+            return "_".join(ref.split("_")[0:2])
+        elif re.match(r".*_M$", ref):
+            # For TOP UP 1H0044101C02_250205_M
+            return ref
+        elif re.match(r"DRAGEN", ref):
+            return ref.split("-")[0]
+        return ref.split("_")[0]
+    
+    df["id_repository"] = df["userReference"].apply(split_user)
+    # New regex for extracting id_batch
+    df["id_batch"] = df["tags"].apply(lambda x: re.search(r"(LP[\w\d]+)", str(ast.literal_eval(x)["userTags"])))
     df["pipeline_name"] = df["pipeline"].apply(
         lambda x: ast.literal_eval(x)["code"])
     df["pipeline_type"] = "secondary"
