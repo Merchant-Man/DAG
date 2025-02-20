@@ -64,7 +64,7 @@ INSERT INTO staging_seq
 						seq_ica.time_modified DESC
 				) rn,
 				COALESCE(db_ica.new_repository, seq_ica.id_repository) id_repository,
-				seq_ica.id_library,
+				COALESCE(REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), "LP.+"), TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))) id_library,
 				'Illumina' sequencer,
 				time_modified date_primary,
 				NULL sum_of_total_passed_bases,

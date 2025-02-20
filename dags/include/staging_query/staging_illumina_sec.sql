@@ -3,7 +3,7 @@ INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
 	COALESCE(db_ic_sec.new_repository, ica_sec.id_repository) id_repository,
-	ica_sec.new_id_batch,
+	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
 	ica_sec.cram,
