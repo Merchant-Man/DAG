@@ -69,13 +69,26 @@ FROM
 			*,
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					id_repository
+					clean_id_repository
 				ORDER BY
 					percent_q30_bases DESC
 			) AS rn
 		FROM
-			illumina_qc
-	) illumina_qc_2 ON ica_sec.id_repository = illumina_qc_2.id_repository
+			(
+			SELECT
+				*,
+			CASE
+			-- DRAGEN
+				WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
+				-- TOP UP 
+				WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
+				ELSE id_repository
+			END clean_id_repository
+			FROM
+				illumina_qc
+
+			) t
+	) illumina_qc_2 ON ica_sec.id_repository = illumina_qc_2.clean_id_repository
 	AND illumina_qc_2.rn = 1
 	LEFT JOIN (
 		SELECT
