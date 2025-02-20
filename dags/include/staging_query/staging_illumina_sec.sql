@@ -2,7 +2,7 @@ DELETE FROM staging_illumina_sec;
 INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
-	COALESCE(db_ic_sec.new_repository, ica_sec.id_repository) id_repository,
+	COALESCE(db_ic_sec.new_repository, ica_sec.clean_id_repository) id_repository,
 	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
@@ -36,7 +36,7 @@ FROM
 			-- This decision causing the number of row is consistent.
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					id_repository
+					clean_id_repository
 				ORDER BY
 					date_end DESC
 			) AS rn
@@ -49,7 +49,14 @@ FROM
 			-- It is way better to use regex to get the id_batch!!!!!!
 				SELECT
 					*,
-					TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", "")) new_id_batch
+					TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", "")) new_id_batch,
+					CASE
+					-- DRAGEN
+						WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
+						-- TOP UP 
+						WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
+						ELSE id_repository
+					END clean_id_repository
 				FROM
 					ica_analysis
 			) t
