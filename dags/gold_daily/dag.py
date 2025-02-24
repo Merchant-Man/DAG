@@ -10,6 +10,7 @@ from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 AWS_CONN_ID = "aws"
 RDS_SECRET = Variable.get("RDS_SECRET")
 QC_QUERY = "qc.sql"
+PGX_REPORT_QUERY = "pgx_report.sql"
 ILLUMINA_SEC="staging_illumina_sec.sql"
 MGI_SEC="staging_mgi_sec.sql"
 ONT_SEC="staging_ont_sec.sql"
@@ -37,6 +38,9 @@ dag = DAG(
 with open(os.path.join("dags/repo/dags/include/gold_query", QC_QUERY)) as f:
     qc_query = f.read()
 
+with open(os.path.join("dags/repo/dags/include/gold_query", PGX_REPORT_QUERY)) as f:
+    pgx_report_query = f.read()
+
 with open(os.path.join("dags/repo/dags/include/staging_query", ILLUMINA_SEC)) as f:
     staging_illumina_sec_query = f.read()
 
@@ -56,6 +60,16 @@ with dag:
     with TaskGroup('loader_sensors') as loader_sensors:
         # By default, each of the task will poke in the interval of 60 seconds based on the BaseSensorOperator
         # Currently, we need to manually defined each sensor and the timedelta for the waited task to be exactly matched the execution time of the external DAG
+        pgx_report_pl = ExternalTaskSensor(
+            task_id="pgx_report",
+            external_dag_id="pgx_report",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
+
         zlims_pl = ExternalTaskSensor(
             task_id="zlims_pl",
             external_dag_id="zlims-pl",
@@ -185,14 +199,20 @@ with dag:
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=staging_simbiox_query
         )
-        qc_task = SQLExecuteQueryOperator(
+        gold_qc_task = SQLExecuteQueryOperator(
             task_id="qc",
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=qc_query
         ) 
+        gold_pgx_report_task = SQLExecuteQueryOperator(
+            task_id="pgx_report",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=pgx_report_query
+        ) 
         # If you want to create dependencies between queries
         # foo >> foo2
-        [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> qc_task
+        [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> gold_qc_task
+        [gold_qc_task, pgx_report_pl] >> gold_pgx_report_task
 
 # Please addd the source if applicable
 loader_sensors >> queries

@@ -469,3 +469,125 @@ CREATE INDEX id_patient_idx
 ON staging_simbiox_biosamples_patients(id_patient);
 CREATE INDEX code_repository_idx
 ON staging_simbiox_biosamples_patients(code_repository);
+
+
+CREATE TABLE staging_pgx_report_status (
+  `file_name` VARCHAR(64) PRIMARY KEY comment 'ID (PK) Uniqueness from PGx samplesheets',
+  bam TEXT,
+  input_creation_date DATETIME,
+  id_repository VARCHAR(32),
+  hub_name TEXT,
+  run_name varchar(128),
+  report_path_ind TEXT,
+  ind_report_creation_date DATETIME,
+  report_path_eng TEXT,
+  eng_report_creation_date DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+CREATE INDEX id_repository_idx
+ON staging_pgx_report_status(id_repository);
+
+
+CREATE TABLE simbiox_master_status_proses (
+	id TINYINT PRIMARY KEY ,
+	status_proses_name varchar(50),
+	status_proses_color varchar(50),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+
+
+CREATE TABLE simbiox_master_status_transfer (
+	id TINYINT PRIMARY KEY ,
+	status_transfer_name varchar(50) NULL,
+	status_transfer_color varchar(50) NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+
+
+CREATE TABLE simbiox_transfer_formulir (
+	id varchar(50) PRIMARY KEY,
+	id_biobank varchar(50),
+	id_biobank_tujuan varchar(50),
+	nomor_formulir varchar(50),
+	tanggal_formulir date,
+	tanggal_pengiriman date,
+	tanggal_penerimaan date,
+	waktu_pengiriman time,
+	waktu_penerimaan time,
+	suhu_pengiriman varchar(10),
+	suhu_penerimaan varchar(10),
+	petugas_pengirim varchar(100),
+	petugas_penerima varchar(100),
+	jasa_ekspedisi varchar(100),
+	no_resi varchar(50),
+	keterangan varchar(255),
+	keterangan_receive varchar(255),
+	transfer_status TINYINT DEFAULT 0,
+	receive_status TINYINT DEFAULT 0,
+	position_start varchar(20),
+	user_dm varchar(50),
+	user_dm_receive varchar(50),
+	user_teknisi varchar(50),
+	user_teknisi_receive varchar(50),
+	created_time timestamp COMMENT 'created_at from the original table',
+	dm_updated_at timestamp,
+	dm_receive_updated_at timestamp,
+	teknisi_updated_at timestamp,
+	teknisi_receive_updated_at timestamp,
+	tujuan_is_biobank TINYINT DEFAULT 1,
+	non_biobank_nama varchar(255),
+	triple_packaging varchar(255),
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+
+CREATE TABLE simbiox_transfer (
+	transfer_id varchar(50) PRIMARY KEY,
+	tanggal_pengiriman date,
+	kode_posisi varchar(255),
+	suhu_pengiriman TINYINT,
+	petugas_pengirim varchar(255),
+	jasa_ekspedisi varchar(255),
+	petugas_penerima varchar(255),
+	suhu_penerimaan TINYINT,
+	tanggal_diterima date,
+	id_biobank varchar(50),
+	id_biobank_tujuan varchar(50),
+	biosample_id varchar(50),
+	repository_code varchar(50),
+	transfer_formulir_id varchar(50),
+	proses_status TINYINT DEFAULT 0,
+	transfer_status TINYINT DEFAULT 0,
+	proses_receive_status TINYINT DEFAULT 0,
+	new_biosample_id varchar(50),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+CREATE INDEX biosample_id_idx
+ON simbiox_transfer(biosample_id);
+
+
+CREATE TABLE simbiox_log_visit_biospc (
+	id varchar(50) PRIMARY KEY,
+	code_origin varchar(10),
+	px_id varchar(50),
+	diagnose text,
+	kode_icd varchar(7),
+	datevisit date,
+	`status` VARCHAR(5),
+	`pi` varchar(50),
+	code_project varchar(50),
+	create_time timestamp,
+	create_by varchar(255),
+	id_biobank varchar(50),
+	kode_kedatangan varchar(2) DEFAULT '01',
+	position_start varchar(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+CREATE INDEX id_biobank_idx
+ON simbiox_log_visit_biospc(id_biobank);
+CREATE INDEX px_id_idx
+ON simbiox_log_visit_biospc(px_id);

@@ -1,0 +1,3 @@
+INSERT INTO simbiox_log_visit_biospc (id,code_origin,px_id,diagnose,kode_icd,datevisit,`status`,`pi`,code_project,create_time,create_by,id_biobank,kode_kedatangan,position_start,created_at,updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE code_origin = VALUES(code_origin),px_id = VALUES(px_id),diagnose = VALUES(diagnose),kode_icd = VALUES(kode_icd),datevisit = VALUES(datevisit),`status` = VALUES(`status`),`pi` = VALUES(`pi`),code_project = VALUES(code_project),create_time = VALUES(create_time),create_by = VALUES(create_by),id_biobank = VALUES(id_biobank),kode_kedatangan = VALUES(kode_kedatangan),position_start = VALUES(position_start),updated_at = '{{ ts }}'

@@ -1,0 +1,4 @@
+-- The quary is not using on key update due to the fact that the run_name is not produced.
+INSERT INTO staging_pgx_report_status(`file_name`,bam,input_creation_date,id_repository,hub_name,run_name,report_path_ind,ind_report_creation_date,report_path_eng,eng_report_creation_date,created_at,updated_at)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE `file_name` = VALUES(`file_name`),bam = VALUES(bam),input_creation_date = VALUES(input_creation_date),id_repository = VALUES(id_repository),hub_name = VALUES(hub_name),run_name = VALUES(run_name),report_path_ind = VALUES(report_path_ind),ind_report_creation_date = VALUES(ind_report_creation_date),report_path_eng = VALUES(report_path_eng),eng_report_creation_date = VALUES(eng_report_creation_date),updated_at = '{{ ts }}'

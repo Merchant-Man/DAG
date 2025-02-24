@@ -3,7 +3,8 @@
 -- Purpose  :   This query is intended to be used as the source of QC metrics.
 -- Author   :   Abdullah Faqih
 -- Created  :   16-02-2025
--- Changes:
+-- Changes	: 
+				- 24-02-2025: Adding new columns for QC categories
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -131,6 +132,37 @@ SELECT
 	    -- Catch-all for other Coverage QC failures
 	    ELSE 'Fail Coverage QC'
 	END AS qc_category2,
+	
+	CASE 
+	    -- Most restrictive: No Data (all critical fields missing)
+	    WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
+	    
+	    -- No Coverage Data: sex is present, but coverage-related fields are missing
+	    WHEN sex IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Coverage Data'
+	    
+	    -- No Sex Data: coverage data exists, sex is missing, and batch_sex_category is NOT 'Fail'
+	    WHEN sex IS NULL AND coverage IS NOT NULL AND at_least_10x IS NOT NULL 
+	         AND batch_sex_category <> 'Fail' THEN 'No Data'
+	
+	    -- Pass QC: Coverage and depth meet the threshold
+	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
+	        CASE 
+	            WHEN batch_sex_category = 'Pass' THEN 'Pass'
+	            WHEN sex IS NOT NULL AND batch_sex_category = 'Incomplete Data' THEN 'No Data'
+	            ELSE 'Fail QC'  -- If batch_sex_category is not 'Pass' or 'Incomplete Data', fail QC
+	        END
+	
+	    -- Explicit Fail QC: Coverage and depth both fail thresholds, and batch_sex_category is 'Fail'
+	    WHEN coverage < 30 AND at_least_10x < 90 AND batch_sex_category = 'Fail' THEN 'Fail QC'
+	
+	    -- Default: Any other condition falls under Fail QC
+	    ELSE 'Fail QC'
+	END AS qc_category3,
+	CASE 
+	    WHEN coverage IS NULL OR at_least_10x IS NULL THEN 'No Data'
+	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 'Pass'
+	    ELSE 'Fail'
+	END AS coverage_category,
 	CURRENT_TIMESTAMP updated_at
 FROM 
 	cte
