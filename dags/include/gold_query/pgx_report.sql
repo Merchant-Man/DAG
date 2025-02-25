@@ -8,6 +8,7 @@
 */
 
 -- Your SQL code goes here DROP TABLE IF EXISTS  gold_pgx_report;
+DROP TABLE IF EXISTS gold_pgx_report;
 
 CREATE TABLE gold_pgx_report (
 SELECT
@@ -52,4 +53,4 @@ FROM (
 	WHERE
 		gold_qc.qc_category2 = "Pass"
 ) t
-)
+);
