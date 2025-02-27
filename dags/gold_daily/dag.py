@@ -16,6 +16,7 @@ MGI_SEC="staging_mgi_sec.sql"
 ONT_SEC="staging_ont_sec.sql"
 SEQ="staging_seq.sql"
 SIMBIOX="staging_simbiox_biosamples_patients.sql"
+SIMBIOX_REPORT_FIX_PROGRESS="staging_report_fix_simbiox.sql"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -55,6 +56,9 @@ with open(os.path.join("dags/repo/dags/include/staging_query", SEQ)) as f:
 
 with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX)) as f:
     staging_simbiox_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX_REPORT_FIX_PROGRESS)) as f:
+    staging_simbiox_report_fix_progress_query = f.read()
 
 with dag:
     with TaskGroup('loader_sensors') as loader_sensors:
@@ -198,6 +202,11 @@ with dag:
             task_id="staging_simbiox",
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=staging_simbiox_query
+        )
+        staging_simbiox_report_fix_progress_task = SQLExecuteQueryOperator(
+            task_id="staging_simbiox_report_fix_progress",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_simbiox_report_fix_progress_query
         )
         gold_qc_task = SQLExecuteQueryOperator(
             task_id="qc",
