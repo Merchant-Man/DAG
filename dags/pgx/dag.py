@@ -174,16 +174,6 @@ def transform_pgx_logs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     # Filter only either input_creation_date or ind_report_creation_date is yesterday.
 
-    print(f"Rows before filter: {len(df)}")
-    # From ICA API the timeModified is in UTC and the Airflow run in UTC
-    ts = pd.to_datetime(ts).tz_localize("UTC")
-    td = pd.Timedelta(15, "days")
-    ts_1 = ts - td
-    print(f"ts: {ts}, td: {td}, ts_1: {ts_1}")
-    df = df.loc[(((df["input_creation_date"] <= ts) & (df["input_creation_date"] >= ts_1)) | (
-        (df["ind_report_creation_date"] <= ts) & (df["ind_report_creation_date"] >= ts_1)))]
-    print(f"Rows after filter: {len(df)}")
-
     if "created_at" not in df.columns:
         df["created_at"] = ts
     if "updated_at" not in df.columns:
