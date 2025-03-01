@@ -1,8 +1,17 @@
+/*
+ ---------------------------------------------------------------------------------------------------------------------------------
+ -- Purpose  :   This query is intended to be used as the staging results of illumina secondary analysis data.
+ -- Author   :   Abdullah Faqih
+ -- Created  :   14-02-2025
+ -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
+ ---------------------------------------------------------------------------------------------------------------------------------
+ */
+-- Your SQL code goes here
 DELETE FROM staging_illumina_sec;
 INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
-	COALESCE(db_ic_sec.new_repository, ica_sec.clean_id_repository) id_repository,
+	COALESCE(sfki.code_repository, COALESCE(db_ic_sec.new_repository,ica_sec.clean_id_repository)) id_repository,
 	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
@@ -110,5 +119,6 @@ FROM
 		WHERE
 			sequencer = "Illumina"
 	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
+	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
 WHERE
 	ica_sec.rn = 1)

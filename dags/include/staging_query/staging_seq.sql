@@ -1,3 +1,13 @@
+/*
+ ---------------------------------------------------------------------------------------------------------------------------------
+ -- Purpose  :   This query is intended to be used as the staging results of all sequencer platform primary analysis data.
+ -- Author   :   Abdullah Faqih
+ -- Created  :   14-02-2025
+ -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
+						    Fix the windowing of Illumina data based on id_lib into only based on id_repository (just quick fix since prev the id_lib nulls) 
+ ---------------------------------------------------------------------------------------------------------------------------------
+ */
+-- Your SQL code goes here
 DELETE FROM staging_seq;
 INSERT INTO staging_seq
 (
@@ -45,42 +55,39 @@ INSERT INTO staging_seq
 		) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
 	UNION ALL
 	SELECT
-		id_repository,
+		COALESCE(sfki.code_repository, t.id_repository) id_repository,
 		id_library,
 		sequencer,
 		date_primary,
-		sum_of_total_passed_bases,
-		sum_of_bam_size,
-		id_index
+		NULL sum_of_total_passed_bases,
+		NULL sum_of_bam_size,
+		NULL id_index
 	FROM
 		(
 			SELECT
 				-- This windowing is needed due to reupload the same file within BSSH.
 				ROW_NUMBER() OVER (
 					PARTITION BY
-						seq_ica.clean_id_repository,
-						seq_ica.id_library
+						seq_ica.clean_id_repository
 					ORDER BY
 						seq_ica.time_modified DESC
 				) rn,
 				COALESCE(db_ica.new_repository, seq_ica.clean_id_repository) id_repository,
-				COALESCE(REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), "LP.+"), TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))) id_library,
+				id_library,
 				'Illumina' sequencer,
-				time_modified date_primary,
-				NULL sum_of_total_passed_bases,
-				NULL sum_of_bam_size,
-				NULL id_index
+				time_modified date_primary
 			FROM
 				(
 				SELECT
-					*,
 					CASE
 					-- DRAGEN
 						WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
 						-- TOP UP 
 						WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
 						ELSE id_repository
-					END clean_id_repository
+					END clean_id_repository,
+					COALESCE(REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), "LP.+"), TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))) id_library,
+					time_modified
 				FROM
 					ica_samples				
 				) seq_ica
@@ -94,6 +101,7 @@ INSERT INTO staging_seq
 						sequencer = "Illumina"
 				) db_ica ON seq_ica.clean_id_repository = db_ica.id_repository
 		) t
+	LEFT JOIN staging_fix_ski_id_repo sfki ON t.id_repository = sfki.new_origin_code_repository
 	WHERE
 		rn = 1
 	UNION ALL
