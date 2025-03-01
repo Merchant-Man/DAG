@@ -106,6 +106,8 @@ CREATE INDEX id_patient_idx
 ON simbiox_biosamples (id_patient);
 CREATE INDEX code_repository_idx
 ON simbiox_biosamples (code_repository);
+CREATE INDEX origin_code_repository_idx
+ON simbiox_biosamples (origin_code_repository);
 CREATE INDEX id_patient_code_repository_idx
 ON simbiox_biosamples (id_patient, code_repository);
 
@@ -591,3 +593,18 @@ CREATE INDEX id_biobank_idx
 ON simbiox_log_visit_biospc(id_biobank);
 CREATE INDEX px_id_idx
 ON simbiox_log_visit_biospc(px_id);
+
+
+CREATE TABLE staging_fix_ski_id_repo (
+	SELECT
+		code_repository,
+		origin_code_repository,
+		CONCAT(REGEXP_SUBSTR(origin_code_repository, "SKI"), "_", REGEXP_SUBSTR(origin_code_repository, "\\d+")) new_origin_code_repository
+	FROM
+		simbiox_biosamples
+	WHERE
+		origin_code_repository LIKE "%SKI%"
+);
+
+CREATE INDEX new_origin_code_repository
+ON staging_fix_ski_id_repo(new_origin_code_repository);

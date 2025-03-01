@@ -3,7 +3,8 @@
 -- Purpose  :   This query is created to provide a materialised table on simbiox data stitched with the registry data for staging purpose.
 -- Author   :   Abdullah Faqih
 -- Created  :   16-02-2025
--- Changes:
+-- Changes	:   01-03-2025 Remove filter for biobank pusat and bbbionmika since several code repo are origin there i.e:
+					 "Biobank Sentral (BB Binomika)" --> SKI samples
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -17,21 +18,29 @@ INSERT INTO staging_simbiox_biosamples_patients (
 				# Taking from patient for valid biobank origin as a first option, then from biosample.
 				COALESCE(sp2.biobank_nama, sb.biobank_nama) biobank_nama
 			FROM (
-					SELECT # Several code_repository can have several biobank ids. Examples: 
-						#	05000010401 -> Biobank RSPI Prof. Dr. Sulianti Saroso Biobank RSUP Persahabatan Biobank RSPI Prof. Dr. Sulianti Saroso
-						# In addition several code_repo have different biosample status (2 and 3: active and transferred) causing duplicaiton rows. Examples:  ("05002210401", "05002210401", "0I0026001C01") #status 2 and status 3 causing
-						# Biobank PKIAN RSAB Harapan Kita Biobank PKIAN RSAB Harapan Kita
-						# Biobank RSPI Prof. Dr. Sulianti Saroso Biobank RSPI Prof. Dr. Sulianti Saroso
-						# Here, we do distinct for the GROUP_CONCAT to get rid the same record (with different biosmaple status coming from the same biobank id. 
-						# Our goal to have the same number of rows as the 'seq' above. - OK
-						id_patient,
-						code_repository,
-						GROUP_CONCAT(DISTINCT mb.biobank_nama SEPARATOR ' ') biobank_nama
-					FROM simbiox_biosamples sb
-						LEFT JOIN master_biobank mb ON sb.id_biobank = mb.id_biobank
-					WHERE sb.id_biobank NOT IN('1', '80dc7749-63f2-4a3a-9486-562f8a677333') #  exclude ('Biobank Sentral (BB Binomika)', 'Biobank Pusat')
-					GROUP BY id_patient,
-						code_repository
+				SELECT
+					*,
+					REGEXP_REPLACE(biobank_nama, "(Biobank Pusat;|Biobank Sentral \\(BB Binomika\\);|;Biobank Pusat|;Biobank Sentral \\(BB Binomika\\))", "") new_biobank_nama
+				FROM
+					(
+						SELECT # Several code_repository can have several biobank ids. Examples: 
+							#	05000010401 -> Biobank RSPI Prof. Dr. Sulianti Saroso Biobank RSUP Persahabatan Biobank RSPI Prof. Dr. Sulianti Saroso
+							# In addition several code_repo have different biosample status (2 and 3: active and transferred) causing duplicaiton rows. Examples:  ("05002210401", "05002210401", "0I0026001C01") #status 2 and status 3 causing
+							# Biobank PKIAN RSAB Harapan Kita Biobank PKIAN RSAB Harapan Kita
+							# Biobank RSPI Prof. Dr. Sulianti Saroso Biobank RSPI Prof. Dr. Sulianti Saroso
+							# Here, we do distinct for the GROUP_CONCAT to get rid the same record (with different biosmaple status coming from the same biobank id. 
+							# Our goal to have the same number of rows as the 'seq' above. - OK
+							id_patient,
+							code_repository,
+							origin_code_repository,
+							GROUP_CONCAT(DISTINCT TRIM(mb.biobank_nama) SEPARATOR ';') biobank_nama
+						FROM
+							simbiox_biosamples sb
+							LEFT JOIN master_biobank mb ON sb.id_biobank = mb.id_biobank
+						GROUP BY
+							id_patient,
+							code_repository
+					) t
 				) sb
 				LEFT JOIN (
 					SELECT # simbiox patients also have biobank nama. 
