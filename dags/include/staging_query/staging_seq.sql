@@ -5,6 +5,7 @@
  -- Created  :   14-02-2025
  -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
 						    Fix the windowing of Illumina data based on id_lib into only based on id_repository (just quick fix since prev the id_lib nulls) 
+				 01-03-2025 Add new criteria for WFHV samples to at least have 9GB of total passed bases.
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -123,5 +124,7 @@ INSERT INTO staging_seq
 				dynamodb_fix_id_repository_latest
 			WHERE
 				sequencer = "ONT"
-		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository
+		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository	
+	WHERE
+		CAST(seq_wfhv.sum_of_total_passed_bases AS DOUBLE ) >= 9*10e9
 )
