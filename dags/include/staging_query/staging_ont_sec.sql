@@ -1,3 +1,14 @@
+/*
+---------------------------------------------------------------------------------------------------------------------------------
+-- Purpose  :   This query is intended to be used as the source of QC metrics.
+-- Author   :   Abdullah Faqih
+-- Created  :   16-02-2025
+-- Changes	: 
+				- 02-03-2025: Adding filter for testing id repositories
+---------------------------------------------------------------------------------------------------------------------------------
+*/
+
+
 DELETE FROM staging_ont_sec;
 INSERT INTO staging_ont_sec
 -- TODO - In the future it might be that we would have an id repo to be rerun with different run_name. Latest run_time should be chosen.
@@ -27,4 +38,6 @@ INSERT INTO staging_ont_sec
 FROM
 	wfhv_analysis
 	LEFT JOIN wfhv_qc ON wfhv_analysis.id_repository = wfhv_qc.id_repository
-	AND wfhv_analysis.run_name = wfhv_qc.run_name)
+	AND wfhv_analysis.run_name = wfhv_qc.run_name
+WHERE
+	NOT (REGEXP_LIKE(wfhv_analysis.id_repository, "(?i)(demo|test|benchmark|dev)") OR REGEXP_LIKE(wfhv_analysis.run_name, "(?i)(demo|test|benchmark|dev)")))
