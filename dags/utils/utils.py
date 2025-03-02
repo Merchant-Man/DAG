@@ -2,6 +2,7 @@ from typing import Callable, Optional, Dict, Any, Tuple, List, Union
 from airflow.providers.http.hooks.http import HttpHook
 import tenacity
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.amazon.aws.hooks.dynamodb import DynamoDBHook
 import json
 import pandas as pd
 import io
@@ -25,7 +26,7 @@ def extract_db_url(db_secret: str) -> Tuple[str, str, str, str]:
     Parameters
     ----------
     db_secret: str
-        The database secret in the format <db_con>://<username>:<password>@<host>:<port>/<database_name> 
+        The database secret in the format <db_con>://<username>:<password>@<host>:<port>/<database_name>
 
     Returns
     -------
@@ -272,11 +273,74 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
 
     return True
 
-def dynamo_and_dump() -> bool: 
-    pass
 
+def dynamo_and_dump(aws_conn_id: str, table_name: str, bucket_name: str,
+                   object_path: str, **kwargs) -> None:
+    """
+    Fetching data from dynamodb and dump it into s3 bucket. Currently only support ALL_SELECTION with scan operation.
 
-def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool = False, all_files=False, **kwargs) -> None:
+    Parameters
+    ----------
+    aws_conn_id : str
+        The connection id to be used to connect to the DynamoDB and the S3 Bronze Bucket
+    table_name : str
+        Table name to be fetched
+    bucket_name : str
+        Table name to store the result form dyanmodb
+    object_path : str
+        The path to store the object inside the bucket
+
+    Returns
+    -------
+    bool
+        True if there is any data and successfully dumped. False otherwise.
+
+    """
+    # Get the client from Airflow hook. Note: Airflow has a not so complete hook functionalities.
+    dynamodb_client = DynamoDBHook(aws_conn_id=aws_conn_id).get_conn().meta.client
+    try:
+        resp = dynamodb_client.scan(
+            TableName=table_name, Select="ALL_ATTRIBUTES")
+        items = []
+        if not resp['Items']:
+            print("No data found in the table")
+            return False
+
+        while True:
+            items.extend(resp['Items'])
+            if "LastEvaluatedKey" not in resp:
+                break
+            resp = dynamodb_client.scan(
+                TableName=table_name, Select="ALL_ATTRIBUTES", ExclusiveStartKey=resp["LastEvaluatedKey"])
+
+    except Exception as e:
+        print(e)
+        raise Exception("Failed to fetch data from dynamodb")
+
+    df = pd.json_normalize(items)
+    new_col_names = []
+    for col in df.columns:
+        temp = re.findall(r"([\w\d]+)\.", col)
+        new_col_names.append(temp[0] if temp else col)
+    df.columns = new_col_names
+    print(df.head())
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+
+    file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
+
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3.load_string(
+        string_data=csv_buffer.getvalue(),
+        key=file_name,
+        bucket_name=bucket_name,
+        replace=True
+    )
+
+    return True
+
+def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool=False, all_files=False, **kwargs) -> None:
     """
     Transforming s3 data and insert into db.
 
@@ -292,84 +356,86 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
         The function to transform the data
     db_secret_url : str
         The database secret url
-    multi_files : bool 
+    multi_files : bool
         Flag to indicates whether to process exact file with '{ds}.csv' or multiple files with '{ds}' in the name.
     """
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
-    curr_ds = kwargs["curr_ds"]
- 
+    s3=S3Hook(aws_conn_id=aws_conn_id)
+    curr_ds=kwargs["curr_ds"]
+
     # Build the prefix ensuring it ends with /
-    prefix = object_path if object_path.endswith('/') else object_path + '/'
-    file_keys = s3.list_keys(bucket_name=bucket_name, prefix=prefix)
+    prefix=object_path if object_path.endswith('/') else object_path + '/'
+    file_keys=s3.list_keys(bucket_name=bucket_name, prefix=prefix)
     # print(file_keys)
 
     if not file_keys:
-        logging.warning(f"=== No files found in bucket {bucket_name} with prefix {prefix} ===")
+        logging.warning(
+            f"=== No files found in bucket {bucket_name} with prefix {prefix} ===")
         return
-    
-    if all_files: # for the current case of illumina QS
+
+    if all_files:  # for the current case of illumina QS
         print(f"All file keys that will be appended: {file_keys}")
-        df = pd.DataFrame()
+        df=pd.DataFrame()
         for file_key in file_keys:
             if file_key.endswith('.csv'):
                 # Read each CSV file into a DataFrame
-                csv_obj = s3.get_key( bucket_name=bucket_name, key=file_key)
-                temp_df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-                df = pd.concat([df, temp_df], ignore_index=True)
+                csv_obj=s3.get_key(bucket_name=bucket_name, key=file_key)
+                temp_df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+                df=pd.concat([df, temp_df], ignore_index=True)
 
     elif multi_files:
         # Regex pattern matching any file that has curr_ds in its name and ends with .csv
-        df = pd.DataFrame()
-        pattern = re.compile(rf".*{re.escape(curr_ds)}.*\.csv")
-        matched_file_list = []
+        df=pd.DataFrame()
+        pattern=re.compile(rf".*{re.escape(curr_ds)}.*\.csv")
+        matched_file_list=[]
         for key in file_keys:
             print(f"checking {key}")
             if pattern.match(key):
                 matched_file_list.append(key)
-        
+
         if not matched_file_list:
-            logging.warning(f"=== Can't find any file with {curr_ds} in S3 ===")
+            logging.warning(
+                f"=== Can't find any file with {curr_ds} in S3 ===")
             return
-        
+
         print(f"Matched files: {matched_file_list}")
-        
+
         for file_name in matched_file_list:
-            csv_obj = s3.get_key(key=file_name, bucket_name=bucket_name)
-            temp_df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-            df = pd.concat([df, temp_df], ignore_index=True)
+            csv_obj=s3.get_key(key=file_name, bucket_name=bucket_name)
+            temp_df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+            df=pd.concat([df, temp_df], ignore_index=True)
     else:
-        file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
+        file_name=f"{object_path}/{kwargs['curr_ds']}.csv"
         # Check whether the file is present (means the data is updated to the s3)
         if not s3.check_for_key(file_name, bucket_name):
             logging.warning(f"=== Can't find {file_name} in S3 ===")
             return
 
-        csv_obj = s3.get_key(key=file_name, bucket_name=bucket_name)
-        df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
+        csv_obj=s3.get_key(key=file_name, bucket_name=bucket_name)
+        df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
 
-    df = transform_func(df, kwargs['curr_ds'])
+    df=transform_func(df, kwargs['curr_ds'])
 
     if df.empty:
         logging.warning(f"=== No data to update ===")
         return
 
-    user, passwd, host, port, db = extract_db_url(db_secret_url)
+    user, passwd, host, port, db=extract_db_url(db_secret_url)
 
-    conn = sql.connect(db=db, user=user, host=host,
+    conn=sql.connect(db=db, user=user, host=host,
                        password=passwd, use_unicode=True)
-    cur = conn.cursor()
-    insert_query = kwargs["templates_dict"]["insert_query"]
+    cur=conn.cursor()
+    insert_query=kwargs["templates_dict"]["insert_query"]
     print("====START INSERTING====")
     print(f"Data Points: {df.shape[0]}")
     print(f"QUERY:\n{insert_query}")
-    chunk_size = 1000
+    chunk_size=1000
     for start in range(0, df.shape[0], chunk_size):
-        chunk = df[start:start + chunk_size]
+        chunk=df[start:start + chunk_size]
         print(f"Chunk data Points: {chunk.shape[0]}")
 
         print(f"Chunk data:\n{chunk.head()}")
         # print(f"Chunk data:\n{chunk.tail()}")
-        data = list(chunk.itertuples(index=False, name=None))
+        data=list(chunk.itertuples(index=False, name=None))
         try:
             # print(data)
             cur.executemany(insert_query, data)
@@ -381,7 +447,7 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
     print("====FINISHED====")
 
     if "dedup_query" in kwargs["templates_dict"]:
-        dedup_query = kwargs["templates_dict"]["dedup_query"]
+        dedup_query=kwargs["templates_dict"]["dedup_query"]
         print("====START DEDUPLICATION====")
         try:
             cur.execute(dedup_query)
@@ -390,5 +456,5 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
         except (sql.Error, sql.Warning) as e:
             conn.close()
             raise ValueError(e)
-        
+
     conn.close()
