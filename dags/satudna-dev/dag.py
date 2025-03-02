@@ -37,9 +37,9 @@ def fetch_from_rds(**context):
                         ELSE 'FAILED'
                     END as analysis_status
                 FROM (
-                    SELECT id_repository, run_status FROM superset_dev.ica_analysis_latest
+                    SELECT id_repository, run_status FROM superset_dev.ica_analysis
                     UNION ALL
-                    SELECT id_repository, run_status FROM superset_dev.mgi_analysis_latest
+                    SELECT id_repository, run_status FROM superset_dev.mgi_analysis
                 ) all_analysis
                 GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
                     CASE 
@@ -57,10 +57,10 @@ def fetch_from_rds(**context):
                     END as qc_pass
                 FROM (
                     SELECT id_repository, at_least_10x, median_coverage 
-                    FROM superset_dev.mgi_qc_latest
+                    FROM superset_dev.mgi_qc
                     UNION ALL
                     SELECT id_repository, at_least_10x, median_coverage
-                    FROM superset_dev.illumina_qc_latest
+                    FROM superset_dev.illumina_qc
                 ) all_qc
                 GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
                     CASE 
