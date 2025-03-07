@@ -63,7 +63,7 @@ FROM
 					-- DRAGEN
 						WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
 						-- TOP UP 
-						WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
+						WHEN id_repository LIKE "%_M"  OR id_repository LIKE "%_T" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
 						ELSE id_repository
 					END clean_id_repository
 				FROM
@@ -90,7 +90,7 @@ FROM
 			-- DRAGEN
 				WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
 				-- TOP UP 
-				WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
+				WHEN id_repository LIKE "%_M"  OR id_repository LIKE "%_T" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
 				ELSE id_repository
 			END clean_id_repository
 			FROM

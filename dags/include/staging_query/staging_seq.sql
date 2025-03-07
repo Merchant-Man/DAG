@@ -85,7 +85,7 @@ INSERT INTO staging_seq
 					-- DRAGEN
 						WHEN id_repository LIKE "%DRAGEN%" THEN REGEXP_SUBSTR(id_repository, "[\\w\\d]+")
 						-- TOP UP 
-						WHEN id_repository LIKE "%_M" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
+						WHEN  id_repository LIKE "%_M"  OR id_repository LIKE "%_T" THEN REGEXP_SUBSTR(id_repository, "[A-Za-z0-9]+")
 						ELSE id_repository
 					END clean_id_repository,
 					COALESCE(REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), "LP.+"), TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))) id_library,
