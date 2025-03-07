@@ -87,7 +87,7 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         if re.match(r"^SKI", ref):
             # For SKI_XXX_YYY get the SKI_XXXX
             return "_".join(ref.split("_")[0:2])
-        elif re.match(r".*_M$", ref):
+        elif re.match(r".*(_M|_T)$", ref):
             # For TOP UP 1H0044101C02_250205_M
             return ref
         elif re.match(r"DRAGEN", ref):
