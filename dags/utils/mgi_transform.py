@@ -1,5 +1,20 @@
 import pandas as pd 
 
+def transform_ztronpro_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.iloc[: , 1:]
+    df = df.drop_duplicates()
+    
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+
+    # Need to fillna so that the mysql connector can insert the data.
+    df = df.astype(str)
+    df.fillna(value="", inplace=True)
+    return df
+
 def transform_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()

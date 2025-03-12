@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import os
-from utils.mgi_transform import transform_analysis_data, transform_qc_data
+from utils.mgi_transform import transform_analysis_data, transform_qc_data, transform_ztronpro_samples_data
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
@@ -9,6 +9,8 @@ from utils.utils import silver_transform_to_db
 AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "mgi/qc"
 ANALYSIS_OBJECT_PATH = "mgi/analysis"
+ZTRONPRO_SAMPLES_OBJECT_PATH = "ztron_pro/samples"
+ZTRONPRO_SAMPLES_LOADER_QEURY = "ztronpro_samples_loader.sql"
 # S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 S3_DWH_BRONZE = "bgsi-data-dwh-bronze"
 RDS_SECRET = Variable.get("RDS_SECRET")
@@ -28,16 +30,36 @@ default_args = {
 dag = DAG(
     'mgi-pl',
     default_args=default_args,
-    description='ETL pipeline for fetching MGI PL QC, and Analysis from Nextflow pipeline',
+    description='ETL pipeline for fetching MGI and ZtronPRO PL QC, and Analysis from Nextflow pipeline',
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+
+with open(os.path.join("dags/repo/dags/include/loader", ZTRONPRO_SAMPLES_LOADER_QEURY)) as f:
+    ztronpro_samples_loader_query = f.read()
 
 with open(os.path.join("dags/repo/dags/include/loader", QC_LOADER_QEURY)) as f:
     qc_loader_query = f.read()
 
 with open(os.path.join("dags/repo/dags/include/loader", ANALYSIS_LOADER_QEURY)) as f:
     analysis_loader_query = f.read()
+
+ztronprop_samples_silver_transform_to_db_task = PythonOperator(
+    task_id="ztronprop_samples_silver_transform_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": ZTRONPRO_SAMPLES_OBJECT_PATH,
+        "transform_func": transform_ztronpro_samples_data,
+        "db_secret_url": RDS_SECRET,
+        "multi_files": True,
+        "curr_ds": "{{ ds }}"
+    },
+    templates_dict={"insert_query": ztronpro_samples_loader_query},
+    provide_context=True
+)
 
 qc_silver_transform_to_db_task = PythonOperator(
     task_id="qc_silver_transform_to_db",
