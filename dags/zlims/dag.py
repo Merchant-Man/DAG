@@ -11,7 +11,7 @@ SAMPLES_OBJECT_PATH = "zlims/samples"
 # S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 S3_DWH_BRONZE = "bgsi-data-dwh-bronze"
 RDS_SECRET = Variable.get("RDS_SECRET")
-SAMPLES_LOADER_QEURY = "zlims_samples_loader.sql"\
+SAMPLES_LOADER_QEURY = "zlims_samples_loader.sql"
 
 default_args = {
     'owner': 'bgsi-data',

@@ -608,3 +608,39 @@ CREATE TABLE staging_fix_ski_id_repo (
 
 CREATE INDEX new_origin_code_repository
 ON staging_fix_ski_id_repo(new_origin_code_repository);
+
+
+CREATE TABLE ztronpro_samples(
+  starting_sample TEXT,
+  original_sample_id VARCHAR(128) PRIMARY KEY comment 'Run name containing id_repository',
+  original_sample_name VARCHAR(128),
+  if_urgent VARCHAR(5), 
+  product_name VARCHAR(32),
+  `order` VARCHAR(32), 
+  project_code VARCHAR(128),
+  project_name VARCHAR(128),
+  sample_progress VARCHAR(32),
+  total_routes VARCHAR(3),
+  workflow TEXT,
+  start_plate_code VARCHAR(32),
+  start_well VARCHAR(8),
+  id_library VARCHAR(8),
+  barcode VARCHAR(32),
+  dnb_id VARCHAR(32),
+  flow_cell_id VARCHAR(32),
+  start_time DATETIME,
+  completion_time DATETIME,
+  batch_number VARCHAR(32),
+  contract_number VARCHAR(32),
+  `zone` VARCHAR(32),
+  creator TEXT,
+  creation_time DATETIME,
+  last_modified_by TEXT,
+  last_modified_time DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+CREATE INDEX starting_sample_idx
+ON ztronpro_samples(starting_sample);
+CREATE INDEX id_library_idx
+ON ztronpro_samples(id_library);
