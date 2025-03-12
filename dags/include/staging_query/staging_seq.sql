@@ -55,6 +55,7 @@ INSERT INTO staging_seq
 						)
 				) dbt2 ON dbt1.id_repository = dbt2.id_repository
 		) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
+	WHERE seq_zlims.date_create >= "2023-11-01" -- removing test data
 	UNION ALL
 	SELECT
 		COALESCE(sfki.code_repository, t.id_repository) id_repository,
