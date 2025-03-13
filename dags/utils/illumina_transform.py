@@ -36,8 +36,12 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
 
+    df['id_repository'] = df['Sample'].str.split('|').apply(lambda x: x[-1].strip())  
+    df['run_name'] = df['Sample'].str.split('|').apply(lambda x: x[-3].strip().strip().split('-')[0]) 
+    
     cols = {
-        'Sample': 'id_repository',
+        'id_repository': 'id_repository',
+        'run_name':'run_name',
         'dragen_mapping-Number_of_duplicate_marked_reads_pct': 'percent_dups',
         'dragen_mapping-Q30_bases_pct': 'percent_q30_bases', 
         'dragen_mapping-Total_input_reads': 'total_seqs',
@@ -68,7 +72,7 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-    df = df[["id_repository","percent_dups","percent_q30_bases","total_seqs","contam","non_primary","percent_mapped","percent_proper_pairs","reads_mapped","at_least_50x","at_least_20x","at_least_10x","median_coverage","vars","snp","indel","ts_tv","depth","ploidy_estimation","created_at","updated_at"]]
+    df = df[["id_repository","run_name","percent_dups","percent_q30_bases","total_seqs","contam","non_primary","percent_mapped","percent_proper_pairs","reads_mapped","at_least_50x","at_least_20x","at_least_10x","median_coverage","vars","snp","indel","ts_tv","depth","ploidy_estimation","created_at","updated_at"]]
 
     df = df.astype(str)
     return df

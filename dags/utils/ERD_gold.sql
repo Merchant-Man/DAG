@@ -137,6 +137,7 @@ ON ica_samples (id_repository);
 -- Already check for illumina_qc id_repository should be unique
 CREATE TABLE illumina_qc(
   id_repository VARCHAR(32) PRIMARY KEY comment 'Code of the repository',
+  run_name VARCHAR(255),
   percent_dups FLOAT,
   percent_q30_bases FLOAT, 
   total_seqs DOUBLE,
@@ -188,6 +189,7 @@ ADD CONSTRAINT PK_qs PRIMARY KEY (id_repository,lane,read_number,yield);
 
 CREATE TABLE mgi_qc(
   id_repository VARCHAR(32) comment 'Code of the repository',
+  run_name VARCHAR(255),
   percent_dups DOUBLE,
   percent_gc FLOAT,
   total_seqs DOUBLE,

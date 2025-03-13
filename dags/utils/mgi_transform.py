@@ -32,9 +32,13 @@ def transform_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
-
+    
+    df['id_repository'] = df['Sample'].str.split('|').apply(lambda x: x[-1].strip()) 
+    df['run_name'] = df['Sample'].str.split('|').apply(lambda x: x[-2].strip()) 
+    
     cols = {
-        'Sample': 'id_repository',
+        'id_repository': 'id_repository',
+        'run_name':'run_name',
         'fastqc_raw-percent_duplicates': 'percent_dups',
         'fastqc_raw-percent_gc': 'percent_gc',
         'fastqc_raw-total_sequences': 'total_seqs',

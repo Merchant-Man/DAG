@@ -97,7 +97,7 @@ FROM
 				illumina_qc
 
 			) t
-	) illumina_qc_2 ON ica_sec.id_repository = illumina_qc_2.clean_id_repository
+	) illumina_qc_2 ON ica_sec.run_name = illumina_qc_2.run_name
 	AND illumina_qc_2.rn = 1
 	LEFT JOIN (
 		SELECT
