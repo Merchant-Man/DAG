@@ -137,7 +137,6 @@ ON ica_samples (id_repository);
 -- Already check for illumina_qc id_repository should be unique
 CREATE TABLE illumina_qc(
   id_repository VARCHAR(32) PRIMARY KEY comment 'Code of the repository',
-  run_name VARCHAR(255),
   percent_dups FLOAT,
   percent_q30_bases FLOAT, 
   total_seqs DOUBLE,
@@ -157,7 +156,8 @@ CREATE TABLE illumina_qc(
   depth FLOAT,
   ploidy_estimation VARCHAR(6),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  run_name VARCHAR(255)
 );
 CREATE INDEX id_repository_idx
 ON illumina_qc(id_repository);
@@ -189,7 +189,6 @@ ADD CONSTRAINT PK_qs PRIMARY KEY (id_repository,lane,read_number,yield);
 
 CREATE TABLE mgi_qc(
   id_repository VARCHAR(32) comment 'Code of the repository',
-  run_name VARCHAR(255),
   percent_dups DOUBLE,
   percent_gc FLOAT,
   total_seqs DOUBLE,
@@ -208,7 +207,8 @@ CREATE TABLE mgi_qc(
   ts_tv FLOAT,
   ploidy_estimation VARCHAR(6),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  run_name VARCHAR(255)
 );
 CREATE INDEX id_repository_idx
 ON mgi_qc(id_repository);

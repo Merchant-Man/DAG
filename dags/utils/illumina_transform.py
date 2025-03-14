@@ -72,7 +72,7 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-    df = df[["id_repository","run_name","percent_dups","percent_q30_bases","total_seqs","contam","non_primary","percent_mapped","percent_proper_pairs","reads_mapped","at_least_50x","at_least_20x","at_least_10x","median_coverage","vars","snp","indel","ts_tv","depth","ploidy_estimation","created_at","updated_at"]]
+    df = df[["id_repository","percent_dups","percent_q30_bases","total_seqs","contam","non_primary","percent_mapped","percent_proper_pairs","reads_mapped","at_least_50x","at_least_20x","at_least_10x","median_coverage","vars","snp","indel","ts_tv","depth","ploidy_estimation","created_at","updated_at","run_name"]]
 
     df = df.astype(str)
     return df
