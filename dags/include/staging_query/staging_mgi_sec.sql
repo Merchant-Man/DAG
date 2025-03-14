@@ -58,7 +58,7 @@ FROM
 			# unless we partitino only by an id_repo and order by the date DEC, we can have consistent data. 
 		FROM
 			mgi_qc
-	) mgi_qc_2 ON mgi_analysis_2.id_repository = mgi_qc_2.id_repository
+	) mgi_qc_2 ON mgi_analysis_2.run_name = mgi_qc_2.run_name
 	AND mgi_qc_2.rn = 1
 	LEFT JOIN (
 		# This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.

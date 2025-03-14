@@ -156,7 +156,8 @@ CREATE TABLE illumina_qc(
   depth FLOAT,
   ploidy_estimation VARCHAR(6),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  run_name VARCHAR(255)
 );
 CREATE INDEX id_repository_idx
 ON illumina_qc(id_repository);
@@ -206,7 +207,8 @@ CREATE TABLE mgi_qc(
   ts_tv FLOAT,
   ploidy_estimation VARCHAR(6),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  run_name VARCHAR(255)
 );
 CREATE INDEX id_repository_idx
 ON mgi_qc(id_repository);
