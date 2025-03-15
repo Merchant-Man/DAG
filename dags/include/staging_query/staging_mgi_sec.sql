@@ -69,7 +69,9 @@ FROM
 		FROM
 			mgi_qc
 		WHERE NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
-	) mgi_qc_2 ON mgi_analysis_2.run_name = mgi_qc_2.run_name
+	) mgi_qc_2 
+	-- ON mgi_analysis_2.run_name = mgi_qc_2.run_name
+	ON mgi_analysis_2.id_repository = mgi_qc_2.id_repository
 	AND mgi_qc_2.rn = 1
 	LEFT JOIN (
 		# This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.
