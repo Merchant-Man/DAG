@@ -76,9 +76,48 @@ WITH cte AS (
 			# Started from here, the number of rows can be duplicated i.e. an id_repository can have multiple secondary analysis run with different run_name.
 			# Unless we do window functino on id_repo ONLY based on datetime available.
 			LEFT JOIN
-				staging_illumina_sec illumina_sec
+				# Since now the staing contains rerun data. Need to dedup by latest date_start run
+				(
+					SELECT
+						*
+					FROM
+						(
+							SELECT
+								ROW_NUMBER() OVER (
+									PARTITION BY
+										id_repository
+									ORDER BY
+										date_start DESC
+								) rn,
+								staging_illumina_sec.*
+							FROM
+								staging_illumina_sec
+						) t1
+					WHERE
+						t1.rn = 1
+				) illumina_sec
 			ON (seq.id_repository = illumina_sec.id_repository AND seq.sequencer="Illumina")
-			LEFT JOIN staging_mgi_sec mgi_sec
+			LEFT JOIN
+				# Since now the staing contains rerun data. Need to dedup by latest date_start run
+				(
+					SELECT
+						*
+					FROM
+						(
+							SELECT
+								ROW_NUMBER() OVER (
+									PARTITION BY
+										id_repository
+									ORDER BY
+										date_start DESC
+								) rn,
+								staging_mgi_sec.*
+							FROM
+								staging_mgi_sec
+						) t1
+					WHERE
+						t1.rn = 1
+				) mgi_sec
 			ON (seq.id_repository = mgi_sec.id_repository AND seq.sequencer="MGI")
 			LEFT JOIN staging_ont_sec ont_sec
 			ON (seq.id_repository = ont_sec.id_repository AND seq.sequencer="ONT")
