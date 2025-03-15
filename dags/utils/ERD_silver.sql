@@ -144,7 +144,7 @@ ON ica_samples (id_repository);
 
 -- Already check for illumina_qc id_repository should be unique
 CREATE TABLE illumina_qc(
-  id_repository VARCHAR(32) PRIMARY KEY comment 'Code of the repository',
+  id_repository VARCHAR(32) comment 'Code of the repository',
   percent_dups FLOAT,
   percent_q30_bases FLOAT, 
   total_seqs DOUBLE,
@@ -166,9 +166,12 @@ CREATE TABLE illumina_qc(
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
   run_name VARCHAR(255)
+  PRIMARY KEY (id_repository, run_name)
 );
 CREATE INDEX id_repository_idx
 ON illumina_qc(id_repository);
+CREATE INDEX run_name_idx
+ON illumina_qc(run_name);
 
 -- for QS, combination of id_repository,lane,read_number,yield should be unique
 -- index should not be used since it is primer bases sequence index. 
@@ -217,11 +220,14 @@ CREATE TABLE mgi_qc(
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
   run_name VARCHAR(255),
+  PRIMARY KEY (id_repository, run_name)
 );
 CREATE INDEX id_repository_idx
 ON mgi_qc(id_repository);
-ALTER TABLE mgi_qc
-ADD CONSTRAINT PK_qs PRIMARY KEY (id_repository, ploidy_estimation, vars, snp, indel, depth, percent_dups, median_coverage)
+CREATE INDEX run_name_idx
+ON mgi_qc(run_name);
+-- ALTER TABLE mgi_qc
+-- ADD CONSTRAINT PK_qs PRIMARY KEY (id_repository, ploidy_estimation, vars, snp, indel, depth, percent_dups, median_coverage)
 
 
 CREATE TABLE mgi_analysis(
