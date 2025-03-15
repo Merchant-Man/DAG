@@ -35,10 +35,14 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     
     df['id_repository'] = df['Sample'].str.split('|').apply(lambda x: x[-1].strip()) 
     df['run_name'] = df['Sample'].str.split('|').apply(lambda x: x[-2].strip()) 
+
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
     
     cols = {
         'id_repository': 'id_repository',
-        'run_name':'run_name',
         'fastqc_raw-percent_duplicates': 'percent_dups',
         'fastqc_raw-percent_gc': 'percent_gc',
         'fastqc_raw-total_sequences': 'total_seqs',
@@ -55,17 +59,15 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'bcftools_stats-number_of_SNPs': 'snp',
         'bcftools_stats-number_of_indels': 'indel',
         'bcftools_stats-tstv': 'ts_tv',
-        'peddy-predicted_sex_sex_check': 'ploidy_estimation'
+        'peddy-predicted_sex_sex_check': 'ploidy_estimation',
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "run_name":"run_name"
     }
 
     df.rename(columns=cols, inplace=True)
     df = df[list(cols.values())]
     df = df[~df['id_repository'].str.contains(r' R[12]$', regex=True)]
-
-    if "created_at" not in df.columns:
-        df["created_at"] = ts
-    if "updated_at" not in df.columns:
-        df["updated_at"] = ts
 
     # Need to fillna so that the mysql connector can insert the data.
     df = df.astype(str)
