@@ -1,4 +1,5 @@
-import pandas as pd 
+import pandas as pd
+import re
 
 def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
@@ -31,13 +32,23 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df[new_cols]
 
     return df
-
 def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
 
-    df['id_repository'] = df['Sample'].str.split('|').apply(lambda x: x[-1].strip())  
-    df['run_name'] = df['Sample'].str.split('|').apply(lambda x: x[-3].strip().strip().split('-')[0]) 
+    df['id_repository'] = df['Sample'].str.split('|').apply(lambda x: x[-1].strip())
+    def _get_run_name(row):
+        temp_run_name = row.split("|")[-3].strip()
+        pattern_list = [
+            "(.*)(?:-DRAGEN_Germline_WGS_4-2-7.*)", # for cases like 0C0194101C05_fe14319c_rerun_2025-02-26_043012 which comes from 0H0155101C01_5d61bff4_rerun_2024-08-13_013035-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-31f0798c-f818-4127-b51f-9bb766a396ad
+            "(.*)(?:-DRAGEN_Germline_WGS_4-2-6-v2.*)" # for cases like 10002030401-1-DRAGEN-4-2-6-Germline-All-Callers which comes from  0G0021201C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-5b9ca3ee-490d-4e8b-b5ad-d084acfbe819
+        ]
+        for pattern in pattern_list:
+            if re.match(pattern, temp_run_name):
+                return re.findall(pattern, temp_run_name)[0]
+        return temp_run_name.split('-')[0]
+
+    df['run_name'] = df['Sample'].apply(_get_run_name)
     
     cols = {
         'id_repository': 'id_repository',

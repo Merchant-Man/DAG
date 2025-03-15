@@ -8,6 +8,7 @@
 				 01-03-2025 Add new criteria for WFHV samples to at least have 9GB of total passed bases.
 				 02-03-2025 Adding filter for testing id repositories.
 				 13-03-2025 Adding window function for filtering multiple entries of samples due to top up.
+				 15-03-2025 Adding filter for testing id repositories for illumina.
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -113,7 +114,9 @@ INSERT INTO staging_seq
 					COALESCE(REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), "LP.+"), TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))) id_library,
 					time_modified
 				FROM
-					ica_samples				
+					ica_samples
+				WHERE
+					NOT REGEXP_LIKE(ica_samples.id_repository, "(?i)(demo|test|benchmark|dev)")
 				) seq_ica
 				LEFT JOIN (
 					SELECT DISTINCT

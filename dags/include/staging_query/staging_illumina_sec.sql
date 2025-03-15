@@ -4,6 +4,7 @@
  -- Author   :   Abdullah Faqih
  -- Created  :   14-02-2025
  -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
+				 15-03-2025 Adding filter to remove test, demo, benchmark, and dev id repositories.
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -45,7 +46,7 @@ FROM
 			-- This decision causing the number of row is consistent.
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					clean_id_repository
+					clean_id_repository, run_name
 				ORDER BY
 					date_end DESC
 			) AS rn
@@ -68,6 +69,7 @@ FROM
 					END clean_id_repository
 				FROM
 					ica_analysis
+				WHERE NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
 			) t
 		WHERE
 			run_status = "SUCCEEDED"
@@ -78,7 +80,7 @@ FROM
 			*,
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					clean_id_repository
+					clean_id_repository, run_name
 				ORDER BY
 					percent_q30_bases DESC
 			) AS rn
@@ -95,7 +97,7 @@ FROM
 			END clean_id_repository
 			FROM
 				illumina_qc
-
+			WHERE NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
 			) t
 	) illumina_qc_2 ON ica_sec.run_name = illumina_qc_2.run_name
 	AND illumina_qc_2.rn = 1
@@ -106,6 +108,7 @@ FROM
 			SUM(yield_q30) yield_q30
 		FROM
 			illumina_qs
+		WHERE NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
 		GROUP BY
 			id_repository
 	) illumina_qs_2 ON ica_sec.id_repository = illumina_qs_2.id_repository

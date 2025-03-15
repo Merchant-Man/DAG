@@ -1,3 +1,12 @@
+/*
+ ---------------------------------------------------------------------------------------------------------------------------------
+ -- Purpose  :   This query is intended to be used as the staging results of illumina secondary analysis data.
+ -- Author   :   Abdullah Faqih
+ -- Created  :   14-02-2025
+ -- Changes	 :	 15-03-2025 Adding filter to remove test, demo, benchmark, and dev id repositories.
+ ---------------------------------------------------------------------------------------------------------------------------------
+ */
+-- Your SQL code goes here
 DELETE FROM staging_mgi_sec;
 INSERT INTO staging_mgi_sec(
 	SELECT
@@ -35,7 +44,7 @@ FROM
 			*,
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					id_repository
+					id_repository, run_name
 				ORDER BY
 					date_start DESC
 			) rn
@@ -43,13 +52,14 @@ FROM
 			mgi_analysis
 		WHERE
 			run_status = "SUCCEEDED"
+			AND NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
 	) mgi_analysis_2
 	LEFT JOIN (
 		SELECT
 			*,
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					id_repository
+					id_repository, run_name
 				ORDER BY
 					at_least_50x DESC
 			) AS rn
@@ -58,6 +68,7 @@ FROM
 			# unless we partitino only by an id_repo and order by the date DEC, we can have consistent data. 
 		FROM
 			mgi_qc
+		WHERE NOT REGEXP_LIKE(id_repository, "(?i)(demo|test|benchmark|dev)")
 	) mgi_qc_2 ON mgi_analysis_2.run_name = mgi_qc_2.run_name
 	AND mgi_qc_2.rn = 1
 	LEFT JOIN (
