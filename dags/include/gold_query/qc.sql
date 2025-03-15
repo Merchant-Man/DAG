@@ -119,7 +119,28 @@ WITH cte AS (
 						t1.rn = 1
 				) mgi_sec
 			ON (seq.id_repository = mgi_sec.id_repository AND seq.sequencer="MGI")
-			LEFT JOIN staging_ont_sec ont_sec
+			LEFT JOIN 
+				# Since now the staing contains rerun data. Need to dedup by latest date_start run
+				(
+					SELECT
+						*
+					FROM
+						(
+							SELECT
+								ROW_NUMBER() OVER (
+									PARTITION BY
+										id_repository
+									ORDER BY
+										date_start DESC
+								) rn,
+								staging_ont_sec.*
+							FROM
+								staging_ont_sec
+						) t1
+					WHERE
+						t1.rn = 1
+				) 
+			 ont_sec
 			ON (seq.id_repository = ont_sec.id_repository AND seq.sequencer="ONT")
         WHERE seq.sequencer IS NOT NULL
 	        	AND LOWER(seq.id_repository) NOT LIKE '%test%'
