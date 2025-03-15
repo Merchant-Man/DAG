@@ -59,7 +59,7 @@ FROM
 			*,
 			ROW_NUMBER() OVER (
 				PARTITION BY
-					id_repository, run_name
+					id_repository
 				ORDER BY
 					at_least_50x DESC
 			) AS rn
