@@ -41,7 +41,8 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         temp_run_name = row.split("|")[-3].strip()
         pattern_list = [
             "(.*)(?:-DRAGEN_Germline_WGS_4-2-7.*)", # for cases like 0C0194101C05_fe14319c_rerun_2025-02-26_043012 which comes from 0H0155101C01_5d61bff4_rerun_2024-08-13_013035-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-31f0798c-f818-4127-b51f-9bb766a396ad
-            "(.*)(?:-DRAGEN_Germline_WGS_4-2-6-v2.*)" # for cases like 10002030401-1-DRAGEN-4-2-6-Germline-All-Callers which comes from  0G0021201C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-5b9ca3ee-490d-4e8b-b5ad-d084acfbe819
+            "(.*)(?:-DRAGEN_Germline_WGS_4-2-6-v2.*)", # for cases like 10002030401-1-DRAGEN-4-2-6-Germline-All-Callers which comes from  0G0021201C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-5b9ca3ee-490d-4e8b-b5ad-d084acfbe819
+            "([A-Z0-9]{12}_[a-zA-Z0-9]{8}_rerun_[\d]{4}\-[\d]{2}-[\d]{2}_[\d]{1,})(?:\-[0-9a-f]{8}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{12})" # for specific case of 0C0194101C05_fe14319c_rerun_2025-02-26_043012 from "/ | tmp | nxf.eOUZXPFKdi | local_files | 0C0194101C05_fe14319c_rerun_2025-02-26_043012-2dd6b9ea-9e2b-4a69-8b54-6a4980054643 | 0C0194101C05 | 0C0194101C05"
         ]
         for pattern in pattern_list:
             if re.match(pattern, temp_run_name):
