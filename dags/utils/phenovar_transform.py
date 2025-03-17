@@ -61,36 +61,6 @@ def fetch_documents_all_participants_and_dump(api_conn_id: str, db_secret_url: s
     bool
         True if there is any data and successfully dumped.
     """
-    access_token = {}
-    # If need auth, jwt is called
-    if jwt_end_point and get_token_function and (jwt_headers or jwt_payload):
-        print("=== Fetching JWT token ===")
-        http_hook = HttpHook(method="POST", http_conn_id=api_conn_id)
-
-        response = http_hook.run_with_advanced_retry(
-            endpoint=jwt_end_point,
-            headers=jwt_headers,
-            data=json.dumps(jwt_payload),
-            _retry_args=retry_args
-        )
-        try:
-            response_header = response.headers
-            response = response.json()
-            access_token = get_token_function(response, response_header)
-        except json.JSONDecodeError as e:
-            print(f"Decoding into JSON failed: {e}")
-            print(f"Failed response: {response}")
-            raise ValueError("Failed to decode the response")
-
-    if access_token:
-        if "headers" in access_token:
-            headers.update(access_token["headers"])
-        elif "params" in access_token:
-            data_payload.update(access_token["params"])
-        else:
-            raise ValueError(
-                "get_token_function doesn't return 'headers' or 'params'! which is required to be integrated for subsequence response to get the data.")
-    http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
 
     print("=== Fetching Data ===")
     all_data = []
@@ -102,8 +72,40 @@ def fetch_documents_all_participants_and_dump(api_conn_id: str, db_secret_url: s
     id_repos = pd.read_sql_query("SELECT id_subject FROM phenovar_participants", conn)["id_subject"].values
     conn.close()
     
-    for id_repo in id_repos:
-        req_end_point = data_end_point.format(id=id_repo)
+    for idx in range(len(id_repos)):
+        if idx%500 == 0:
+            access_token = {}
+            # Need relogin for long fetching time
+            if jwt_end_point and get_token_function and (jwt_headers or jwt_payload):
+                print("=== Fetching JWT token ===")
+                http_hook = HttpHook(method="POST", http_conn_id=api_conn_id)
+
+                response = http_hook.run_with_advanced_retry(
+                    endpoint=jwt_end_point,
+                    headers=jwt_headers,
+                    data=json.dumps(jwt_payload),
+                    _retry_args=retry_args
+                )
+                try:
+                    response_header = response.headers
+                    response = response.json()
+                    access_token = get_token_function(response, response_header)
+                except json.JSONDecodeError as e:
+                    print(f"Decoding into JSON failed: {e}")
+                    print(f"Failed response: {response}")
+                    raise ValueError("Failed to decode the response")
+
+            if access_token:
+                if "headers" in access_token:
+                    headers.update(access_token["headers"])
+                elif "params" in access_token:
+                    data_payload.update(access_token["params"])
+                else:
+                    raise ValueError(
+                        "get_token_function doesn't return 'headers' or 'params'! which is required to be integrated for subsequence response to get the data.")
+            http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
+
+        req_end_point = data_end_point.format(id=id_repos[idx])
         response = http_hook.run_with_advanced_retry(
             endpoint=req_end_point,
             headers=headers,
