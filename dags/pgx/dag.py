@@ -189,7 +189,7 @@ with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
 
 fetch_and_dump_task = PythonOperator(
-    task_id="bronze_simbiox_patients",
+    task_id="bronze_pgx",
     python_callable=get_pgx_report_and_dump,
     dag=dag,
     op_kwargs={

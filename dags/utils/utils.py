@@ -340,7 +340,7 @@ def dynamo_and_dump(aws_conn_id: str, table_name: str, bucket_name: str,
 
     return True
 
-def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame], db_secret_url: str, multi_files: bool=False, all_files=False, **kwargs) -> None:
+def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, db_secret_url: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame] = None, multi_files: bool=False, all_files=False, **kwargs) -> None:
     """
     Transforming s3 data and insert into db.
 
@@ -412,8 +412,9 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
 
         csv_obj=s3.get_key(key=file_name, bucket_name=bucket_name)
         df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-
-    df=transform_func(df, kwargs['curr_ds'])
+        
+    if transform_func:
+        df=transform_func(df, kwargs['curr_ds'])
 
     if df.empty:
         logging.warning(f"=== No data to update ===")

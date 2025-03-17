@@ -652,3 +652,80 @@ CREATE INDEX starting_sample_idx
 ON ztronpro_samples(starting_sample);
 CREATE INDEX id_library_idx
 ON ztronpro_samples(id_library);
+
+
+CREATE TABLE phenovar_variables(
+    id VARCHAR(36) PRIMARY KEY,
+    `name` TEXT,
+    helper_text TEXT,
+    group_id VARCHAR(36),
+    group_name TEXT,
+    section_id VARCHAR(36),
+    section_name TEXT,
+    category_id VARCHAR(36),
+    category_name TEXT,
+    freq_ask_update TEXT,
+    master_value_id VARCHAR(36), 
+    is_spesific_diseases VARCHAR(5), 
+    diseases_id TEXT, 
+    is_spesific_institution VARCHAR(5), 
+    institution_id TEXT,
+    is_mandatory VARCHAR(5), 
+    have_formula VARCHAR(5),
+    formula TEXT,
+    types VARCHAR(5),
+    main_variable VARCHAR(36),
+    is_limit VARCHAR(5), 
+    `limit` TEXT,
+    is_continue VARCHAR(5), 
+    continue_values TEXT,
+    is_gender VARCHAR(5), 
+    gender_value TEXT,
+    is_age VARCHAR(5), 
+    age_values TEXT,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36),
+    created_at DATETIME,
+    updated_at DATETIME
+);
+CREATE INDEX group_id_idx
+ON phenovar_variables(group_id);
+CREATE INDEX section_id_idx
+ON phenovar_variables(section_id);
+CREATE INDEX category_id_idx
+ON phenovar_variables(category_id);
+
+
+CREATE TABLE phenovar_categories(
+    id VARCHAR(36) PRIMARY KEY,
+    `name` TEXT,
+    group_id VARCHAR(36),
+    group_name TEXT,
+    section_id VARCHAR(36),
+    section_name TEXT,
+    `status` VARCHAR(5),
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36),
+    created_at DATETIME,
+    updated_at DATETIME
+);
+CREATE INDEX group_id_idx
+ON phenovar_categories(group_id);
+CREATE INDEX section_id_idx
+ON phenovar_categories(section_id);
+
+CREATE TABLE phenovar_documents(
+  participant_id VARCHAR(10),
+  institution_id VARCHAR(36),
+  institution_name TEXT,
+  document_type VARCHAR(255),
+  question_answer JSON,
+  user JSON,
+  `version` VARCHAR(255),
+  created_by TEXT,
+  created_at DATETIME,
+  PRIMARY KEY (participant_id, institution_id, document_type)
+);
+CREATE INDEX participant_id_idx
+ON phenovar_documents(participant_id);
+
