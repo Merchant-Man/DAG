@@ -186,7 +186,6 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
     if offset_pagination:
         data_payload[offset_param] = offset
     while True:
-        print(f"===\nURI: {BaseHook.get_connection(api_conn_id).get_uri()}\nEnd Point: {data_end_point}\nData payload: {data_payload}\nheaders: {headers}\n===")
         response = http_hook.run_with_advanced_retry(
             endpoint=data_end_point,
             headers=headers,
