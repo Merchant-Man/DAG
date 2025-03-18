@@ -13,7 +13,6 @@ AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "wfhv/qc"
 SAMPLES_OBJECT_PATH = "wfhv/samples"
 ANALYSIS_OBJECT_PATH = "wfhv/analysis"
-WFHV_SAMPLES_TABLE = 'bgsi-upload-ont'
 WFHV_OUTPUT_BUCKET = "bgsi-data-wfhv-output"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
@@ -87,7 +86,6 @@ samples_bronze_s3_to_s3_task = PythonOperator(
     dag=dag,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
-        "table_name": f"WFHV_SAMPLES_TABLE",
         "bronze_bucket": S3_DWH_BRONZE,
         "bronze_object_path": f"{BRONZE_OBJECT_PATH}/{SAMPLES_OBJECT_PATH}",
         "wfhv_input_bucket": WFHV_INPUT_BUCKET,
