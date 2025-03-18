@@ -8,6 +8,195 @@ import json
 import pandas as pd
 
 
+def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronze_bucket: str, bronze_object_path: str, **kwargs):
+    """
+    Fetches WFHV samples data from the S3 input bucket.
+
+    Parameters:
+    ----------
+    aws_conn_id : str
+        AWS connection ID for authentication.
+    wfhv_input_bucket : str
+        S3 bucket containing WFHV output data.
+    bronze_bucket : str
+        The name of the dwh bronze bucket
+    bronze_object_path : str
+        The path to store the bronze object
+    ts : str
+        Timestamp used to filter folders based on modification date.
+    kwargs : dict
+        Additional parameters, including Airflow's execution context (e.g., `ds`)
+    """
+    # Initialize AWS Hook
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
+    s3_client = s3_hook.get_conn()
+    
+    # Use Airflow Execution Date (ds) or a default timestamp
+    ts = str(kwargs.get("ds", "2025-03-02"))
+    # ts= "2025-03-02"
+    # Function to list relevant run folders
+    def _get_s3_file(prefix: str, pattern: str):
+        """Finds the first file matching `pattern` under `prefix` in S3."""
+        paginator = s3_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=wfhv_input_bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                if re.search(pattern, obj["Key"]):
+                    print(f"Found matching file: {obj['Key']}")
+                    return obj["Key"]
+        print(f"No matching file found for pattern {pattern} under {prefix}")
+        return None
+
+    def _read_s3_file(key: str):
+        """Reads an S3 file and returns its content as a string."""
+        if key:
+            try:
+                response = s3_client.get_object(Bucket=wfhv_input_bucket, Key=key)
+                return response["Body"].read().decode("utf-8", errors="ignore")
+            except Exception as e:
+                print(f"Error reading {key}: {e}")
+        return None
+
+    def _extract_json_from_html(html_content, key):
+        """Extracts a JSON array from HTML content using regex."""
+        match = re.search(fr'"{key}"\s*:\s*(\[\{{.*?\}}\])', html_content, re.DOTALL)
+        return json.loads(match.group(1)) if match else None
+
+    def _extract_summary_data(prefix: str):
+        """Extracts timestamps and metadata from `final_summary*.txt`."""
+        content = _read_s3_file(_get_s3_file(prefix, r"final_summary.*\.txt$"))
+        if not content:
+            print(f"Warning: No summary data found for {prefix}")
+            return None, None, None, None, None, None
+
+        def _safe_search(pattern, text):
+            match = re.search(pattern, text)
+            return match.group(1) if match else None
+
+        return (
+            _safe_search(r"started=(\S+)", content),
+            _safe_search(r"acquisition_stopped=(\S+)", content),
+            _safe_search(r"processing_stopped=(\S+)", content),
+            _safe_search(r"instrument=(\S+)", content),
+            _safe_search(r"position=(\S+)", content),
+            _safe_search(r"flow_cell_id=(\S+)", content),
+        )
+
+    def _extract_folder_size_and_date(bucket_name, prefix):
+        """
+        Calculate the total size of all objects in a folder and get the most recent upload date.
+        """
+        total_size = 0
+        latest_date = None
+        paginator = s3_client.get_paginator("list_objects_v2")
+
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            if "Contents" in page:
+                for obj in page["Contents"]:
+                    total_size += obj["Size"]
+                    obj_date = obj["LastModified"]
+                    if latest_date is None or obj_date > latest_date:
+                        latest_date = obj_date
+
+        formatted_date = latest_date.strftime('%Y-%m-%d %H:%M:%S') if latest_date else None
+        return total_size, formatted_date
+
+    def _extract_barcode_data(prefix: str):
+        """Extracts barcode data from an HTML report file."""
+        html = _read_s3_file(_get_s3_file(prefix, r"report.*\.html$"))
+        barcodes = _extract_json_from_html(html, "barcode_reads") if html else []
+
+        started, acquisition_stopped, processing_stopped, instrument, position, flow_cell_id = _extract_summary_data(prefix)
+        
+        folder_size, latest_upload_date = _extract_folder_size_and_date(wfhv_input_bucket, prefix)
+        
+        data = [
+            {
+                "id_library": prefix.split("/")[0],
+                "bam_folder": f"s3://{wfhv_input_bucket}/{prefix}bam_pass/{b['barcode']}/",
+                "alias": b["barcode"],
+                "id_repository": str(b["barcode"].split("_")[0]) if isinstance(b["barcode"], str) else "UNKNOWN",
+                "total_bases": b["total_bases"],
+                "passed_bases_percent": b["passed_bases_percent"],
+                "total_passed_bases": int(b["total_bases"] * (b["passed_bases_percent"] / 100)),
+                "bam_size": folder_size,
+                "date_upload": latest_upload_date,
+                "started_at": started,
+                "acquisition_stopped": acquisition_stopped,
+                "processing_stopped": processing_stopped,
+                "instrument": instrument,
+                "position": position,
+                "id_flowcell": flow_cell_id,
+            }
+            for b in barcodes
+        ]
+
+        return pd.DataFrame(data)  # Ensure return is a DataFrame
+    def _list_run_folders():
+        paginator = s3_client.get_paginator("list_objects_v2")
+        recent_runs = set()
+
+        for page in paginator.paginate(Bucket=wfhv_input_bucket, Delimiter="/"):
+            for folder in page.get("CommonPrefixes", []):
+                prefix = folder["Prefix"].strip("/")
+                head_response = s3_client.list_objects_v2(Bucket=wfhv_input_bucket, Prefix=prefix, MaxKeys=1)
+                if "Contents" in head_response:
+                    last_modified = head_response["Contents"][0]["LastModified"].strftime("%Y-%m-%d")
+                    if last_modified >= ts:
+                        recent_runs.add(prefix)
+
+        return list(recent_runs)
+
+    def _process_folders(runname: str):
+        """Processes subfolders and extracts barcode data."""
+        prefix = f"{runname}/no_sample/"
+        matching_data = []
+        paginator = s3_client.get_paginator("list_objects_v2")
+
+        for page in paginator.paginate(Bucket=wfhv_input_bucket, Prefix=prefix, Delimiter="/"):
+            for folder in page.get("CommonPrefixes", []):
+                barcode_data = _extract_barcode_data(folder["Prefix"])
+                if barcode_data.empty:
+                    print(f"No barcode data found for {folder['Prefix']}, skipping...")
+                    continue
+
+                matching_data.append(barcode_data)
+
+        return pd.concat(matching_data, ignore_index=True) if matching_data else pd.DataFrame()
+
+    # Main execution
+    run_folders = _list_run_folders()
+    print(run_folders)
+    all_data = pd.DataFrame()
+
+    for run in run_folders:
+        try:
+            data = _process_folders(run)
+            if not data.empty:
+                all_data = pd.concat([all_data, data], ignore_index=True)
+            else:
+                print(f"No matching data found for {run}.")
+        except Exception as e:
+            print(f"Error processing {run}: {e}")
+
+    # Save DataFrame to CSV in S3
+    csv_buffer = StringIO()
+    all_data.to_csv(csv_buffer, index=False)
+    
+    curr_ds = kwargs.get("curr_ds", "default_date")
+    file_name = f"{bronze_object_path}/{kwargs['curr_ds']}.csv"
+
+    # Upload to S3
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3.load_string(
+        string_data=csv_buffer.getvalue(),
+        key=file_name,
+        bucket_name=bronze_bucket,
+        replace=True
+    )
+
+    return all_data  # Return DataFrame for debugging/logging if needed
+
+
 def fetch_wfhv_analysis_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bronze_bucket: str, bronze_object_path: str,  **kwargs) -> None:
     """
     Fetch wfhv analysis results from wfhv output bucket to the dwh bronze bucket
@@ -102,7 +291,7 @@ def fetch_wfhv_analysis_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bro
     df = pd.DataFrame(data)
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
-    print(df)
+    # print(df)
     file_name = f"{bronze_object_path}/{kwargs['curr_ds']}.csv"
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)

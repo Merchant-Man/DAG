@@ -67,15 +67,14 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
 
 def transform_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
-    # Remove duplicates
     df = df.drop_duplicates()
 
-    # Ensure the column contains datetime objects
-    df['date_upload'] = pd.to_datetime(df['date_upload'])
+    df = df.dropna(subset=['id_flowcell']) #drop old date (before 20250319 updates)
 
-    # Convert to UTC and format as ISO 8601
-    df['date_upload'] = df['date_upload'].dt.tz_localize(
-        'UTC').apply(lambda x: x.isoformat())
+    datetime_cols = ['date_upload', 'started_at', 'acquisition_stopped', 'processing_stopped']
+    for col in datetime_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ') # Convert datetime columns to UTC and ISO 8601 format
 
     # Assuming df is your DataFrame
     grouped_df = df.groupby('id_repository').agg({
@@ -86,29 +85,33 @@ def transform_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'total_bases': list,  # Aggregate 'total_bases' as a list
         'passed_bases_percent': list,  # Aggregate 'passed_bases_percent' as a list
         'bam_folder': list,  # Aggregate 'bam_folder' as a list
-        'id_library': list  # Aggregate 'id_library' as a list
+        'id_library': list,  # Aggregate 'id_library' as a list
+        'started_at': list,
+        'acquisition_stopped': list,
+        'processing_stopped': list,
+        'instrument': list,
+        'position': list,
+        'id_flowcell': list
     }).reset_index()
 
-    # Add a column for the sum of total_passed_bases
-    grouped_df['sum_of_total_passed_bases'] = grouped_df['total_passed_bases'].apply(
-        lambda x: sum(filter(None, [float(i) for i in x if pd.notnull(i)]))
+    grouped_df['total_bam_size'] = grouped_df['bam_size'].apply(
+        lambda x: sum(filter(None, [int(i) for i in x if pd.notnull(i)]))
     ).astype(str)
 
-    # Add a column for the sum of bam_size
-    grouped_df['sum_of_bam_size'] = grouped_df['bam_size'].apply(
+    grouped_df['sum_of_total_passed_bases'] = grouped_df['total_passed_bases'].apply(
         lambda x: sum(filter(None, [int(i) for i in x if pd.notnull(i)]))
     ).astype(str)
 
     # Create a new column `id_library` where the value is just one item from the list
-    grouped_df['id_batch'] = grouped_df['id_library'].apply(
-        lambda x: x[0] if x else None)
+    grouped_df['id_batch'] = grouped_df['id_library'].apply (lambda x: x[0] if x else None)
 
     if "created_at" not in df.columns:
         grouped_df["created_at"] = ts
     if "updated_at" not in df.columns:
         grouped_df["updated_at"] = ts
 
-    # Need to fillna so that the mysql connector can insert the data.
     grouped_df = grouped_df.astype(str)
     grouped_df.fillna(value="", inplace=True)
+
+    grouped_df=grouped_df[["id_repository","alias","total_passed_bases","bam_size","date_upload","total_bases","passed_bases_percent","bam_folder","id_library","sum_of_total_passed_bases","total_bam_size","id_batch","created_at","updated_at","started_at","acquisition_stopped","processing_stopped","instrument","position","id_flowcell"]]
     return grouped_df

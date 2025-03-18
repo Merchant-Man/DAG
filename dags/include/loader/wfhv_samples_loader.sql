@@ -1,5 +1,5 @@
-INSERT INTO wfhv_samples(id_repository,alias,total_passed_bases,bam_size,date_upload,total_bases,passed_bases_percent,bam_folder,id_library,sum_of_total_passed_bases,sum_of_bam_size,id_batch,created_at,updated_at)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+INSERT INTO wfhv_samples(id_repository,alias,total_passed_bases,bam_size,date_upload,total_bases,passed_bases_percent,bam_folder,id_library,sum_of_total_passed_bases,sum_of_bam_size,id_batch,created_at,updated_at,started_at,acquisition_stopped,processing_stopped,instrument,position,id_flowcell)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON DUPLICATE KEY UPDATE id_repository = VALUES(id_repository),
 alias = VALUES(alias),
 total_passed_bases = VALUES(total_passed_bases),
@@ -12,4 +12,10 @@ id_library = VALUES(id_library),
 sum_of_total_passed_bases = VALUES(sum_of_total_passed_bases),
 sum_of_bam_size = VALUES(sum_of_bam_size),
 id_batch = VALUES(id_batch),
-updated_at =  '{{ ts }}'
+updated_at =  '{{ ts }}',
+started_at = VALUES(started_at),
+acquisition_stopped = VALUES(acquisition_stopped),
+processing_stopped= VALUES(processing_stopped),
+instrument = VALUES(instrument),
+position = VALUES(position),
+id_flowcell = VALUES(id_flowcell)
