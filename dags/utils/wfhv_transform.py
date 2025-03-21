@@ -67,9 +67,12 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
 
 def transform_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
-    df = df.drop_duplicates()
-
-    df = df.dropna(subset=['id_flowcell']) #drop old date (before 20250319 updates)
+    # df = df.drop_duplicates()
+    #drop old date (before 20250321 updates)
+    df_test["non_null_count"] = df.notnull().sum(axis=1)
+    df_test = df_test.sort_values("non_null_count", ascending=False)
+    df_test = df_test.drop_duplicates(subset="bam_folder", keep="first")
+    df_test = df_test.drop(columns="non_null_count")
 
     datetime_cols = ['date_upload', 'started_at', 'acquisition_stopped', 'processing_stopped']
     for col in datetime_cols:
@@ -115,3 +118,4 @@ def transform_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     grouped_df=grouped_df[["id_repository","alias","total_passed_bases","bam_size","date_upload","total_bases","passed_bases_percent","bam_folder","id_library","sum_of_total_passed_bases","total_bam_size","id_batch","created_at","updated_at","started_at","acquisition_stopped","processing_stopped","instrument","position","id_flowcell"]]
     return grouped_df
+

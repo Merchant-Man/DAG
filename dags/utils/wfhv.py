@@ -18,10 +18,6 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         AWS connection ID for authentication.
     wfhv_input_bucket : str
         S3 bucket containing WFHV output data.
-    bronze_bucket : str
-        The name of the dwh bronze bucket
-    bronze_object_path : str
-        The path to store the bronze object
     ts : str
         Timestamp used to filter folders based on modification date.
     kwargs : dict
@@ -32,8 +28,8 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
     s3_client = s3_hook.get_conn()
     
     # Use Airflow Execution Date (ds) or a default timestamp
-    ts = str(kwargs.get("ds", "2025-03-02"))
-    # ts= "2025-03-02"
+    # ts = str(kwargs.get("ds", "2025-03-02"))
+    ts= "2024-03-02"
     # Function to list relevant run folders
     def _get_s3_file(prefix: str, pattern: str):
         """Finds the first file matching `pattern` under `prefix` in S3."""
@@ -146,6 +142,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
 
         return list(recent_runs)
 
+    # Extract barcode data and process folders (unchanged functions)
     def _process_folders(runname: str):
         """Processes subfolders and extracts barcode data."""
         prefix = f"{runname}/no_sample/"
@@ -165,6 +162,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
 
     # Main execution
     run_folders = _list_run_folders()
+    print(f"Listing runs after {ts}")
     print(run_folders)
     all_data = pd.DataFrame()
 
