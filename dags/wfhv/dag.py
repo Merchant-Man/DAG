@@ -13,7 +13,6 @@ AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "wfhv/qc"
 SAMPLES_OBJECT_PATH = "wfhv/samples"
 ANALYSIS_OBJECT_PATH = "wfhv/analysis"
-WFHV_SAMPLES_TABLE = 'bgsi-upload-ont'
 WFHV_OUTPUT_BUCKET = "bgsi-data-wfhv-output"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
@@ -81,15 +80,15 @@ qc_silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-samples_bronze_dynamo_to_s3_task = PythonOperator(
-    task_id="samples_bronze_dynamo_to_s3",
-    python_callable=dynamo_and_dump,
+samples_bronze_s3_to_s3_task = PythonOperator(
+    task_id="samples_bronze_s3_to_s3",
+    python_callable=fetch_wfhv_samples_dump_data,
     dag=dag,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
-        "table_name": WFHV_SAMPLES_TABLE,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": SAMPLES_OBJECT_PATH,
+        "bronze_bucket": S3_DWH_BRONZE,
+        "bronze_object_path": f"{BRONZE_OBJECT_PATH}/{SAMPLES_OBJECT_PATH}",
+        "wfhv_input_bucket": WFHV_INPUT_BUCKET,
         "curr_ds": "{{ ds }}"
     },
     provide_context=True
@@ -143,6 +142,6 @@ analysis_silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-samples_bronze_dynamo_to_s3_task >> samples_silver_transform_to_db_task
+samples_bronze_s3_to_s3_task >> samples_silver_transform_to_db_task
 analysis_bronze_s3_to_s3_task >> analysis_silver_transform_to_db_task
 qc_bronze_s3_to_s3_task >> qc_silver_transform_to_db_task
