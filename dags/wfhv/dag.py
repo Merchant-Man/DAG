@@ -13,6 +13,7 @@ AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "wfhv/qc"
 SAMPLES_OBJECT_PATH = "wfhv/samples"
 ANALYSIS_OBJECT_PATH = "wfhv/analysis"
+WFHV_INPUT_BUCKET = "bgsi-data-wfhv-input"
 WFHV_OUTPUT_BUCKET = "bgsi-data-wfhv-output"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
