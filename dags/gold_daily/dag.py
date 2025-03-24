@@ -125,9 +125,8 @@ with dag:
         )
 
         phenovar_participants = ExternalTaskSensor(
-            task_id="phenovar-participants",
-            external_dag_id="phenovar-participants",
-            external_task_id="silver_transform_to_db",
+            task_id="phenovar",
+            external_dag_id="phenovar",
             check_existence=True,
             timeout=60*60*2,  # 2 hours
             execution_delta=timedelta(minutes=30, hours=1),

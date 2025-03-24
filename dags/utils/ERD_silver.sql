@@ -732,9 +732,11 @@ ON phenovar_documents(participant_id);
 CREATE TABLE regina_documents(
   id_subject VARCHAR(50) PRIMARY KEY,
   composition_id VARCHAR(255),
-  composition_name TEXT,
+  composition_name VARCHAR(255),
   entry_name TEXT,
   entry_content JSON,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 )
+CREATE INDEX composition_name_idx
+ON regina_documents(composition_name);
