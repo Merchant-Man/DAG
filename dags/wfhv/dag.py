@@ -87,7 +87,7 @@ samples_bronze_s3_to_s3_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bronze_bucket": S3_DWH_BRONZE,
-        "bronze_object_path": f"{BRONZE_OBJECT_PATH}/{SAMPLES_OBJECT_PATH}",
+        "bronze_object_path": SAMPLES_OBJECT_PATH,
         "wfhv_input_bucket": WFHV_INPUT_BUCKET,
         "curr_ds": "{{ ds }}"
     },
