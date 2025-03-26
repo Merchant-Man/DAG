@@ -7,7 +7,7 @@ import pandas as pd
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from utils.utils import silver_transform_to_db, dynamo_and_dump
-from utils.wfhv import fetch_wfhv_analysis_dump_data, fetch_wfhv_stats_dump_data
+from utils.wfhv import fetch_wfhv_samples_dump_data, fetch_wfhv_analysis_dump_data, fetch_wfhv_stats_dump_data
 
 AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "wfhv/qc"
