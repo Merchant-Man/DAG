@@ -20,6 +20,10 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         S3 bucket containing WFHV output data.
     ts : str
         Timestamp used to filter folders based on modification date.
+    bronze_bucket : str
+        The name of the dwh bronze bucket
+    bronze_object_path : str
+        The path to store the bronze object
     kwargs : dict
         Additional parameters, including Airflow's execution context (e.g., `ds`)
     """
