@@ -69,10 +69,10 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 def transform_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # df = df.drop_duplicates()
     #drop old date (before 20250321 updates)
-    df_test["non_null_count"] = df.notnull().sum(axis=1)
-    df_test = df_test.sort_values("non_null_count", ascending=False)
-    df_test = df_test.drop_duplicates(subset="bam_folder", keep="first")
-    df_test = df_test.drop(columns="non_null_count")
+    df["non_null_count"] = df.notnull().sum(axis=1)
+    df= df.sort_values("non_null_count", ascending=False)
+    df= df.drop_duplicates(subset="bam_folder", keep="first")
+    df= df.drop(columns="non_null_count")
 
     datetime_cols = ['date_upload', 'started_at', 'acquisition_stopped', 'processing_stopped']
     for col in datetime_cols:
