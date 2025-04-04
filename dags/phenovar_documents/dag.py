@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.models import Variable
 from utils.utils import silver_transform_to_db
 from airflow.operators.python import PythonOperator
-from utils.phenovar_transform import fetch_documents_all_participants_and_dump, transform_document_data
+from utils.phenovar_transform import fetch_documents_all_participants_and_dump, transform_document_data, flatten_document_data
 import os
 from typing import Dict, Any
 
@@ -99,4 +99,15 @@ silver_transform_document_to_db_task = PythonOperator(
     provide_context=True
 )
 
-bronze_fetch_jwt_and_dump_data_document_task >> silver_transform_document_to_db_task
+flatten_document_task = PythonOperator(
+    task_id="flatten_document",
+    python_callable=flatten_document_data,
+    dag=dag,
+    op_kwargs={
+        "db_secret_url": RDS_SECRET,
+        "verbose": True
+    },
+    provide_context=True
+)
+
+bronze_fetch_jwt_and_dump_data_document_task >> silver_transform_document_to_db_task >> flatten_document_task

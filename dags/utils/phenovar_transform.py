@@ -6,6 +6,10 @@ import json
 import pandas as pd
 import mysql.connector as sql
 import time
+from sqlalchemy import create_engine
+from sqlalchemy.types import VARCHAR, DATETIME
+import re
+import ast
 
 def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
@@ -151,3 +155,136 @@ def transform_document_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df["question_answer"] = df["question_answer"].apply(json.dumps)
     df["user"] = df["user"].apply(json.dumps)
     return df
+
+def flatten_document_data(db_secret_url:str, verbose:bool=False) -> None:
+    """
+    Flatten Phenovar Document data
+
+    Parameters
+    ----------
+    db_secret_url : str
+        Database secret URL
+    verbose : bool, optional
+        Verbose mode, by default False
+    """
+    # Get all available id_subject from RegINA
+    docs_query=r"""
+    SELECT * FROM phenovar_documents
+    """
+
+    engine=create_engine(db_secret_url)
+
+    with engine.connect() as conn:
+        phenovar_docs_df = pd.read_sql(
+            sql=docs_query,
+            con=conn.connection
+        )
+    
+    # Get variable id mapping to map column name
+    variable_query = r"""
+    SELECT * FROM phenovar_variables
+    """
+    with engine.connect() as conn:
+        phenovar_var_df = pd.read_sql(
+            sql=variable_query,
+            con=conn.connection
+        )
+    variable_map = {}
+    phenovar_var_df[["id", "name", "is_mandatory"]].apply(
+        lambda row: variable_map.setdefault(row["id"], {"name": row["name"], "is_mandatory": row["is_mandatory"]}) if row["id"] not in variable_map else None, axis=1
+    )
+    
+    # the question_answer column values are in the format of string JSON 
+    def _get_form_group(doc_type:str) -> str:
+        match = re.findall(r"^AAA\d+\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/([^|]+)\|(.+)", doc_type)
+        if match: 
+            return "_".join(match[0])
+    phenovar_docs_df["form_group"] = phenovar_docs_df["document_type"].apply(_get_form_group)
+
+    unique_form_group = list(phenovar_docs_df["form_group"].unique())
+
+    form_group_df_dict = {}
+    for form_group in unique_form_group:
+        if verbose:
+            print(f"Processing form_group: {form_group}")
+        # Skip if form_group is None
+        if form_group == None:
+            continue
+        temp_df = phenovar_docs_df[phenovar_docs_df["form_group"]==form_group]
+        # Make the column into dictionary
+        temp_data = temp_df["question_answer"].apply(lambda x: json.loads(x)).apply(lambda x: ast.literal_eval(x))
+
+        # After that, we can use Pandas functionalities to normalize dictionary data.
+        temp_data_norm = pd.json_normalize(temp_data.to_list())
+
+        # Excluding the continous values whose values are actually how to fill it which are not needed.
+        # form.continue_values.uuid
+        excl_cols = []
+        for col in list(temp_data_norm.columns):
+            if re.findall(r"form\.continue_values\.[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", col):
+                excl_cols.append(col)
+        temp_data_norm.drop(excl_cols, axis=1, inplace=True)
+        
+        new_cols = []
+        for col in temp_data_norm.columns:
+            temp_uuid = re.findall(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", col)
+            col = re.sub(rf"form\.[^.]+\.", "", col)
+            if temp_uuid:
+                name = variable_map[temp_uuid[0]]["name"]
+                if name:
+                    # strip needed since some variable name contains extra space(s)
+                    temp_col = re.sub(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", name.strip(), col)
+                    new_cols.append(temp_col)
+                    continue
+
+            # If not match, just use the original column name
+            new_cols.append(col)
+        temp_data_norm.columns = new_cols
+
+        temp_df.reset_index(inplace=True, drop=True)
+        temp_data_norm.reset_index(inplace=True, drop=True)
+        temp_df = pd.concat([temp_df , temp_data_norm], axis=1)
+
+        #Dropping unused columns and rename it
+        temp_df.drop(["document_type", "question_answer", "institution_id", "user"], axis=1, inplace=True)
+        temp_df.rename(columns={"participant_id":"id_subject", "institution_name":"biobank_nama"}, inplace=True)
+        
+        temp_df.to_csv(f"{form_group}.csv", index=False)
+
+        form_group_df_dict[form_group] = temp_df
+
+    # Dump into mysql
+    for key in form_group_df_dict.keys():
+        temp_df = form_group_df_dict[key].drop(["form_group", "created_by"], axis=1)
+        
+        # excluding registry columns which come from registry form
+        excl_cols = ["Catatan","Hub","Institusi","Judul Penelitian","Nomor EC","PIC (Nama Peneliti)","Proyek","Tanggal Kadaluarsa","Tanggal Dibuat"]
+
+        if not re.findall(r"(?i)rekrutmen_registrasi", key):
+            temp_df = form_group_df_dict[key].drop(excl_cols, axis=1)
+        
+        temp_df = pd.melt(temp_df, 
+                id_vars=["id_subject", "biobank_nama","version","created_at"], var_name="path", value_name="value")
+
+        # Set index for the DB
+        temp_df.set_index(["id_subject", "biobank_nama", "created_at"], inplace=True)
+        # Naming purpose: MySQL has a limit of 64 characters for table name
+        key = key.lower()
+        key = re.sub(r"(?i)formulir-", "", key)
+        key = re.sub(r"(?i)spesifik-penyakit-", "", key)
+        key = re.sub(r"--", "-", key)
+        key = re.sub(r"examination", "exam", key)
+
+
+        table_name = f"phenovar_docs_{key}"
+        if verbose:
+            print(f"Dumping {table_name} to dB")
+        with engine.begin() as conn:
+            temp_df.to_sql(
+                name = f"{table_name}",
+                if_exists="replace",
+                con=conn,
+                dtype={'id_subject': VARCHAR(10), 'biobank_nama': VARCHAR(255), 'created_at': DATETIME}
+            )
+        if verbose:
+            print(f"{table_name} has been dumped")
