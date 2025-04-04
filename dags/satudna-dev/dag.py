@@ -1,12 +1,14 @@
 import pandas as pd
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from sqlalchemy import create_engine
+from airflow.models import Connection
 import boto3
 from datetime import datetime, timedelta
 
 RDS_SECRET = Variable.get("RDS_SECRET")
+AWS_CONN_ID = "aws"
 engine = create_engine(RDS_SECRET)
 
 default_args = {
@@ -29,52 +31,18 @@ dag = DAG(
 def fetch_from_rds(**context):
     try:
         query = """
-            WITH combined_analysis AS (
-                SELECT DISTINCT 
-                    id_repository,
-                    CASE 
-                        WHEN run_status = 'SUCCEEDED' THEN 'SUCCEEDED'
-                        ELSE 'FAILED'
-                    END as analysis_status
-                FROM (
-                    SELECT id_repository, run_status FROM superset_dev.ica_analysis
-                    UNION ALL
-                    SELECT id_repository, run_status FROM superset_dev.mgi_analysis
-                ) all_analysis
-                GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
-                    CASE 
-                        WHEN run_status = 'SUCCEEDED' THEN 'SUCCEEDED'
-                        ELSE 'FAILED'
-                    END
-            ),
-            combined_qc AS (
-                SELECT 
-                    id_repository,
-                    CASE 
-                        WHEN at_least_10x >= 80 
-                        AND median_coverage >= 30 THEN TRUE
-                        ELSE FALSE
-                    END as qc_pass
-                FROM (
-                    SELECT id_repository, at_least_10x, median_coverage 
-                    FROM superset_dev.mgi_qc
-                    UNION ALL
-                    SELECT id_repository, at_least_10x, median_coverage
-                    FROM superset_dev.illumina_qc
-                ) all_qc
-                GROUP BY id_repository,  -- Add GROUP BY to handle duplicates
-                    CASE 
-                        WHEN at_least_10x >= 80 
-                        AND median_coverage >= 30 THEN TRUE
-                        ELSE FALSE
-                    END
-            )
-            SELECT 
-                a.id_repository,
-                a.analysis_status as analysis_secondary,
-                COALESCE(q.qc_pass, FALSE) as qc_pass
-            FROM combined_analysis a
-            LEFT JOIN combined_qc q ON a.id_repository = q.id_repository
+            SELECT
+                id_repository,
+                CASE
+                    WHEN date_secondary IS NOT NULL THEN "SUCCEEDED"
+                    ELSE "FAILED"
+                END analysis_secondary,
+                CASE
+                    WHEN qc_category = "Pass" THEN TRUE
+                    ELSE FALSE
+                END qc_pass
+            FROM
+                gold_qc
         """
         df = pd.read_sql(query, engine)
         # Drop duplicates if any still exist after the SQL-level deduplication
@@ -96,7 +64,10 @@ def load_to_dynamo(**context):
         if not records:
             raise ValueError("No records retrieved from XCom")
         
-        dynamodb = boto3.resource('dynamodb')
+        dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-3', 
+                           aws_access_key_id=Connection.get_connection_from_secrets(
+                               AWS_CONN_ID).login,
+                           aws_secret_access_key=Connection.get_connection_from_secrets(AWS_CONN_ID).password)
         table = dynamodb.Table('satudna-dev')
         
         # Create a set to track processed IDs
