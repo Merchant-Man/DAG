@@ -32,8 +32,8 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
     s3_client = s3_hook.get_conn()
     
     # Use Airflow Execution Date (ds) or a default timestamp
-    # ts = str(kwargs.get("ds", "2025-03-02"))
-    ts= "2024-03-02"
+    ts = str(kwargs.get("ds", "2024-03-02"))
+    # ts= "2024-03-02"
     # Function to list relevant run folders
     def _get_s3_file(prefix: str, pattern: str):
         """Finds the first file matching `pattern` under `prefix` in S3."""
