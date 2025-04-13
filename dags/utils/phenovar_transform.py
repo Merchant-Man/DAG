@@ -248,8 +248,6 @@ def flatten_document_data(db_secret_url:str, verbose:bool=False) -> None:
         #Dropping unused columns and rename it
         temp_df.drop(["document_type", "question_answer", "institution_id", "user"], axis=1, inplace=True)
         temp_df.rename(columns={"participant_id":"id_subject", "institution_name":"biobank_nama"}, inplace=True)
-        
-        temp_df.to_csv(f"{form_group}.csv", index=False)
 
         form_group_df_dict[form_group] = temp_df
 
