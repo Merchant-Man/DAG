@@ -17,14 +17,13 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         {"Perempuan": "FEMALE", "Laki-laki": "MALE"})
     df["age"] = df["age"].astype("int64")
 
-    df = df[["id_subject", "age", "sex",
-             "created_at", "updated_at", "creationDate"]]
-
     if "created_at" not in df.columns:
         df["created_at"] = ts
     if "updated_at" not in df.columns:
         df["updated_at"] = ts
-    print(df.columns)
+    
+    df = df[["id_subject", "age", "sex",
+             "created_at", "updated_at", "creationDate"]]
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
 
