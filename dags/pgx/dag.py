@@ -13,7 +13,7 @@ from io import StringIO
 import re
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import json
-from sqlalchemy import create_engine, VARCHAR
+from sqlalchemy import create_engine, VARCHAR, SMALLINT
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 AWS_CONN_ID = "aws"
@@ -196,7 +196,7 @@ def _get_pgx_report_json_files_from_s3(s3_client:boto3.client, bucket_name:str, 
     hubs = temp_report.get("order_details").get("ordered_by")
     test_method = temp_report.get("sample_details").get("test_method")
 
-    col = ["drug_name", "phenotype_text", "gene_symbol", "branded_drug", "drug_category", "drug_classification", "nala_score_v2", "rec_source", "run_id", "scientific_evidence_symbol"]
+    col = ["drug_name", "phenotype_text", "gene_symbol", "branded_drug", "drug_category", "drug_classification", "nala_score_v2", "rec_category", "rec_source", "rec_text", "run_id", "scientific_evidence_symbol", "implication_text"]
 
     temp_res = []
 
@@ -206,8 +206,8 @@ def _get_pgx_report_json_files_from_s3(s3_client:boto3.client, bucket_name:str, 
                 rec["drug_name"], rec["phenotype_text"], 
                 rec["gene_symbol"], rec["branded_drug"], 
                 rec["drug_category"], rec["drug_classification"], 
-                rec["nala_score_v2"], rec["rec_source"], 
-                rec["run_id"], rec["scientific_evidence_symbol"]
+                rec["nala_score_v2"], rec["rec_category"], rec["rec_source"], rec["rec_text"],
+                rec["run_id"], rec["scientific_evidence_symbol"], rec["implication_text"]
                 )
              )
     temp_df = pd.DataFrame(temp_res, columns=col)
@@ -275,18 +275,18 @@ def get_pgx_summary(db_secret_url:str) -> None:
                 dtype={'hubs': VARCHAR(128), 'drug_name': VARCHAR(128), 'drug_category': VARCHAR(128), 'drug_classification': VARCHAR(128), 'gene_symbol': VARCHAR(16), 'order_id': VARCHAR(36)}
             )
     res.reset_index(inplace=True)
-    grouped_res = res.groupby(["hubs", "drug_name", "gene_symbol", "rec_source", "scientific_evidence_symbol", "nala_score_v2"]).size().reset_index(name="ct_subj_id")
+    grouped_res = res.groupby(["hubs", "drug_name", "gene_symbol", "rec_source", "scientific_evidence_symbol", "nala_score_v2", "rec_category"]).size().reset_index(name="ct_subj_id")
 
     total_id_per_hubs = res.groupby(["hubs"]).agg({"order_id": "nunique"}).reset_index()
     total_id_per_hubs.rename(columns={"order_id": "ct_total_subj_id"}, inplace=True)
     grouped_res = pd.merge(grouped_res, total_id_per_hubs, on="hubs", how="left")
-    grouped_res.set_index(["hubs", "drug_name", "gene_symbol", "nala_score_v2"], inplace=True)
+    grouped_res.set_index(["hubs", "drug_name", "gene_symbol", "nala_score_v2", "rec_category"], inplace=True)
     with engine.begin() as conn:
         grouped_res.to_sql(
             name=f"gold_pgx_summary_report",
             if_exists="replace",
             con=conn,
-            dtype={'hubs': VARCHAR(128), 'drug_name': VARCHAR(128),'gene_symbol': VARCHAR(16), 'nala_score_v2': VARCHAR(32)}
+            dtype={"hubs": VARCHAR(128), "drug_name": VARCHAR(128), "gene_symbol": VARCHAR(16), "nala_score_v2": VARCHAR(32), "rec_category": SMALLINT}
         )
     print(f" == Finished == ")
 
