@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import Variable
 from utils.utils import fetch_and_dump, silver_transform_to_db
-from utils.regina_transform import transform_document_data
+from utils.regina_transform import transform_demography_data
 from airflow.operators.python import PythonOperator
 import pandas as pd
 import os
@@ -84,7 +84,7 @@ silver_transform_to_db_task = PythonOperator(
         "aws_conn_id": AWS_CONN_ID, 
         "bucket_name": S3_DWH_BRONZE,
         "object_path": OBJECT_PATH,
-        "transform_func": transform_document_data, 
+        "transform_func": transform_demography_data, 
         "multi_files": True,
         "db_secret_url": RDS_SECRET, 
         "curr_ds": "{{ ds }}"
