@@ -156,68 +156,200 @@ WITH cte AS (
 
 SELECT 
 	*,
-	CASE 
-        WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL THEN 'No Data'
-        WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND batch_sex_category <> 'Fail' THEN 'No Data'
-        WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
-        WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
-            CASE 
-                WHEN batch_sex_category = 'Pass' THEN 'Pass'
-                WHEN batch_sex_category = 'Incomplete Data' THEN 'No Data'
-                ELSE 'Fail'
-            END
-        ELSE 'Fail'
-    END AS qc_category,
-    CASE 
-	    -- Check for "No Data" first (most restrictive)
-	    WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
-	    
-	    -- Check for "No Coverage Data" (sex is present, but coverage data is missing)
-	    WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL THEN 'No Coverage Data'
-	    
-	    -- Check for "No Sex Data" only when batch_sex_category is NOT Fail
-	    WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND batch_sex_category <> 'Fail' THEN 'No Sex Data'
-	
-	    -- Specific QC Pass or Fail logic
-	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
-	        CASE 
-	            WHEN batch_sex_category = 'Pass' THEN 'Pass'
-	            WHEN sex IS NOT NULL AND batch_sex_category = 'Incomplete Data' THEN 'Incomplete Batch Sex Data'
-	            ELSE 'Fail Sex Check'
-	        END
-	    
-	    -- Fail QC logic
-	    WHEN coverage < 30 AND at_least_10x < 90 AND batch_sex_category = 'Fail' THEN 'Fail QC'
-	
-	    -- Catch-all for other Coverage QC failures
-	    ELSE 'Fail Coverage QC'
-	END AS qc_category2,
+	CASE
+		WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Pass'
+				WHEN batch_sex_category = 'Incomplete Data' THEN 'No Data'
+				ELSE 'Fail'
+			END
+		WHEN (coverage < 30 OR at_least_10x < 90) AND coverage IS NOT NULL AND at_least_10x IS NOT NULL THEN 'Fail'
+		WHEN batch_sex_category ='Fail' THEN 'Fail'
+		WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL THEN 'No Data'
+		WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND (batch_sex_category <> 'Fail' OR batch_sex_category IS NULL) THEN 'No Data'
+		WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
+		ELSE 'Undefined'
+	END AS qc_category,
+
+	CASE
+		WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Pass'
+				WHEN batch_sex_category = 'Incomplete Data' THEN 'No Data'
+				ELSE 'Fail'
+			END
+		WHEN (coverage < 30 OR at_least_10x < 90) AND coverage IS NOT NULL AND at_least_10x IS NOT NULL THEN 'Fail'
+		WHEN batch_sex_category ='Fail' THEN 'Fail'
+		WHEN (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) AND sex IS NOT NULL THEN 'In Progress Analysis'
+		WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND (batch_sex_category <> 'Fail' OR batch_sex_category IS NULL) THEN 'No Registry Data'
+		WHEN sex IS NULL AND (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) THEN 'No Data'
+		ELSE 'Undefined'
+	END qc_category2,
 	
 	CASE 
-	    -- Most restrictive: No Data (all critical fields missing)
-	    WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
-	    
-	    -- No Coverage Data: sex is present, but coverage-related fields are missing
-	    WHEN sex IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Coverage Data'
-	    
-	    -- No Sex Data: coverage data exists, sex is missing, and batch_sex_category is NOT 'Fail'
-	    WHEN sex IS NULL AND coverage IS NOT NULL AND at_least_10x IS NOT NULL 
-	         AND batch_sex_category <> 'Fail' THEN 'No Data'
-	
-	    -- Pass QC: Coverage and depth meet the threshold
-	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
-	        CASE 
-	            WHEN batch_sex_category = 'Pass' THEN 'Pass'
-	            WHEN sex IS NOT NULL AND batch_sex_category = 'Incomplete Data' THEN 'No Data'
-	            ELSE 'Fail QC'  -- If batch_sex_category is not 'Pass' or 'Incomplete Data', fail QC
-	        END
-	
-	    -- Explicit Fail QC: Coverage and depth both fail thresholds, and batch_sex_category is 'Fail'
-	    WHEN coverage < 30 AND at_least_10x < 90 AND batch_sex_category = 'Fail' THEN 'Fail QC'
-	
-	    -- Default: Any other condition falls under Fail QC
-	    ELSE 'Fail QC'
+		WHEN (coverage >= 30 AND at_least_10x >= 90) THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Pass'
+				WHEN sex_ploidy_category = 'Match' AND batch_sex_category = 'Fail' THEN 'Blacklisted'
+				WHEN sex_ploidy_category = 'Mismatch' AND batch_sex_category = 'Fail' THEN 'Blacklisted'
+				WHEN batch_sex_category = 'Fail' THEN
+					CASE
+						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
+						WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Blacklisted'
+						ELSE 'Blacklisted'
+					END
+				WHEN batch_sex_category = 'Incomplete Data' AND sex_ploidy_category = 'Match' THEN 'Graylisted'
+				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
+				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Graylisted'
+				ELSE 'Graylisted'
+			END
+
+		WHEN sequencer ='ONT' AND sum_of_total_passed_bases < 90000000000 THEN 'Top Up List'
+
+		WHEN coverage < 30 OR at_least_10x < 90 THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Top Up List'
+
+				WHEN sex_ploidy_category = 'Mismatch' THEN 'Blacklisted'
+
+				WHEN batch_sex_category = 'Fail' THEN 
+					CASE 
+						WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 
+							'Blacklisted'
+
+						WHEN sex IS NULL THEN 
+							'Blacklisted'
+
+						WHEN sex_ploidy_category = 'Match' THEN 
+							'Blacklisted'
+
+						ELSE 'Blacklisted'
+					END
+
+				WHEN batch_sex_category = 'Incomplete Data' THEN 
+					CASE
+						WHEN sex_ploidy_category = 'Match' THEN 'Graylisted'
+						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
+						WHEN ploidy_estimation IS NULL THEN 'Graylisted'
+						Else 'Graylisted'
+					END
+
+				WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 'Graylisted'
+				WHEN ploidy_estimation IS NULL THEN 'Graylisted'
+				WHEN sex IS NULL THEN 'Graylisted'
+
+				ELSE 'Blacklisted'
+			END 
+
+		WHEN batch_sex_category = 'Fail' THEN 
+			CASE 
+				WHEN sex_ploidy_category = 'Match' THEN 'test'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Blacklisted'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
+				ELSE 'Blacklisted'
+			END
+
+		WHEN coverage IS NOT NULL AND at_least_10x IS NOT NULL AND batch_sex_category <> 'Fail' THEN 
+			CASE 
+				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Graylisted'
+				WHEN sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
+				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
+			END
+
+		WHEN sex IS NOT NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+
+		WHEN sex IS NOT NULL AND ploidy_estimation IS NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+
+		WHEN sex IS NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+
+		WHEN sex IS NULL AND ploidy_estimation IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'Graylisted'
+
+		ELSE 'Unidentified'
 	END AS qc_category3,
+
+	CASE 
+		WHEN (coverage >= 30 AND at_least_10x >= 90) THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Pass'
+				WHEN sex_ploidy_category = 'Match' AND batch_sex_category = 'Fail' THEN 'Fail (Batch Sex Check)'
+				WHEN sex_ploidy_category = 'Mismatch' AND batch_sex_category = 'Fail' THEN 'Fail (Sex Check)'
+				WHEN batch_sex_category = 'Fail' THEN
+					CASE
+						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex QC), No Data (No Sex Data)'
+						WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Fail (Batch Sex Check), No Data (No Registry Sex Data)'
+						ELSE 'Fail (Batch Sex Check), No Data (No Ploidy Sex Data)'
+					END
+				WHEN batch_sex_category = 'Incomplete Data' AND sex_ploidy_category = 'Match' THEN 'No Data (Incomplete Batch Sex Data)'
+				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'No Data (No Sex Data)'
+				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'No Data (No Registry Sex Data)'
+				ELSE 'No Data (No Ploidy Data)'
+			END
+
+		WHEN coverage < 30 OR at_least_10x < 90 THEN 
+			CASE 
+				WHEN batch_sex_category = 'Pass' THEN 'Fail (Coverage QC)'
+
+				WHEN sex_ploidy_category = 'Mismatch' THEN 'Fail (Coverage and Sex Check)'
+
+				WHEN batch_sex_category = 'Fail' THEN 
+					CASE 
+						WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 
+							'Fail (Coverage and Batch Sex Check), No Data (No Sex Data)'
+
+						WHEN sex IS NULL THEN 
+							'Fail (Coverage and Batch Sex Check), No Data (No Registry Sex Data)'
+
+						WHEN sex_ploidy_category = 'Match' THEN 
+							'Fail (Coverage and Batch Sex Check)'
+
+						ELSE 'Fail (Coverage and Batch Sex Check), No Data (No Ploidy Data)'
+					END
+
+				WHEN batch_sex_category = 'Incomplete Data' THEN 
+					CASE
+						WHEN sex_ploidy_category = 'Match' THEN 'Fail (Coverage QC), No Data (Incomplete Batch Sex check)'
+						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Sex Data)'
+						WHEN ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Ploidy Sex Data)'
+						Else 'Fail (Coverage QC), No Data (No Registry Data)'
+					END
+
+				-- If ploidy estimation or sex data is missing, categorize the failure accordingly
+				WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 'Fail (Coverage QC), No Data (No Sex Data)'
+				WHEN ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Ploidy Data)'
+				WHEN sex IS NULL THEN 'Fail (Coverage QC), No Data (No Registry Sex Data)'
+
+				ELSE 'Fail (Coverage and Sex QC)'
+			END 
+
+		WHEN batch_sex_category = 'Fail' THEN 
+			CASE 
+				WHEN sex_ploidy_category = 'Match' THEN 'test'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Ploidy Data)'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Registry Data)'
+				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Data)'
+				ELSE 'Fail (Batch Sex Check)'
+			END
+
+		WHEN coverage IS NOT NULL AND at_least_10x IS NOT NULL AND batch_sex_category <> 'Fail' THEN 
+			CASE 
+				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'No Data (No Registry Sex Data)'
+				WHEN sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'No Data (No Ploidy Data)'
+				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'No Data (No Sex Data)'
+			END
+
+		WHEN sex IS NOT NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Coverage Data'
+
+		WHEN sex IS NOT NULL AND ploidy_estimation IS NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No QC Data'
+
+		WHEN sex IS NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Registry Sex and Coverage Data'
+
+		WHEN sex IS NULL AND ploidy_estimation IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
+
+		-- Default Case for Any Other Failure
+		ELSE 'Unidentified'
+	END AS qc_category4,
+
 	CASE 
 	    WHEN coverage IS NULL OR at_least_10x IS NULL THEN 'No Data'
 	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 'Pass'
