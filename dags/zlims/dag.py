@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import os
 from utils.zlims_transform import transform_samples_data
+from utils.mgi_transform import transform_analysis_data
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
@@ -8,10 +9,11 @@ from utils.utils import silver_transform_to_db
 
 AWS_CONN_ID = "aws"
 SAMPLES_OBJECT_PATH = "zlims/samples"
-# S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
+ANALYSIS_OBJECT_PATH = "ztron_pro/analysis"
 S3_DWH_BRONZE = "bgsi-data-dwh-bronze"
 RDS_SECRET = Variable.get("RDS_SECRET")
-SAMPLES_LOADER_QEURY = "zlims_samples_loader.sql"
+SAMPLES_LOADER_QUERY = "zlims_samples_loader.sql"
+ANALYSIS_LOADER_QUERY = "ztronpro_analysis_loader.sql"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -31,8 +33,11 @@ dag = DAG(
     catchup=False
 )
 
-with open(os.path.join("dags/repo/dags/include/loader", SAMPLES_LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", SAMPLES_LOADER_QUERY)) as f:
     samples_loader_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/loader", ANALYSIS_LOADER_QUERY)) as f:
+    analysis_loader_query = f.read()
 
 samples_silver_transform_to_db_task = PythonOperator(
     task_id="samples_silver_transform_to_db",
@@ -48,5 +53,22 @@ samples_silver_transform_to_db_task = PythonOperator(
         "curr_ds": "{{ ds }}"
     },
     templates_dict={"insert_query": samples_loader_query},
+    provide_context=True
+)
+
+analysis_silver_transform_to_db_task = PythonOperator(
+    task_id="analysis_silver_transform_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": ANALYSIS_OBJECT_PATH,
+        "transform_func": transform_analysis_data,
+        "db_secret_url": RDS_SECRET,
+        "multi_files": True,
+        "curr_ds": "{{ ds }}"
+    },
+    templates_dict={"insert_query": analysis_loader_query},
     provide_context=True
 )
