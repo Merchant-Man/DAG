@@ -136,7 +136,9 @@ INSERT INTO staging_seq
 		COALESCE(db_wfhv.new_repository, seq_wfhv.id_repository) id_repository,
 		id_batch id_library,
 		"ONT" sequencer,
-		date_upload date_primary,
+    	( SELECT MAX(j.ts) FROM JSON_TABLE (
+			REPLACE(seq_wfhv.processing_stopped, '''', '"'),
+			'$[*]' COLUMNS (ts DATETIME PATH '$')) AS j) AS date_primary,
 		sum_of_total_passed_bases,
 		sum_of_bam_size,
 		NULL id_index

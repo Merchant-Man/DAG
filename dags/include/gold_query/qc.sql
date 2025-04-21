@@ -175,14 +175,17 @@ SELECT
 		WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
 			CASE 
 				WHEN batch_sex_category = 'Pass' THEN 'Pass'
-				WHEN batch_sex_category = 'Incomplete Data' THEN 'No Data'
+				WHEN batch_sex_category = 'Incomplete Data' AND ploidy_estimation IS NOT NULL AND sex IS NULL THEN 'No Registry Data'
+				WHEN batch_sex_category = 'Incomplete Data' AND ploidy_estimation IS NULL AND sex IS NULL THEN 'No Data'
+				WHEN batch_sex_category = 'Incomplete Data' AND sex IS NOT NULL THEN 'In Progress Analysis'
 				ELSE 'Fail'
 			END
 		WHEN (coverage < 30 OR at_least_10x < 90) AND coverage IS NOT NULL AND at_least_10x IS NOT NULL THEN 'Fail'
 		WHEN batch_sex_category ='Fail' THEN 'Fail'
+		WHEN sex IS NULL AND (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) THEN 'No Data'
 		WHEN (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) AND sex IS NOT NULL THEN 'In Progress Analysis'
 		WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND (batch_sex_category <> 'Fail' OR batch_sex_category IS NULL) THEN 'No Registry Data'
-		WHEN sex IS NULL AND (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) THEN 'No Data'
+
 		ELSE 'Undefined'
 	END qc_category2,
 	
