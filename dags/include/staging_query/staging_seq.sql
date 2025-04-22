@@ -133,7 +133,7 @@ INSERT INTO staging_seq
 		rn = 1
 	UNION ALL
 	SELECT
-		COALESCE(db_wfhv.new_repository, seq_wfhv.id_repository) id_repository,
+		id_repository,
 		id_batch id_library,
 		"ONT" sequencer,
     	( SELECT MAX(j.ts) FROM JSON_TABLE (
@@ -144,6 +144,15 @@ INSERT INTO staging_seq
 		NULL id_index
 	FROM
 		wfhv_samples seq_wfhv
+		LEFT JOIN (
+			SELECT DISTINCT
+				id_repository,
+				new_repository
+			FROM
+				dynamodb_fix_id_repository_latest
+			WHERE
+				sequencer = "ONT"
+		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository	
 	WHERE
 		NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev)")
 )
