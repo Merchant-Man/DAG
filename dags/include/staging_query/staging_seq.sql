@@ -133,7 +133,7 @@ INSERT INTO staging_seq
 		rn = 1
 	UNION ALL
 	SELECT
-		id_repository,
+		seq_wfhv.id_repository id_repository,
 		id_batch id_library,
 		"ONT" sequencer,
     	( SELECT MAX(j.ts) FROM JSON_TABLE (
