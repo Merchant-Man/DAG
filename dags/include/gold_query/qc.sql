@@ -309,13 +309,19 @@ SELECT
 						ELSE 'Fail (Coverage and Batch Sex Check), No Data (No Ploidy Data)'
 					END
 
-				WHEN batch_sex_category = 'Incomplete Data' THEN 
-					CASE
-						WHEN sex_ploidy_category = 'Match' THEN 'Fail (Coverage QC), No Data (Incomplete Batch Sex check)'
-						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Sex Data)'
-						WHEN ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Ploidy Sex Data)'
-						Else 'Fail (Coverage QC), No Data (No Registry Data)'
-					END
+        WHEN batch_sex_category = 'Incomplete Data' THEN 
+            CASE
+                WHEN sex_ploidy_category = 'Match' THEN 
+                    'Fail (Coverage QC), No Data (Incomplete Batch Sex check)'
+                WHEN (sex IS NULL OR sex = '') AND (ploidy_estimation IS NULL OR ploidy_estimation = '') THEN 
+                    'Fail (Coverage QC), No Data (No Sex Data)'
+                WHEN (ploidy_estimation IS NULL OR ploidy_estimation = '') AND (sex IS NOT NULL AND sex <> '') THEN 
+                    'Fail (Coverage QC), No Data (No Ploidy Sex Data)'
+                WHEN (sex IS NULL OR sex = '') AND (ploidy_estimation IS NOT NULL AND ploidy_estimation <> '') THEN 
+                    'Fail (Coverage QC), No Data (No Registry Data)'
+                ELSE 
+                    'what'
+            END
 
 				-- If ploidy estimation or sex data is missing, categorize the failure accordingly
 				WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 'Fail (Coverage QC), No Data (No Sex Data)'
@@ -352,6 +358,30 @@ SELECT
 		-- Default Case for Any Other Failure
 		ELSE 'Unidentified'
 	END AS qc_category4,
+
+	CASE
+		WHEN batch_sex_category = 'Pass' THEN 'Pass'
+		WHEN batch_sex_category = 'Fail' THEN
+			CASE
+				WHEN sex_ploidy_category = 'Match' THEN 'Fail Batch Sex Check'
+				WHEN sex_ploidy_category = 'Mismatch' THEN 'Fail Sex Check'
+				ELSE 'Incomplete Data (Fail Batch Sex Check)'
+			END
+
+		WHEN batch_sex_category = 'Incomplete Data' THEN 'Incomplete Data'
+		ELSE 'Undefined'
+	END qc_category5,
+
+	CASE 
+		WHEN coverage >= 30 THEN
+			CASE
+				WHEN at_least_10x >= 90 THEN 'Pass'
+				ELSE 'Fail Coverage Breadth'
+			END
+		WHEN at_least_10x >= 90 AND coverage < 30 THEN 'Fail Coverage Depth'
+		WHEN coverage < 30 AND at_least_10x < 90 THEN 'Fail Coverage'
+		ELSE 'No Coverage Data'
+	END qc_category6,
 
 	CASE 
 	    WHEN coverage IS NULL OR at_least_10x IS NULL THEN 'No Data'
