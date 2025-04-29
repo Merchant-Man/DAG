@@ -23,6 +23,8 @@ def transform_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         df["created_at"] = ts
     if "updated_at" not in df.columns:
         df["updated_at"] = ts
+    
+    df["data_creation_date"] = pd.to_datetime(df["data_creation_date"], format="%d-%m-%Y")
 
     # Need to fillna so that the mysql connector can insert the data.
     df = df.astype(str)
