@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import os
 from utils.zlims_transform import transform_samples_data
-from utils.mgi_transform import transform_analysis_data
+from utils.mgi_transform import ztron_transform_analysis_data
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
@@ -64,7 +64,7 @@ analysis_silver_transform_to_db_task = PythonOperator(
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": ANALYSIS_OBJECT_PATH,
-        "transform_func": transform_analysis_data,
+        "transform_func": ztron_transform_analysis_data,
         "db_secret_url": RDS_SECRET,
         "multi_files": True,
         "curr_ds": "{{ ds }}"

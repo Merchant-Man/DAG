@@ -11,7 +11,6 @@ QC_OBJECT_PATH = "mgi/qc"
 ANALYSIS_OBJECT_PATH = "mgi/analysis"
 ZTRONPRO_SAMPLES_OBJECT_PATH = "ztron_pro/samples"
 ZTRONPRO_SAMPLES_LOADER_QEURY = "ztronpro_samples_loader.sql"
-# S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 S3_DWH_BRONZE = "bgsi-data-dwh-bronze"
 RDS_SECRET = Variable.get("RDS_SECRET")
 QC_LOADER_QEURY = "mgi_qc_loader.sql"
