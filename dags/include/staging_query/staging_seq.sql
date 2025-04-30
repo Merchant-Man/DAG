@@ -9,12 +9,24 @@
 				 02-03-2025 Adding filter for testing id repositories.
 				 13-03-2025 Adding window function for filtering multiple entries of samples due to top up.
 				 15-03-2025 Adding filter for testing id repositories for illumina.
+				 29-04-2025 Adding ztron pro samples
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
 DELETE FROM staging_seq;
 INSERT INTO staging_seq
 (
+	WITH
+		deleted_hg37 AS (
+			SELECT
+				REGEXP_SUBSTR(original_sample_id, "[^_]+") code_repository
+			FROM
+				ztronpro_samples
+			WHERE
+				REGEXP_LIKE(original_sample_id, "(?i)_hg38")
+				AND NOT original_sample_id LIKE "Ashkenazim%"
+		) 
+
 	SELECT
 		id_repository,
 		id_library,
@@ -131,6 +143,26 @@ INSERT INTO staging_seq
 	LEFT JOIN staging_fix_ski_id_repo sfki ON t.id_repository = sfki.new_origin_code_repository
 	WHERE
 		rn = 1
+	UNION ALL
+	SELECT
+		REGEXP_SUBSTR(original_sample_id, "[^_]+") id_repository,
+		flow_cell_id id_library,
+		'MGI' sequencer,
+		creation_time date_primary,
+		NULL sum_of_total_passed_bases,
+		NULL sum_of_bam_size,
+		CAST(barcode AS UNSIGNED) id_index
+	FROM
+		ztronpro_samples
+	WHERE
+		NOT REGEXP_LIKE(original_sample_id, "(?i)test|AshkenazimTrio")
+		AND NOT original_sample_id IN (
+			SELECT
+				*
+			FROM
+				deleted_hg37
+		)
+		AND sample_progress = "Completed"
 	UNION ALL
 	SELECT
 		seq_wfhv.id_repository id_repository,
