@@ -1,3 +1,4 @@
-INSERT INTO phenovar_participants(id_subject, encrypt_full_name, encrypt_nik, encrypt_birth_date, sex, source, province, district, created_at, updated_at, creation_date, updation_date)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-ON DUPLICATE KEY UPDATE encrypt_full_name = VALUES(encrypt_full_name), encrypt_nik = VALUES(encrypt_nik), encrypt_birth_date = VALUES(encrypt_birth_date), sex = VALUES(sex), source = VALUES(source), province = VALUES(province), district = VALUES(district), updation_date=VALUES(updation_date), updated_at = '{{ ts }}'
+INSERT INTO phenovar_participants(id_subject, encrypt_full_name, encrypt_nik, encrypt_birth_date, sex, source,
+province_code, province, district_code, district, subdistrict_code, subdistrict, village_code, village, use_nik_ibu, created_by, updated_by, hospital_name, created_at, updated_at, creation_date, updation_date)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE encrypt_full_name = VALUES(encrypt_full_name),encrypt_nik = VALUES(encrypt_nik),encrypt_birth_date = VALUES(encrypt_birth_date),sex = VALUES(sex),source = VALUES(source),province_code = VALUES(province_code),province = VALUES(province),district_code = VALUES(district_code),district = VALUES(district),subdistrict_code = VALUES(subdistrict_code),subdistrict = VALUES(subdistrict),village_code = VALUES(village_code),village = VALUES(village),use_nik_ibu = VALUES(use_nik_ibu),updated_by = VALUES(updated_by),updated_at = '{{ ts }}',updation_date = VALUES(updation_date)
