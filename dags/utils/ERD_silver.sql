@@ -15,13 +15,29 @@ CREATE TABLE phenovar_participants (
   encrypt_birth_date VARCHAR(225) NOT NULL comment 'Encrypted birth date from PhenoVar',
   sex VARCHAR(6) NOT NULL,
   source VARCHAR(64) comment 'Source of data i.e. SatuSehat',
+  province_code VARCHAR(2) NOT NULL comment 'Province code from NIK',
   province VARCHAR(64) NOT NULL,
+  district_code VARCHAR(4) NOT NULL comment 'District (Kab.) code from NIK',
   district VARCHAR(64) NOT NULL,
+  subdistrict_code VARCHAR(4) NOT NULL comment 'Subdistrict (Kec.) code from NIK',
+  subdistrict VARCHAR(64) NOT NULL,
+  village_code VARCHAR(4) NOT NULL comment 'Subdistrict (Kec.) code from NIK',
+  village VARCHAR(64) NOT NULL,
+  use_nik_ibu BOOLEAN NOT NULL,
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  hospital_name VARCHAR(128) NOT NULL comment 'Hospital name extracted from the creator email',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
   creation_date DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar',
   updation_date DATETIME NOT NULL comment 'Timestamp of last update from PhenoVar'
 );
+CREATE INDEX hospital_name_idx
+ON phenovar_participants(hospital_name);
+CREATE INDEX sex_idx
+ON phenovar_participants(sex);
+CREATE INDEX province_code_idx
+ON phenovar_participants(province_code);
 
 
 CREATE TABLE master_specimen (
