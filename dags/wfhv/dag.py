@@ -20,6 +20,7 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 QC_LOADER_QEURY = "wfhv_qc_loader.sql"
 SAMPLES_LOADER_QEURY = "wfhv_samples_loader.sql"
 ANALYSIS_LOADER_QEURY = "wfhv_analysis_loader.sql"
+S3_DYNAMODB_FIX_ID = "dynamodb/fix/id_repository/"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -95,6 +96,14 @@ samples_bronze_s3_to_s3_task = PythonOperator(
     provide_context=True
 )
 
+samples_silver_transform_partial = lambda df, ts: transform_samples_data(
+    df,
+    ts,
+    fix_bucket=S3_DWH_BRONZE,
+    fix_prefix=S3_DYNAMODB_FIX_ID,
+    aws_conn_id=AWS_CONN_ID
+)
+
 samples_silver_transform_to_db_task = PythonOperator(
     task_id="samples_silver_transform_to_db",
     python_callable=silver_transform_to_db,
@@ -103,7 +112,7 @@ samples_silver_transform_to_db_task = PythonOperator(
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": SAMPLES_OBJECT_PATH,
-        "transform_func": transform_samples_data,
+        "transform_func": samples_silver_transform_partial,  
         "db_secret_url": RDS_SECRET,
         "multi_files": True,
         "curr_ds": "{{ ds }}"
