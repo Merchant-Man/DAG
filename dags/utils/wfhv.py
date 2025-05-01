@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import timezone
 import json
 import pandas as pd
-
+import math
 
 def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronze_bucket: str, bronze_object_path: str, **kwargs):
     """
@@ -32,7 +32,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
     s3_client = s3_hook.get_conn()
     
     # Use Airflow Execution Date (ds) or a default timestamp
-    ts = str(kwargs.get("ds", "2024-03-02"))
+    ts = str(kwargs.get("ds", "2025-03-02"))
     # ts= "2024-03-02"
     # Function to list relevant run folders
     def _get_s3_file(prefix: str, pattern: str):
@@ -101,36 +101,60 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         return total_size, formatted_date
 
     def _extract_barcode_data(prefix: str):
-        """Extracts barcode data from an HTML report file."""
         html = _read_s3_file(_get_s3_file(prefix, r"report.*\.html$"))
         barcodes = _extract_json_from_html(html, "barcode_reads") if html else []
 
-        started, acquisition_stopped, processing_stopped, instrument, position, flow_cell_id = _extract_summary_data(prefix)
-        
-        folder_size, latest_upload_date = _extract_folder_size_and_date(wfhv_input_bucket, prefix)
-        
-        data = [
-            {
-                "id_library": prefix.split("/")[0],
-                "bam_folder": f"s3://{wfhv_input_bucket}/{prefix}bam_pass/{b['barcode']}/",
-                "alias": b["barcode"],
-                "id_repository": str(b["barcode"].split("_")[0]) if isinstance(b["barcode"], str) else "UNKNOWN",
-                "total_bases": b["total_bases"],
-                "passed_bases_percent": b["passed_bases_percent"],
-                "total_passed_bases": int(b["total_bases"] * (b["passed_bases_percent"] / 100)),
-                "bam_size": folder_size,
-                "date_upload": latest_upload_date,
-                "started_at": started,
-                "acquisition_stopped": acquisition_stopped,
-                "processing_stopped": processing_stopped,
-                "instrument": instrument,
-                "position": position,
-                "id_flowcell": flow_cell_id,
-            }
-            for b in barcodes
-        ]
+        # fallback
+        if not barcodes:
+            try:
+                response = s3_client.list_objects_v2(
+                    Bucket=wfhv_input_bucket,
+                    Prefix=f"{prefix}bam_pass/",
+                    Delimiter="/"
+                )
+                barcodes = [
+                    {
+                        "barcode": p["Prefix"].split("/")[-2],
+                        "total_bases": None,
+                        "passed_bases_percent": None
+                    }
+                    for p in response.get("CommonPrefixes", [])
+                    if not p["Prefix"].split("/")[-2].lower().startswith(("barcode", "unclassified"))
+                ]
+            except Exception as e:
+                print(f"Error in fallback barcode parsing: {e}")
 
-        return pd.DataFrame(data)  # Ensure return is a DataFrame
+        started, acquisition_stopped, processing_stopped, instrument, position, flow_cell_id = _extract_summary_data(prefix)
+        folder_size, latest_upload_date = _extract_folder_size_and_date(wfhv_input_bucket, prefix)
+
+        rows = []
+        for b in barcodes:
+            try:
+                total_bases = b.get("total_bases")
+                passed_percent = b.get("passed_bases_percent")
+                total_passed = math.floor(total_bases * (passed_percent / 100)) if total_bases and passed_percent else None
+                barcode = b["barcode"]
+                rows.append({
+                    "id_library": prefix.split("/")[0],
+                    "bam_folder": f"s3://{wfhv_input_bucket}/{prefix}bam_pass/{barcode}/",
+                    "alias": barcode,
+                    "id_repository": str(barcode.split("_")[0]) if isinstance(barcode, str) else "UNKNOWN",
+                    "total_bases": total_bases,
+                    "passed_bases_percent": passed_percent,
+                    "total_passed_bases": total_passed,
+                    "bam_size": folder_size,
+                    "date_upload": latest_upload_date,
+                    "started_at": started,
+                    "acquisition_stopped": acquisition_stopped,
+                    "processing_stopped": processing_stopped,
+                    "instrument": instrument,
+                    "position": position,
+                    "id_flowcell": flow_cell_id,
+                })
+            except Exception as e:
+                print(f"Error building row for barcode: {b} - {e}")
+        return pd.DataFrame(rows)
+
     def _list_run_folders():
         paginator = s3_client.get_paginator("list_objects_v2")
         recent_runs = set()
@@ -138,6 +162,8 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         for page in paginator.paginate(Bucket=wfhv_input_bucket, Delimiter="/"):
             for folder in page.get("CommonPrefixes", []):
                 prefix = folder["Prefix"].strip("/")
+                # prefix='ONT_SEQ_20240812_003'
+                # prefix='ONT_SEQ_20250217_047'
                 head_response = s3_client.list_objects_v2(Bucket=wfhv_input_bucket, Prefix=prefix, MaxKeys=1)
                 if "Contents" in head_response:
                     last_modified = head_response["Contents"][0]["LastModified"].strftime("%Y-%m-%d")
@@ -148,7 +174,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
 
     # Extract barcode data and process folders (unchanged functions)
     def _process_folders(runname: str):
-        """Processes subfolders and extracts barcode data."""
+        """Processes relevant subfolders and extracts barcode data."""
         prefix = f"{runname}/no_sample/"
         matching_data = []
         paginator = s3_client.get_paginator("list_objects_v2")
@@ -172,17 +198,13 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
 
     for run in run_folders:
         try:
-            data = _process_folders(run)
+            data = pd.DataFrame(_process_folders(run))
             if not data.empty:
                 all_data = pd.concat([all_data, data], ignore_index=True)
             else:
                 print(f"No matching data found for {run}.")
         except Exception as e:
             print(f"Error processing {run}: {e}")
-
-    if all_data.empty:
-        print("No matching data found, CSV will not be created.")
-        return
 
     # Save DataFrame to CSV in S3
     csv_buffer = StringIO()
@@ -200,8 +222,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         replace=True
     )
 
-    return all_data  # Return DataFrame for debugging/logging if needed
-
+    return all_data 
 
 def fetch_wfhv_analysis_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bronze_bucket: str, bronze_object_path: str,  **kwargs) -> None:
     """
