@@ -39,7 +39,7 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         elif re.search(r"rspisuliantisaroso", creator_email):
             return "RSPI Prof. Dr. Sulianti Saroso"
         elif re.search(r"rsuppersahabatan", creator_email):
-            return "RSPI Prof. Dr. Sulianti Saroso"
+            return "RSUP Persahabatan"
         else:
             return "Unknown"
 
