@@ -416,3 +416,21 @@ def fetch_wfhv_stats_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bronze
         bucket_name=bronze_bucket,
         replace=True
     )
+
+def check_fix_file_exists(**kwargs):
+    from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+    aws_conn_id = kwargs['aws_conn_id']
+    bucket_name = kwargs['bucket_name']
+    prefix = kwargs['prefix']
+    curr_ds = kwargs['curr_ds']  # e.g., '2025-05-01'
+    
+    s3_hook = S3Hook(aws_conn_id)
+    s3_client = s3_hook.get_conn()
+    
+    print(f"Checking S3 for fix file: {prefix}{curr_ds}.csv")
+
+    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=f"{prefix}{curr_ds}.csv")
+    file_exists = 'Contents' in response and len(response['Contents']) > 0
+
+    return not file_exists  # True = multi_files, False = only single file for this date
