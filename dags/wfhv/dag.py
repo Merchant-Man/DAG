@@ -7,7 +7,7 @@ import pandas as pd
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from utils.utils import silver_transform_to_db, dynamo_and_dump
-from utils.wfhv import fetch_wfhv_samples_dump_data, fetch_wfhv_analysis_dump_data, fetch_wfhv_stats_dump_data
+from utils.wfhv import fetch_wfhv_samples_dump_data, fetch_wfhv_analysis_dump_data, fetch_wfhv_stats_dump_data, check_fix_file_exists
 
 AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "wfhv/qc"
@@ -104,22 +104,31 @@ samples_silver_transform_partial = lambda df, ts: transform_samples_data(
     aws_conn_id=AWS_CONN_ID
 )
 
-samples_silver_transform_to_db_task = PythonOperator(
-    task_id="samples_silver_transform_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": SAMPLES_OBJECT_PATH,
-        "transform_func": samples_silver_transform_partial,  
-        "db_secret_url": RDS_SECRET,
-        "multi_files": True,
-        "curr_ds": "{{ ds }}"
-    },
-    templates_dict={"insert_query": samples_loader_query},
-    provide_context=True
-)
+# Conditional silver transform task
+def create_samples_transform_task():
+    def _transform(**kwargs):
+        ti = kwargs['ti']
+        fix_exists = ti.xcom_pull(task_ids='check_samples_fix_file')
+        multi_files = not fix_exists  # default = False → True only if no fix file
+        print(f"[INFO] Setting multi_files = {multi_files} based on fix file check.")
+        return silver_transform_to_db(
+            aws_conn_id=AWS_CONN_ID,
+            bucket_name=S3_DWH_BRONZE,
+            object_path=SAMPLES_OBJECT_PATH,
+            transform_func=samples_silver_transform_partial,
+            db_secret_url=RDS_SECRET,
+            multi_files=multi_files,
+            curr_ds=kwargs["curr_ds"],
+            insert_query=kwargs["templates_dict"]["insert_query"]
+        )
+
+    return PythonOperator(
+        task_id="samples_silver_transform_to_db",
+        python_callable=_transform,
+        provide_context=True,
+        templates_dict={"insert_query": samples_loader_query},
+        dag=dag
+    )
 
 analysis_bronze_s3_to_s3_task = PythonOperator(
     task_id="analysis_bronze_s3_to_s3",
@@ -152,6 +161,21 @@ analysis_silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-samples_bronze_s3_to_s3_task >> samples_silver_transform_to_db_task
+check_samples_fix_task = PythonOperator(
+    task_id="check_samples_fix_file",
+    python_callable=check_fix_file_exists,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "prefix": S3_DYNAMODB_FIX_ID,
+        "curr_ds": "{{ ds }}"
+    },
+    provide_context=True,
+    dag=dag
+)
+
+samples_silver_transform_to_db_task = create_samples_transform_task()
+
+samples_bronze_s3_to_s3_task >> check_fix_task >> samples_silver_transform_to_db_task
 analysis_bronze_s3_to_s3_task >> analysis_silver_transform_to_db_task
 qc_bronze_s3_to_s3_task >> qc_silver_transform_to_db_task
