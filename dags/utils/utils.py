@@ -10,7 +10,7 @@ import mysql.connector as sql
 import re
 from airflow.hooks.base import BaseHook
 import logging
-
+from pandas.errors import EmptyDataError 
 
 default_retry_args = dict(
     wait=tenacity.wait_exponential(),
@@ -378,11 +378,16 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
             if file_key.endswith('.csv'):
                 # Read each CSV file into a DataFrame
                 csv_obj=s3.get_key(bucket_name=bucket_name, key=file_key)
-                temp_df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-                if not temp_df.empty:
-                    df = pd.concat([df, temp_df], ignore_index=True)
-                else:
-                   continue
+                content = csv_obj.get()['Body'].read()
+                try:
+                    temp_df = pd.read_csv(io.BytesIO(content))
+                    if not temp_df.empty:
+                        df = pd.concat([df, temp_df], ignore_index=True)
+                    else:
+                        continue
+                except EmptyDataError:
+                    continue
+
 
     elif multi_files:
         # Regex pattern matching any file that has curr_ds in its name and ends with .csv
