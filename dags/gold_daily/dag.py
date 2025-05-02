@@ -1,394 +1,226 @@
-/*
----------------------------------------------------------------------------------------------------------------------------------
--- Purpose  :   This query is intended to be used as the source of QC metrics.
--- Author   :   Abdullah Faqih
--- Created  :   16-02-2025
--- Changes	: 
-				- 24-02-2025: Adding new columns for QC categories
----------------------------------------------------------------------------------------------------------------------------------
-*/
+from datetime import datetime, timedelta
+import os
+from airflow import DAG
+from airflow.models import Variable
+from airflow.sensors.external_task import ExternalTaskSensor
+from airflow.utils.task_group import TaskGroup
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
--- Your SQL code goes here 
-DROP TABLE IF EXISTS gold_qc;
 
-CREATE TABLE gold_qc
-(
-WITH cte AS (
-    SELECT *,
-        CASE
-        	-- previously I set id_library instead getting signficantly lower number. Changed to id_batch instead.
-            WHEN COUNT(CASE WHEN sex_ploidy_category = 'Mismatch' THEN 1 END) 
-                OVER (PARTITION BY id_library) > 0 THEN 'Fail'
-            WHEN COUNT(CASE WHEN sex_ploidy_category = 'No Data' THEN 1 END) 
-                OVER (PARTITION BY id_library) > 0 THEN 'Incomplete Data'
-            ELSE 'Pass'
-        END AS batch_sex_category
-    FROM (		SELECT
-			seq.id_repository,
-			sbp.id_patient,
-			sbp.id_mpi,
-			sbp.id_subject,
-		    sbp.biobank_nama origin_biobank,
-			# null sex means we can't find the simbiox data on both registries.
-			sbp.registry_sex sex,
-			seq.date_primary,
-			-- seq.id_library,
-			seq.sequencer,
-			seq.id_index id_index_zlims,
-		    -- COALESCE(seq.id_library, illumina_sec.id_batch, mgi_sec.id_batch) AS id_batch,
-			-- MGI and ONT SHOULD CONTAIN id_library on samples. Illumina not consistent
-			-- EMPTRY STRING IS NOT NULL!!!!!
-			COALESCE(NULLIF(seq.id_library, ''), illumina_sec.id_batch) AS id_library,
-			-- seq.id_library for ONT id_batch (secondary)
-			COALESCE(NULLIF(illumina_sec.id_batch, ''), NULLIF(mgi_sec.id_batch, ''), seq.id_library) AS id_batch,
-			seq.sum_of_total_passed_bases,
-			seq.sum_of_bam_size,
-		    COALESCE(mgi_sec.date_start, illumina_sec.date_start, ont_sec.date_start) date_secondary,
-		    COALESCE(mgi_sec.run_name, illumina_sec.run_name, ont_sec.run_name) run_name,
-		    COALESCE(mgi_sec.pipeline_name, illumina_sec.pipeline_name, ont_sec.pipeline_name) pipeline_name,
-			COALESCE(mgi_sec.cram, illumina_sec.cram, ont_sec.cram) AS cram,
-			COALESCE(mgi_sec.cram_size, illumina_sec.cram_size, ont_sec.cram_size) AS cram_size,
-		    COALESCE(mgi_sec.vcf, illumina_sec.vcf, ont_sec.vcf) vcf,
-		    COALESCE(mgi_sec.vcf_size, illumina_sec.vcf_size, ont_sec.vcf_size) vcf_size,
-		    -- QC   
-			COALESCE(mgi_sec.at_least_10x, illumina_sec.at_least_10x, ont_sec.at_least_10x) AS at_least_10x,
-			COALESCE(mgi_sec.at_least_20x, illumina_sec.at_least_20x, ont_sec.at_least_20x) AS at_least_20x,
-		    COALESCE(mgi_sec.median_coverage, illumina_sec.median_coverage, ont_sec.median_coverage) AS coverage,
-			-- mgi doesnt contain contamination data
-			COALESCE(illumina_sec.contamination, ont_sec.contamination) AS contamination,
-			-- only illumina contain this metric
-			illumina_sec.percent_q30_bases,
-			-- ont doesn't produce yield metric
-			COALESCE(illumina_sec.yield, ont_sec.yield) AS yield,
-			-- only illumina contain this 
-			illumina_sec.yield_q30,
-			UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) ploidy_estimation,
-			CASE
-				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XX' AND UPPER(COALESCE(sbp.registry_sex)) = 'FEMALE' THEN 'Match'
-				WHEN UPPER(COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation)) = 'XY' AND UPPER(COALESCE(sbp.registry_sex)) = 'MALE' THEN 'Match'
-				WHEN COALESCE(sbp.registry_sex) IS NULL THEN 'No Data'
-				WHEN COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) IS NULL OR COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) = 'nan' OR  COALESCE(mgi_sec.ploidy_estimation, illumina_sec.ploidy_estimation, ont_sec.ploidy_estimation) = '' THEN 'No Data'
-				ELSE 'Mismatch'
-			END sex_ploidy_category
-		FROM
-			staging_seq seq
-			LEFT JOIN staging_simbiox_biosamples_patients sbp ON seq.id_repository = sbp.code_repository
-			# Started from here, the number of rows can be duplicated i.e. an id_repository can have multiple secondary analysis run with different run_name.
-			# Unless we do window functino on id_repo ONLY based on datetime available.
-			LEFT JOIN
-				# Since now the staing contains rerun data. Need to dedup by latest date_start run
-				(
-					SELECT
-						*
-					FROM
-						(
-							SELECT
-								ROW_NUMBER() OVER (
-									PARTITION BY
-										id_repository
-									ORDER BY
-										date_start DESC
-								) rn,
-								staging_illumina_sec.*
-							FROM
-								staging_illumina_sec
-						) t1
-					WHERE
-						t1.rn = 1
-				) illumina_sec
-			ON (seq.id_repository = illumina_sec.id_repository AND seq.sequencer="Illumina")
-			LEFT JOIN
-				# Since now the staing contains rerun data. Need to dedup by latest date_start run
-				(
-					SELECT
-						*
-					FROM
-						(
-							SELECT
-								ROW_NUMBER() OVER (
-									PARTITION BY
-										id_repository
-									ORDER BY
-										date_start DESC
-								) rn,
-								staging_mgi_sec.*
-							FROM
-								staging_mgi_sec
-						) t1
-					WHERE
-						t1.rn = 1
-				) mgi_sec
-			ON (seq.id_repository = mgi_sec.id_repository AND seq.sequencer="MGI")
-			LEFT JOIN 
-				# Since now the staing contains rerun data. Need to dedup by latest date_start run
-				(
-					SELECT
-						*
-					FROM
-						(
-							SELECT
-								ROW_NUMBER() OVER (
-									PARTITION BY
-										id_repository
-									ORDER BY
-										date_start DESC
-								) rn,
-								staging_ont_sec.*
-							FROM
-								staging_ont_sec
-						) t1
-					WHERE
-						t1.rn = 1
-				) 
-			 ont_sec
-			ON (seq.id_repository = ont_sec.id_repository AND seq.sequencer="ONT")
-        WHERE seq.sequencer IS NOT NULL
-	        	AND LOWER(seq.id_repository) NOT LIKE '%test%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%pro%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%mla%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%sp500%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%gk-p5%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%gk-p3%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%control%'
-	            AND LOWER(seq.id_repository) NOT LIKE '%T011%'
-    ) AS subquery
-) 
+AWS_CONN_ID = "aws"
+RDS_SECRET = Variable.get("RDS_SECRET")
+QC_QUERY = "qc.sql"
+PGX_REPORT_QUERY = "pgx_report.sql"
+ILLUMINA_SEC="staging_illumina_sec.sql"
+MGI_SEC="staging_mgi_sec.sql"
+ONT_SEC="staging_ont_sec.sql"
+SEQ="staging_seq.sql"
+SIMBIOX="staging_simbiox_biosamples_patients.sql"
+SIMBIOX_REPORT_FIX_PROGRESS="staging_report_fix_simbiox.sql"
 
-SELECT 
-	*,
-	CASE
-		WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Pass'
-				WHEN batch_sex_category = 'Incomplete Data' THEN 'No Data'
-				ELSE 'Fail'
-			END
-		WHEN (coverage < 30 OR at_least_10x < 90) AND coverage IS NOT NULL AND at_least_10x IS NOT NULL THEN 'Fail'
-		WHEN batch_sex_category ='Fail' THEN 'Fail'
-		WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL THEN 'No Data'
-		WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND (batch_sex_category <> 'Fail' OR batch_sex_category IS NULL) THEN 'No Data'
-		WHEN sex IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
-		ELSE 'Undefined'
-	END AS qc_category,
+default_args = {
+    'owner': 'bgsi-data',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 2, 11),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=1)
+}
 
-	CASE
-		WHEN coverage >= 30 AND at_least_10x >= 90 THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Pass'
-				WHEN batch_sex_category = 'Incomplete Data' AND ploidy_estimation IS NOT NULL AND sex IS NULL THEN 'No Registry Data'
-				WHEN batch_sex_category = 'Incomplete Data' AND ploidy_estimation IS NULL AND sex IS NULL THEN 'No Data'
-				WHEN batch_sex_category = 'Incomplete Data' AND sex IS NOT NULL THEN 'In Progress Analysis'
-				ELSE 'Fail'
-			END
-		WHEN (coverage < 30 OR at_least_10x < 90) AND coverage IS NOT NULL AND at_least_10x IS NOT NULL THEN 'Fail'
-		WHEN batch_sex_category ='Fail' THEN 'Fail'
-		WHEN sex IS NULL AND (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) THEN 'No Data'
-		WHEN (coverage IS NULL OR at_least_10x IS NULL OR ploidy_estimation IS NULL) AND sex IS NOT NULL THEN 'In Progress Analysis'
-		WHEN sex IS NULL AND (coverage IS NOT NULL AND at_least_10x IS NOT NULL) AND (batch_sex_category <> 'Fail' OR batch_sex_category IS NULL) THEN 'No Registry Data'
+dag = DAG(
+    'gold_daily',
+    default_args=default_args,
+    description='ETL pipeline for scheduling daily queries for gold tables',
+    schedule_interval="30 1 * * *",  # @1:30 AM everyday,
+    catchup=False
+)
 
-		ELSE 'Undefined'
-	END qc_category2,
-	
-	CASE 
-		WHEN (coverage >= 30 AND at_least_10x >= 90) THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Pass'
-				WHEN sex_ploidy_category = 'Match' AND batch_sex_category = 'Fail' THEN 'Blacklisted'
-				WHEN sex_ploidy_category = 'Mismatch' AND batch_sex_category = 'Fail' THEN 'Blacklisted'
-				WHEN batch_sex_category = 'Fail' THEN
-					CASE
-						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
-						WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Blacklisted'
-						ELSE 'Blacklisted'
-					END
-				WHEN batch_sex_category = 'Incomplete Data' AND sex_ploidy_category = 'Match' THEN 'Graylisted'
-				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
-				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Graylisted'
-				ELSE 'Graylisted'
-			END
+with open(os.path.join("dags/repo/dags/include/gold_query", QC_QUERY)) as f:
+    qc_query = f.read()
 
-		WHEN sequencer ='ONT' AND sum_of_total_passed_bases < 90000000000 THEN 'Top Up List'
+with open(os.path.join("dags/repo/dags/include/gold_query", PGX_REPORT_QUERY)) as f:
+    pgx_report_query = f.read()
 
-		WHEN coverage < 30 OR at_least_10x < 90 THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Top Up List'
+with open(os.path.join("dags/repo/dags/include/staging_query", ILLUMINA_SEC)) as f:
+    staging_illumina_sec_query = f.read()
 
-				WHEN sex_ploidy_category = 'Mismatch' THEN 'Blacklisted'
+with open(os.path.join("dags/repo/dags/include/staging_query", MGI_SEC)) as f:
+    staging_mgi_sec_query = f.read()
 
-				WHEN batch_sex_category = 'Fail' THEN 
-					CASE 
-						WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 
-							'Blacklisted'
+with open(os.path.join("dags/repo/dags/include/staging_query", ONT_SEC)) as f:
+    staging_ont_sec_query = f.read()
 
-						WHEN sex IS NULL THEN 
-							'Blacklisted'
+with open(os.path.join("dags/repo/dags/include/staging_query", SEQ)) as f:
+    staging_seq_query = f.read()
 
-						WHEN sex_ploidy_category = 'Match' THEN 
-							'Blacklisted'
+with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX)) as f:
+    staging_simbiox_query = f.read()
 
-						ELSE 'Blacklisted'
-					END
+with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX_REPORT_FIX_PROGRESS)) as f:
+    staging_simbiox_report_fix_progress_query = f.read()
 
-				WHEN batch_sex_category = 'Incomplete Data' THEN 
-					CASE
-						WHEN sex_ploidy_category = 'Match' THEN 'Graylisted'
-						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
-						WHEN ploidy_estimation IS NULL THEN 'Graylisted'
-						Else 'Graylisted'
-					END
+with dag:
+    with TaskGroup('loader_sensors') as loader_sensors:
+        # By default, each of the task will poke in the interval of 60 seconds based on the BaseSensorOperator
+        # Currently, we need to manually defined each sensor and the timedelta for the waited task to be exactly matched the execution time of the external DAG
+        pgx_report_pl = ExternalTaskSensor(
+            task_id="pgx_report",
+            external_dag_id="pgx_report",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-				WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 'Graylisted'
-				WHEN ploidy_estimation IS NULL THEN 'Graylisted'
-				WHEN sex IS NULL THEN 'Graylisted'
+        zlims_pl = ExternalTaskSensor(
+            task_id="zlims_pl",
+            external_dag_id="zlims-pl",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-				ELSE 'Blacklisted'
-			END 
+        wfhv_pl = ExternalTaskSensor(
+            task_id="wfhv_pl",
+            external_dag_id="wfhv-pl",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-		WHEN batch_sex_category = 'Fail' THEN 
-			CASE 
-				WHEN sex_ploidy_category = 'Match' THEN 'Blacklisted'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Blacklisted'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
-				ELSE 'Blacklisted'
-			END
+        simbiox_patients = ExternalTaskSensor(
+            task_id="simbiox-patients",
+            external_dag_id="simbiox-patients",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success", "failed"] # failed is allowed since regina api is not stable.
+        )
 
-		WHEN coverage IS NOT NULL AND at_least_10x IS NOT NULL AND batch_sex_category <> 'Fail' THEN 
-			CASE 
-				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Graylisted'
-				WHEN sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
-				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Graylisted'
-			END
+        simbiox_biosamples = ExternalTaskSensor(
+            task_id="simbiox-biosamples",
+            external_dag_id="simbiox-biosamples",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30),
+            exponential_backoff=True,
+            allowed_states=["success", "failed"] # failed is allowed since simbiox api is not stable.
+        )
 
-		WHEN sex IS NOT NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+        regina_demography = ExternalTaskSensor(
+            task_id="regina-demography",
+            external_dag_id="regina-demography",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success", "failed"] # failed is allowed since regina api is not stable. 
+        )
 
-		WHEN sex IS NOT NULL AND ploidy_estimation IS NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+        phenovar_participants = ExternalTaskSensor(
+            task_id="phenovar",
+            external_dag_id="phenovar",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-		WHEN sex IS NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'Graylisted'
+        mgi_pl = ExternalTaskSensor(
+            task_id="mgi_pl",
+            external_dag_id="mgi-pl",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-		WHEN sex IS NULL AND ploidy_estimation IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'Graylisted'
+        illumina = ExternalTaskSensor(
+            task_id="illumina",
+            external_dag_id="illumina",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-		ELSE 'Unidentified'
-	END AS qc_category3,
+        ica_analysis = ExternalTaskSensor(
+            task_id="ica_analysis",
+            external_dag_id="ica-analysis",
+            external_task_id="silver_transform_to_db",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-	CASE 
-		WHEN (coverage >= 30 AND at_least_10x >= 90) THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Pass'
-				WHEN sex_ploidy_category = 'Match' AND batch_sex_category = 'Fail' THEN 'Fail (Batch Sex Check)'
-				WHEN sex_ploidy_category = 'Mismatch' AND batch_sex_category = 'Fail' THEN 'Fail (Sex Check)'
-				WHEN batch_sex_category = 'Fail' THEN
-					CASE
-						WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex QC), No Data (No Sex Data)'
-						WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Fail (Batch Sex Check), No Data (No Registry Sex Data)'
-						ELSE 'Fail (Batch Sex Check), No Data (No Ploidy Sex Data)'
-					END
-				WHEN batch_sex_category = 'Incomplete Data' AND sex_ploidy_category = 'Match' THEN 'No Data (Incomplete Batch Sex Data)'
-				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'No Data (No Sex Data)'
-				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'No Data (No Registry Sex Data)'
-				ELSE 'No Data (No Ploidy Data)'
-			END
+        ica_samples = ExternalTaskSensor(
+            task_id="ica_samples",
+            external_dag_id="ica-samples",
+            external_task_id="silver_transform_to_db",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=30, hours=1),
+            exponential_backoff=True,
+            allowed_states=["success"]
+        )
 
-		WHEN coverage < 30 OR at_least_10x < 90 THEN 
-			CASE 
-				WHEN batch_sex_category = 'Pass' THEN 'Fail (Coverage QC)'
+    with TaskGroup('queries') as queries:
+        staging_illumina_sec_task = SQLExecuteQueryOperator(
+            task_id="staging_illumina_sec",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_illumina_sec_query
+        )
+        staging_mgi_sec_task = SQLExecuteQueryOperator(
+            task_id="staging_mgi_sec",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_mgi_sec_query
+        )
+        staging_ont_sec_task = SQLExecuteQueryOperator(
+            task_id="staging_ont_sec",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_ont_sec_query
+        )
+        staging_seq_task = SQLExecuteQueryOperator(
+            task_id="staging_seq",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_seq_query
+        )
+        staging_simbiox_task = SQLExecuteQueryOperator(
+            task_id="staging_simbiox",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_simbiox_query
+        )
+        staging_simbiox_report_fix_progress_task = SQLExecuteQueryOperator(
+            task_id="staging_simbiox_report_fix_progress",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=staging_simbiox_report_fix_progress_query
+        )
+        gold_qc_task = SQLExecuteQueryOperator(
+            task_id="qc",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=qc_query
+        ) 
+        gold_pgx_report_task = SQLExecuteQueryOperator(
+            task_id="pgx_report",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=pgx_report_query
+        ) 
+        # If you want to create dependencies between queries
+        # foo >> foo2
+        [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> gold_qc_task
+        [gold_qc_task, pgx_report_pl] >> gold_pgx_report_task
 
-				WHEN sex_ploidy_category = 'Mismatch' THEN 'Fail (Coverage and Sex Check)'
-
-				WHEN batch_sex_category = 'Fail' THEN 
-					CASE 
-						WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 
-							'Fail (Coverage and Batch Sex Check), No Data (No Sex Data)'
-
-						WHEN sex IS NULL THEN 
-							'Fail (Coverage and Batch Sex Check), No Data (No Registry Sex Data)'
-
-						WHEN sex_ploidy_category = 'Match' THEN 
-							'Fail (Coverage and Batch Sex Check)'
-
-						ELSE 'Fail (Coverage and Batch Sex Check), No Data (No Ploidy Data)'
-					END
-
-        WHEN batch_sex_category = 'Incomplete Data' THEN 
-            CASE
-                WHEN sex_ploidy_category = 'Match' THEN 
-                    'Fail (Coverage QC), No Data (Incomplete Batch Sex check)'
-                WHEN (sex IS NULL OR sex = '') AND (ploidy_estimation IS NULL OR ploidy_estimation = '') THEN 
-                    'Fail (Coverage QC), No Data (No Sex Data)'
-                WHEN (ploidy_estimation IS NULL OR ploidy_estimation = '') AND (sex IS NOT NULL AND sex <> '') THEN 
-                    'Fail (Coverage QC), No Data (No Ploidy Sex Data)'
-                WHEN (sex IS NULL OR sex = '') AND (ploidy_estimation IS NOT NULL AND ploidy_estimation <> '') THEN 
-                    'Fail (Coverage QC), No Data (No Registry Data)'
-                ELSE 
-                    'what'
-            END
-
-				-- If ploidy estimation or sex data is missing, categorize the failure accordingly
-				WHEN ploidy_estimation IS NULL AND sex IS NULL THEN 'Fail (Coverage QC), No Data (No Sex Data)'
-				WHEN ploidy_estimation IS NULL THEN 'Fail (Coverage QC), No Data (No Ploidy Data)'
-				WHEN sex IS NULL THEN 'Fail (Coverage QC), No Data (No Registry Sex Data)'
-
-				ELSE 'Fail (Coverage and Sex QC)'
-			END 
-
-		WHEN batch_sex_category = 'Fail' THEN 
-			CASE 
-				WHEN sex_ploidy_category = 'Match' THEN 'Fail (Batch Sex Check)'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Ploidy Data)'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Registry Data)'
-				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Data)'
-				ELSE 'Fail (Batch Sex Check)'
-			END
-
-		WHEN coverage IS NOT NULL AND at_least_10x IS NOT NULL AND batch_sex_category <> 'Fail' THEN 
-			CASE 
-				WHEN sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'No Data (No Registry Sex Data)'
-				WHEN sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'No Data (No Ploidy Data)'
-				WHEN sex IS NULL AND ploidy_estimation IS NULL THEN 'No Data (No Sex Data)'
-			END
-
-		WHEN sex IS NOT NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Coverage Data'
-
-		WHEN sex IS NOT NULL AND ploidy_estimation IS NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No QC Data'
-
-		WHEN sex IS NULL AND ploidy_estimation IS NOT NULL AND (coverage IS NULL OR at_least_10x IS NULL) THEN 'No Registry Sex and Coverage Data'
-
-		WHEN sex IS NULL AND ploidy_estimation IS NULL AND coverage IS NULL AND at_least_10x IS NULL THEN 'No Data'
-
-		-- Default Case for Any Other Failure
-		ELSE 'Unidentified'
-	END AS qc_category4,
-
-	CASE
-		WHEN batch_sex_category = 'Pass' THEN 'Pass'
-		WHEN batch_sex_category = 'Fail' THEN
-			CASE
-				WHEN sex_ploidy_category = 'Match' THEN 'Fail Batch Sex Check'
-				WHEN sex_ploidy_category = 'Mismatch' THEN 'Fail Sex Check'
-				ELSE 'Incomplete Data (Fail Batch Sex Check)'
-			END
-
-		WHEN batch_sex_category = 'Incomplete Data' THEN 'Incomplete Data'
-		ELSE 'Undefined'
-	END qc_category5,
-
-	CASE 
-		WHEN coverage >= 30 THEN
-			CASE
-				WHEN at_least_10x >= 90 THEN 'Pass'
-				ELSE 'Fail Coverage Breadth'
-			END
-		WHEN at_least_10x >= 90 AND coverage < 30 THEN 'Fail Coverage Depth'
-		WHEN coverage < 30 AND at_least_10x < 90 THEN 'Fail Coverage'
-		ELSE 'No Coverage Data'
-	END qc_category6,
-
-	CASE 
-	    WHEN coverage IS NULL OR at_least_10x IS NULL THEN 'No Data'
-	    WHEN coverage >= 30 AND at_least_10x >= 90 THEN 'Pass'
-	    ELSE 'Fail'
-	END AS coverage_category,
-	CURRENT_TIMESTAMP updated_at
-FROM 
-	cte
-);
+# Please addd the source if applicable
+loader_sensors >> queries
