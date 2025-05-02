@@ -95,6 +95,10 @@ id_biobank VARCHAR(128) comment 'ID of the biobank',
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 );
+ALTER TABLE simbiox_patients
+ADD INDEX id_subject_idx (id_subject);
+ALTER TABLE simbiox_patients
+ADD INDEX `id_biobank_idx` (`id_biobank`);
 	
 
 
