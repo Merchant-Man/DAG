@@ -379,7 +379,10 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
                 # Read each CSV file into a DataFrame
                 csv_obj=s3.get_key(bucket_name=bucket_name, key=file_key)
                 temp_df=pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-                df=pd.concat([df, temp_df], ignore_index=True)
+                if not temp_df.empty:
+                    df = pd.concat([df, temp_df], ignore_index=True)
+                else:
+                   continue
 
     elif multi_files:
         # Regex pattern matching any file that has curr_ds in its name and ends with .csv
