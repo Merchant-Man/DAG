@@ -1,6 +1,8 @@
 import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import json
+import io
+
 
 def transform_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
@@ -72,6 +74,8 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
     df["non_null_count"] = df.notnull().sum(axis=1)
     df = df.sort_values("non_null_count", ascending=False).drop_duplicates(subset="bam_folder", keep="first")
     df = df.drop(columns="non_null_count")
+    print("Total appended:")
+    print(len(df))
 
     # Load fix file for id_repository remapping
     try:
@@ -155,4 +159,5 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
     ]
 
     return grouped_df[final_columns]
+
 

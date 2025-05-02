@@ -3,10 +3,11 @@ from typing import Tuple, List
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import re
 from io import StringIO
-from datetime import timezone
+from datetime import timezone, datetime
 import json
 import pandas as pd
 import math
+
 
 def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronze_bucket: str, bronze_object_path: str, **kwargs):
     """
@@ -18,8 +19,6 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
         AWS connection ID for authentication.
     wfhv_input_bucket : str
         S3 bucket containing WFHV output data.
-    ts : str
-        Timestamp used to filter folders based on modification date.
     bronze_bucket : str
         The name of the dwh bronze bucket
     bronze_object_path : str
@@ -331,7 +330,6 @@ def fetch_wfhv_analysis_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bro
         replace=True
     )
 
-
 def fetch_wfhv_stats_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bronze_bucket: str, bronze_object_path: str,  **kwargs) -> None:
     """
     Fetch wfhv analysis results from wfhv output bucket to the dwh bronze bucket
@@ -417,20 +415,25 @@ def fetch_wfhv_stats_dump_data(aws_conn_id: str, wfhv_output_bucket: str, bronze
         replace=True
     )
 
-def check_fix_file_exists(**kwargs):
-    from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-    aws_conn_id = kwargs['aws_conn_id']
-    bucket_name = kwargs['bucket_name']
-    prefix = kwargs['prefix']
-    curr_ds = kwargs['curr_ds']  # e.g., '2025-05-01'
-    
-    s3_hook = S3Hook(aws_conn_id)
+def check_fix_file_exists(aws_conn_id: str, bucket_name: str, object_path: str, **kwargs):
+    # Make target_date timezone-aware in UTC
+    ts = kwargs.get("ds")
+    target_date = datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
     s3_client = s3_hook.get_conn()
-    
-    print(f"Checking S3 for fix file: {prefix}{curr_ds}.csv")
 
-    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=f"{prefix}{curr_ds}.csv")
-    file_exists = 'Contents' in response and len(response['Contents']) > 0
+    paginator = s3_client.get_paginator('list_objects_v2')
+    page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=object_path)
 
-    return not file_exists  # True = multi_files, False = only single file for this date
+    for page in page_iterator:
+        contents = page.get("Contents", [])
+        for obj in contents:
+            last_modified = obj["LastModified"]
+            if last_modified >= target_date:
+                print(f"Found file: {obj['Key']} (LastModified: {last_modified})")
+                return True
+
+    print(f"No files found with LastModified >= {ts}.")
+    return False
