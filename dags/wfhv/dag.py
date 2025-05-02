@@ -176,6 +176,6 @@ check_samples_fix_task = PythonOperator(
 
 samples_silver_transform_to_db_task = create_samples_transform_task()
 
-samples_bronze_s3_to_s3_task >> check_fix_task >> samples_silver_transform_to_db_task
+samples_bronze_s3_to_s3_task >> check_samples_fix_task >> samples_silver_transform_to_db_task
 analysis_bronze_s3_to_s3_task >> analysis_silver_transform_to_db_task
 qc_bronze_s3_to_s3_task >> qc_silver_transform_to_db_task
