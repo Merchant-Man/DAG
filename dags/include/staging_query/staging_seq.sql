@@ -25,7 +25,93 @@ INSERT INTO staging_seq
 			WHERE
 				REGEXP_LIKE(original_sample_id, "(?i)_hg38")
 				AND NOT original_sample_id LIKE "Ashkenazim%"
-		) 
+		),
+		mgi AS (
+			SELECT
+				id_repository,
+				id_library,
+				sequencer,
+				date_primary,
+				sum_of_total_passed_bases,
+				sum_of_bam_size,
+				id_index
+				-- I fix to only include the latext id_repository (either top up or not)
+			FROM
+				(
+					SELECT
+						ROW_NUMBER() OVER (
+							PARTITION BY
+								COALESCE(db_mgi.new_repository, seq_zlims.id_repository)
+							ORDER BY
+								seq_zlims.date_create DESC
+						) rn,
+						COALESCE(db_mgi.new_repository, seq_zlims.id_repository) id_repository,
+						id_flowcell id_library,
+						'MGI' sequencer,
+						date_create date_primary,
+						NULL sum_of_total_passed_bases,
+						NULL sum_of_bam_size,
+						COALESCE(db_mgi.new_index, seq_zlims.id_index) id_index
+					FROM
+						zlims_samples seq_zlims
+						LEFT JOIN (
+							# This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.
+							SELECT
+								dbt1.id_repository,
+								dbt1.new_repository,
+								dbt2.id_zlims_index,
+								dbt2.new_index
+							FROM
+								(
+									SELECT DISTINCT
+										id_repository,
+										new_repository
+									FROM
+										dynamodb_fix_id_repository_latest dbt1
+									WHERE
+										sequencer = "MGI"
+								) dbt1
+								LEFT JOIN (
+									SELECT DISTINCT
+										id_repository,
+										id_zlims_index,
+										new_index
+									FROM
+										dynamodb_fix_id_repository_latest
+									WHERE
+										sequencer = "MGI"
+										AND (
+											id_zlims_index IS NOT NULL
+											AND new_index IS NOT NULL
+										)
+								) dbt2 ON dbt1.id_repository = dbt2.id_repository
+						) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
+					WHERE
+						seq_zlims.date_create >= "2023-11-01" -- removing test data
+				) temp_zlims
+			WHERE
+				rn = 1
+			UNION ALL
+			SELECT
+				REGEXP_SUBSTR(original_sample_id, "[^_]+") id_repository,
+				flow_cell_id id_library,
+				'MGI' sequencer,
+				creation_time date_primary,
+				NULL sum_of_total_passed_bases,
+				NULL sum_of_bam_size,
+				CAST(barcode AS UNSIGNED) id_index
+			FROM
+				ztronpro_samples
+			WHERE
+				NOT REGEXP_LIKE(original_sample_id, "(?i)test|AshkenazimTrio")
+				AND NOT original_sample_id IN (
+					SELECT
+						*
+					FROM
+						deleted_hg37
+				)
+				AND sample_progress = "Completed"
+		)
 
 	SELECT
 		id_repository,
@@ -35,61 +121,21 @@ INSERT INTO staging_seq
 		sum_of_total_passed_bases,
 		sum_of_bam_size,
 		id_index
-	-- I fix to only include the latext id_repository (either top up or not)
 	FROM
 		(
 			SELECT
+				*,
 				ROW_NUMBER() OVER (
 					PARTITION BY
-						COALESCE(db_mgi.new_repository, seq_zlims.id_repository)
+						id_repository
 					ORDER BY
-						seq_zlims.date_create DESC
-				) rn,
-				COALESCE(db_mgi.new_repository, seq_zlims.id_repository) id_repository,
-				id_flowcell id_library,
-				'MGI' sequencer,
-				date_create date_primary,
-				NULL sum_of_total_passed_bases,
-				NULL sum_of_bam_size,
-				COALESCE(db_mgi.new_index, seq_zlims.id_index) id_index
+						date_primary DESC
+				) rn
 			FROM
-				zlims_samples seq_zlims
-				LEFT JOIN (
-					# This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.
-					SELECT
-						dbt1.id_repository,
-						dbt1.new_repository,
-						dbt2.id_zlims_index,
-						dbt2.new_index
-					FROM
-						(
-							SELECT DISTINCT
-								id_repository,
-								new_repository
-							FROM
-								dynamodb_fix_id_repository_latest dbt1
-							WHERE
-								sequencer = "MGI"
-						) dbt1
-						LEFT JOIN (
-							SELECT DISTINCT
-								id_repository,
-								id_zlims_index,
-								new_index
-							FROM
-								dynamodb_fix_id_repository_latest
-							WHERE
-								sequencer = "MGI"
-								AND (
-									id_zlims_index IS NOT NULL
-									AND new_index IS NOT NULL
-								)
-						) dbt2 ON dbt1.id_repository = dbt2.id_repository
-				) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
-			WHERE
-				seq_zlims.date_create >= "2023-11-01" -- removing test data
-		) temp_zlims
-	WHERE rn = 1
+				mgi
+		) t
+	WHERE
+		t.rn = 1
 	UNION ALL
 	SELECT
 		COALESCE(sfki.code_repository, t.id_repository) id_repository,
@@ -143,26 +189,6 @@ INSERT INTO staging_seq
 	LEFT JOIN staging_fix_ski_id_repo sfki ON t.id_repository = sfki.new_origin_code_repository
 	WHERE
 		rn = 1
-	UNION ALL
-	SELECT
-		REGEXP_SUBSTR(original_sample_id, "[^_]+") id_repository,
-		flow_cell_id id_library,
-		'MGI' sequencer,
-		creation_time date_primary,
-		NULL sum_of_total_passed_bases,
-		NULL sum_of_bam_size,
-		CAST(barcode AS UNSIGNED) id_index
-	FROM
-		ztronpro_samples
-	WHERE
-		NOT REGEXP_LIKE(original_sample_id, "(?i)test|AshkenazimTrio")
-		AND NOT original_sample_id IN (
-			SELECT
-				*
-			FROM
-				deleted_hg37
-		)
-		AND sample_progress = "Completed"
 	UNION ALL
 	SELECT
 		seq_wfhv.id_repository id_repository,
