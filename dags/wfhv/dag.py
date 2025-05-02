@@ -123,8 +123,8 @@ def create_samples_transform_task():
     def _transform(**kwargs):
         ti = kwargs['ti']
         fix_exists = ti.xcom_pull(task_ids='check_samples_fix_file')
-        multi_files = not fix_exists
-        print(f"[INFO] Setting multi_files = {multi_files} based on fix file check.")
+        all_files = fix_exists
+        print(f"[INFO] Setting all_files = {all_files} based on fix file check.")
 
         return silver_transform_to_db(
             aws_conn_id=AWS_CONN_ID,
@@ -132,7 +132,7 @@ def create_samples_transform_task():
             object_path=SAMPLES_OBJECT_PATH,
             transform_func=samples_silver_transform_partial,
             db_secret_url=RDS_SECRET,
-            multi_files=multi_files,
+            all_files=all_files,
             curr_ds=kwargs["curr_ds"],
             templates_dict=kwargs["templates_dict"]  # ← prevent NoneType here
         )
