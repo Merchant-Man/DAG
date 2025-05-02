@@ -246,7 +246,7 @@ SELECT
 
 		WHEN batch_sex_category = 'Fail' THEN 
 			CASE 
-				WHEN sex_ploidy_category = 'Match' THEN 'test'
+				WHEN sex_ploidy_category = 'Match' THEN 'Blacklisted'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Blacklisted'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Blacklisted'
@@ -333,7 +333,7 @@ SELECT
 
 		WHEN batch_sex_category = 'Fail' THEN 
 			CASE 
-				WHEN sex_ploidy_category = 'Match' THEN 'test'
+				WHEN sex_ploidy_category = 'Match' THEN 'Fail (Batch Sex Check)'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NOT NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Ploidy Data)'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NOT NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Registry Data)'
 				WHEN (coverage IS NULL OR at_least_10x IS NULL) AND sex IS NULL AND ploidy_estimation IS NULL THEN 'Fail (Batch Sex Check), No Data (No Coverage and Sex Data)'

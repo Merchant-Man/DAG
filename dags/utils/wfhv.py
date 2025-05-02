@@ -205,7 +205,9 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
                 print(f"No matching data found for {run}.")
         except Exception as e:
             print(f"Error processing {run}: {e}")
-
+    if all_data.empty:
+        print("No matching data found, CSV will not be created.")
+        return
     # Save DataFrame to CSV in S3
     csv_buffer = StringIO()
     all_data.to_csv(csv_buffer, index=False)
