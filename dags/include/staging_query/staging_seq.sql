@@ -212,5 +212,5 @@ INSERT INTO staging_seq
 				sequencer = "ONT"
 		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository	
 	WHERE
-		NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev)")
+		NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
 )
