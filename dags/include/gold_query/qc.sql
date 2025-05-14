@@ -11,7 +11,7 @@
 -- Your SQL code goes here 
 DROP TABLE IF EXISTS gold_qc;
 
-CREATE TABLE temp_gold_qc AS
+CREATE TABLE gold_qc AS
 WITH cte AS (
     SELECT *,
         CASE
