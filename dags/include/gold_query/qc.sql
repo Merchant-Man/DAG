@@ -359,7 +359,7 @@ final_qc AS (
 			WHEN sequencer='ONT' AND sum_of_total_passed_bases < 90000000000 THEN 'Primary Analysed - Top Up'
 			WHEN run_name IS NULL THEN 'Primary Analyzed'
 			WHEN (coverage < 30 OR at_least_10x < 90) AND batch_sex_category='Pass' THEN 'Secondary Analyzed - Top Up'
-			ELSE 'Secondary Analyzed'
+			ELSE 'Secondary Analyze
 		END progress,
 
         CURRENT_TIMESTAMP AS updated_at
