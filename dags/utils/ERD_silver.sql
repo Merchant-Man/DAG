@@ -5,6 +5,7 @@ CREATE TABLE regina_demography (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
   creationDate DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar',
+  ehr_id VARCHAR(36) NOT NULL comment 'EHR ID from SatuSehat'
 );
 
 
@@ -30,7 +31,8 @@ CREATE TABLE phenovar_participants (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
   creation_date DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar',
-  updation_date DATETIME NOT NULL comment 'Timestamp of last update from PhenoVar'
+  updation_date DATETIME NOT NULL comment 'Timestamp of last update from PhenoVar',
+  encrypt_ihs_number VARCHAR(64) NOT NULL commnet 'Encrypted IHS number from SatuSehat'
 );
 CREATE INDEX hospital_name_idx
 ON phenovar_participants(hospital_name);
