@@ -23,7 +23,7 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         df["updated_at"] = ts
     
     df = df[["id_subject", "age", "sex",
-             "created_at", "updated_at", "creationDate"]]
+             "created_at", "updated_at", "creationDate", "ehr_id"]]
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
 
