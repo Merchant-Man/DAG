@@ -46,7 +46,7 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df['hospital_name'] = df['created_by'].apply(_get_hospital_name)
 
     df.rename(columns={'id': 'id_subject', 'created_at': 'creation_date',
-                       'updated_at': 'updation_date', 'gender': 'sex', 'nik': 'encrypt_nik', 'full_name': 'encrypt_full_name', 'dob': 'encrypt_birth_date'}, inplace=True)
+                       'updated_at': 'updation_date', 'gender': 'sex', 'nik': 'encrypt_nik', 'full_name': 'encrypt_full_name', 'dob': 'encrypt_birth_date', 'ihs_number': 'encrypt_ihs_number'}, inplace=True)
 
     if "created_at" not in df.columns:
         df["created_at"] = ts
@@ -54,7 +54,7 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         df["updated_at"] = ts
 
     df = df[["id_subject", "encrypt_full_name", "encrypt_nik", "encrypt_birth_date", "sex", "source",
-             "province_code", "province", "district_code", "district", "subdistrict_code", "subdistrict", "village_code", "village", "use_nik_ibu", "created_by", "updated_by",  "hospital_name",  "created_at", "updated_at", "creation_date", "updation_date"]]
+             "province_code", "province", "district_code", "district", "subdistrict_code", "subdistrict", "village_code", "village", "use_nik_ibu", "created_by", "updated_by",  "hospital_name",  "created_at", "updated_at", "creation_date", "updation_date", "encrypt_ihs_number"]]
 
     print(df.head())
     print(df.columns)
