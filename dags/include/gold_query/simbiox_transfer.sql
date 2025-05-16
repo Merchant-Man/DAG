@@ -3,7 +3,7 @@
 -- Purpose  :   This query is intended to be used as simbiox transfer report
 -- Author   :   Abdullah Faqih
 -- Created  :   14-05-2025
--- Changes	: 
+-- Changes	:   16-05-2025 Adding origin_code_repository
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -39,6 +39,7 @@ WITH
 SELECT
 	t1.*,
 	t2.code_repository,
+    t2.origin_code_repository,
 	t3.id_subject,
 	t4.biobank_nama patient_biobank,
 	t5.patient_categ,

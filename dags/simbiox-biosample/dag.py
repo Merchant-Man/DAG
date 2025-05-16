@@ -53,7 +53,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     df = df[[
         "id", "id_patient", "code_repository", "code_box", "code_position", "date_received", "date_enumerated", "id_biobank", "origin_code_repository",
-        "origin_code_box", "biosample_type", "biosample_specimen", "type_case", "sub_cell_specimen",  "biosample_volume", "biosample_status", "created_at", "updated_at"]]
+        "origin_code_box", "biosample_type", "biosample_specimen", "type_case", "sub_cell_specimen",  "biosample_volume", "biosample_status", "created_at", "updated_at", 
+        "final_result_analytic", "tube_type", "degrees_celsius_storage", "research_id", "project_id", "last_save", "remove", "log_biospc_id", "kode_kedatangan", "kode_hub_penyimpan"]]
 
     df = df.astype(str)
 
