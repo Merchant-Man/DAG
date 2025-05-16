@@ -1,5 +1,5 @@
-INSERT INTO simbiox_biosamples(id,id_patient,code_repository,code_box,code_position,date_received,date_enumerated,id_biobank,origin_code_repository,origin_code_box,biosample_type,biosample_specimen,type_case,sub_cell_specimen,biosample_volume,biosample_status,created_at,updated_at)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+INSERT INTO simbiox_biosamples(id,id_patient,code_repository,code_box,code_position,date_received,date_enumerated,id_biobank,origin_code_repository,origin_code_box,biosample_type,biosample_specimen,type_case,sub_cell_specimen,biosample_volume,biosample_status,created_at,updated_at,final_result_analytic,tube_type,degrees_celsius_storage,research_id,project_id,last_save,remove,log_biospc_id,kode_kedatangan,kode_hub_penyimpan)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON DUPLICATE KEY UPDATE id_patient = VALUES(id_patient), code_repository = VALUES(code_repository),
 code_box = VALUES(code_box),
 code_position = VALUES(code_position),
@@ -14,4 +14,14 @@ type_case = VALUES(type_case),
 sub_cell_specimen = VALUES(sub_cell_specimen),
 biosample_volume = VALUES(biosample_volume),
 biosample_status = VALUES(biosample_status),
-updated_at = '{{ ts }}'
+updated_at = '{{ ts }}',
+final_result_analytic = VALUES(tube_type),
+tube_type = VALUES(degrees_celsius_storage),
+degrees_celsius_storage = VALUES(research_id),
+research_id = VALUES(project_id),
+project_id = VALUES(last_save),
+last_save = VALUES(remove),
+remove = VALUES(log_biospc_id),
+log_biospc_id = VALUES(kode_kedatangan),
+kode_kedatangan = VALUES(kode_hub_penyimpa),
+kode_hub_penyimpan = VALUES(kode_hub_penyimpan)
