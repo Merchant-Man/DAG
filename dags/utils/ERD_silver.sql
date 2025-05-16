@@ -122,7 +122,17 @@ sub_cell_specimen VARCHAR(16),
 biosample_volume MEDIUMINT UNSIGNED,
 biosample_status VARCHAR(16),
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+final_result_analytic VARCHAR(16),
+tube_type VARCHAR(3),
+degrees_celsius_storage SMALLINT,
+research_id VARCHAR(36),
+project_id VARCHAR(36),
+last_save DATETIME,
+`remove` VARCHAR(2),
+log_biospc_id VARCHAR(36),
+kode_kedatangan VARCHAR(36),
+kode_hub_penyimpan VARCHAR(36)
 );
 CREATE INDEX id_patient_idx
 ON simbiox_biosamples (id_patient);
@@ -132,6 +142,10 @@ CREATE INDEX origin_code_repository_idx
 ON simbiox_biosamples (origin_code_repository);
 CREATE INDEX id_patient_code_repository_idx
 ON simbiox_biosamples (id_patient, code_repository);
+CREATE INDEX kode_kedatangan_idx
+ON simbiox_biosamples (kode_kedatangan);
+CREATE INDEX kode_hub_penyimpan_idx
+ON simbiox_biosamples (kode_hub_penyimpan);
 
 
 CREATE TABLE ica_samples(

@@ -64,13 +64,7 @@ INSERT INTO
 					t8.status_transfer_name,
 					t2.tujuan_is_biobank,
 					t2.non_biobank_nama,
-					t2.triple_packaging,
-					ROW_NUMBER() OVER (
-						PARTITION BY
-							t1.biosample_id
-						ORDER BY
-							tanggal_penerimaan DESC
-					) rn
+					t2.triple_packaging
 				FROM
 					simbiox_transfer t1
 					LEFT JOIN simbiox_master_status_proses t4 ON t1.proses_status = t4.id
@@ -80,6 +74,4 @@ INSERT INTO
 					LEFT JOIN simbiox_transfer_formulir t2 ON t1.transfer_formulir_id = t2.id
 					LEFT JOIN simbiox_master_status_transfer t8 ON t2.transfer_status = t8.id
 			) t
-		WHERE
-			rn = 1
 	)
