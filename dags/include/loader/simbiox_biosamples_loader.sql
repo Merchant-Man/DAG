@@ -23,5 +23,5 @@ project_id = VALUES(last_save),
 last_save = VALUES(remove),
 remove = VALUES(log_biospc_id),
 log_biospc_id = VALUES(kode_kedatangan),
-kode_kedatangan = VALUES(kode_hub_penyimpa),
+kode_kedatangan = VALUES(kode_kedatangan),
 kode_hub_penyimpan = VALUES(kode_hub_penyimpan)
