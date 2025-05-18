@@ -18,6 +18,9 @@ SEQ="staging_seq.sql"
 SIMBIOX="staging_simbiox_biosamples_patients.sql"
 SIMBIOX_REPORT_FIX_PROGRESS="staging_report_fix_simbiox.sql"
 
+SIMBIOX_TRANSFER_STAG="staging_simbiox_transfer.sql"
+SIMBIOX_TRANSFER_REPORT="simbiox_transfer.sql"
+
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
@@ -59,6 +62,13 @@ with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX)) as f:
 
 with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX_REPORT_FIX_PROGRESS)) as f:
     staging_simbiox_report_fix_progress_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/staging_query", SIMBIOX_TRANSFER_STAG)) as f:
+    simbiox_transfer_stag_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/gold_query", SIMBIOX_TRANSFER_REPORT)) as f:
+    simbiox_transfer_report_query = f.read()
+
 
 with dag:
     with TaskGroup('loader_sensors') as loader_sensors:
@@ -110,6 +120,16 @@ with dag:
             check_existence=True,
             timeout=60*60*2,  # 2 hours
             execution_delta=timedelta(minutes=30),
+            exponential_backoff=True,
+            allowed_states=["success", "failed"] # failed is allowed since simbiox api is not stable.
+        )
+
+        simbiox_tables = ExternalTaskSensor(
+            task_id="simbiox_tables",
+            external_dag_id="simbiox_tables",
+            check_existence=True,
+            timeout=60*60*2,  # 2 hours
+            execution_delta=timedelta(minutes=90),
             exponential_backoff=True,
             allowed_states=["success", "failed"] # failed is allowed since simbiox api is not stable.
         )
@@ -207,10 +227,20 @@ with dag:
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=staging_simbiox_report_fix_progress_query
         )
+        staging_simbiox_transfer_task = SQLExecuteQueryOperator(
+            task_id="sstaging_simbiox_transfer",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=simbiox_transfer_stag_query
+        )
         gold_qc_task = SQLExecuteQueryOperator(
             task_id="qc",
             conn_id="bgsi-rds-mysql-prod-superset_dev",
             sql=qc_query
+        ) 
+        gold_simbiox_transfer_task = SQLExecuteQueryOperator(
+            task_id="simbiox_transfer_report",
+            conn_id="bgsi-rds-mysql-prod-superset_dev",
+            sql=simbiox_transfer_report_query
         ) 
         gold_pgx_report_task = SQLExecuteQueryOperator(
             task_id="pgx_report",
@@ -221,6 +251,7 @@ with dag:
         # foo >> foo2
         [staging_mgi_sec_task, staging_ont_sec_task, staging_illumina_sec_task, staging_seq_task, staging_simbiox_task] >> gold_qc_task
         [gold_qc_task, pgx_report_pl] >> gold_pgx_report_task
+        staging_simbiox_transfer_task >> gold_simbiox_transfer_task
 
 # Please addd the source if applicable
 loader_sensors >> queries

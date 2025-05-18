@@ -115,27 +115,27 @@ INSERT INTO
 					mgi_analysis_2.rn = 1
 				UNION ALL
 				SELECT
-					data_creation_date date_start,
-					id_repository,
+					ztronpro_analysis.date_secondary date_start,
+					ztronpro_analysis.id_repository,
 					NULL id_batch,
 					"ZTRONPRO-MEGABOLT" pipeline_name,
-					run_folder_name run_name,
-					NULL cram,
-					NULL cram_size,
-					NULL vcf,
-					NULL vcf_size,
+					ztronpro_analysis.run_name,
+					ztronpro_analysis.cram,
+					ztronpro_analysis.cram_size,
+					ztronpro_analysis.vcf,
+					ztronpro_analysis.vcf_size,
 					NULL tag_user_tags,
-					percent_dups,
+					ztronpro_qc.percent_dups,
 					NULL percent_q30_bases,
 					NULL total_seqs,
-					depth median_coverage,
+					ztronpro_qc.depth median_coverage,
 					NULL contamination,
-					at_least_10x,
-					at_least_20x,
+					ztronpro_qc.at_least_10x,
+					ztronpro_qc.at_least_20x,
 					# Ploidy estimation of MGI are in "female" and "male" or "nan"
 					CASE
-						WHEN LOWER(predicted_sex) = "female" THEN "XX"
-						WHEN LOWER(predicted_sex) = "male" THEN "XY"
+						WHEN LOWER(ploidy_estimation) = "female" THEN "XX"
+						WHEN LOWER(ploidy_estimation) = "male" THEN "XY"
 						ELSE NULL
 					END ploidy_estimation,
 					snp,
@@ -143,6 +143,10 @@ INSERT INTO
 					ts_tv
 				FROM
 					ztronpro_analysis
+				LEFT JOIN
+					ztronpro_qc
+				ON
+					ztronpro_analysis.id_repository = ztronpro_qc.id_repository AND ztronpro_analysis.run_name = ztronpro_qc.run_name
 			)
 		SELECT
 			date_start,
