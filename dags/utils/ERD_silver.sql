@@ -689,6 +689,56 @@ ON ztronpro_samples(starting_sample);
 CREATE INDEX id_library_idx
 ON ztronpro_samples(id_library);
 
+CREATE TABLE ztronpro_analysis(
+  id_repository VARCHAR(32) comment 'Code of the repository',
+  run_name VARCHAR(255),
+  cram TEXT,
+  cram_size BIGINT UNSIGNED,
+  vcf TEXT,
+  vcf_size BIGINT UNSIGNED,
+  date_secondary DATETIME,
+  pipeline_name VARCHAR(255),
+  pipeline_type VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  PRIMARY KEY (id_repository, run_name)
+);
+CREATE INDEX id_repository_idx
+ON ztronpro_analysis(id_repository);
+CREATE INDEX date_secondary_idx
+ON ztronpro_analysis(date_secondary);
+CREATE INDEX run_name_idx
+ON ztronpro_analysis(run_name);
+
+-- Already check for ztronpro_qc id_repository should be unique
+CREATE TABLE ztronpro_qc(
+  id_repository VARCHAR(32) comment 'Code of the repository',
+  run_name VARCHAR(255),
+  ploidy_estimation VARCHAR(6),
+  percent_dups FLOAT,
+  percent_gc FLOAT,
+  percent_mapped FLOAT,
+  percent_proper_pairs FLOAT,
+  at_least_30x FLOAT,
+  at_least_20x FLOAT,
+  at_least_10x FLOAT,
+  depth FLOAT,
+  vars INT UNSIGNED,
+  snp FLOAT,
+  indel DOUBLE,
+  ts_tv FLOAT,
+  reads_raw INT UNSIGNED,
+  reads_clean INT UNSIGNED,
+  rate_clean FLOAT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  PRIMARY KEY (id_repository, run_name)
+);
+CREATE INDEX id_repository_idx
+ON ztronpro_qc(id_repository);
+CREATE INDEX run_name_idx
+ON ztronpro_qc(run_name);
+
 
 CREATE TABLE phenovar_variables(
     id VARCHAR(36) PRIMARY KEY,

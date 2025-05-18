@@ -1,0 +1,18 @@
+INSERT INTO ztronpro_qc(id_repository,run_name,ploidy_estimation,percent_dups,percent_gc,percent_mapped,percent_proper_pairs,at_least_30x,at_least_20x,at_least_10x,depth,vars,snp,indel,ts_tv,reads_raw,reads_clean,rate_clean,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE ploidy_estimation=VALUES(ploidy_estimation),
+percent_dups=VALUES(percent_dups),
+percent_gc=VALUES(percent_gc),
+percent_mapped=VALUES(percent_mapped),
+percent_proper_pairs=VALUES(percent_proper_pairs),
+at_least_30x=VALUES(at_least_30x),
+at_least_20x=VALUES(at_least_20x),
+at_least_10x=VALUES(at_least_10x),
+depth=VALUES(depth),
+vars=VALUES(vars),
+snp=VALUES(snp),
+indel=VALUES(indel),
+ts_tv=VALUES(ts_tv),
+reads_raw=VALUES(reads_raw),
+reads_clean=VALUES(reads_clean),
+rate_clean=VALUES(rate_clean),
+updated_at=VALUES(updated_at)
