@@ -509,12 +509,25 @@ CREATE TABLE staging_simbiox_biosamples_patients (
   code_repository varchar(32), 
   id_mpi longtext, 
   id_subject longtext, 
-  biobank_nama varchar(255)
+  biobank_nama varchar(255),
+  registry_id_subject varchar(50),
+  registry_sex varchar(6),
+  patient_categ varchar(8),
+  biosample_id varchar(64),
+  origin_code_repository varchar(32)
 );
+CREATE INDEX patient_categ_idx
+ON staging_simbiox_biosamples_patients(patient_categ);
 CREATE INDEX id_patient_idx
 ON staging_simbiox_biosamples_patients(id_patient);
 CREATE INDEX code_repository_idx
 ON staging_simbiox_biosamples_patients(code_repository);
+CREATE INDEX biosample_id_idx
+ON staging_simbiox_biosamples_patients(biosample_id);
+CREATE INDEX biobank_nama_idx
+ON staging_simbiox_biosamples_patients(biobank_nama);
+CREATE INDEX origin_code_repository_idx
+ON staging_simbiox_biosamples_patients(origin_code_repository);
 
 
 CREATE TABLE staging_pgx_report_status (

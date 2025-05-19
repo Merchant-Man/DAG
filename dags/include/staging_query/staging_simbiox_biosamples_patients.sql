@@ -6,6 +6,7 @@
 -- Changes	:   01-03-2025 Remove filter for biobank pusat and bbbionmika since several code repo are origin there i.e:
 					 "Biobank Sentral (BB Binomika)" --> SKI samples
 			    14-05-2025 Add patient category from visit log
+				19-05-2025 Add origin_code_repository
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -41,6 +42,7 @@ INSERT INTO
 				SELECT
 					sb.id_patient,
 					sb.code_repository,
+					origin_code_repository,
 					id_mpi,
 					id_subject,
 					patient_categ,
@@ -95,6 +97,7 @@ INSERT INTO
 					) sp2 ON sb.id_patient = sp2.id_patient
 			)
 		SELECT
+			DISTINCT
 			sbp.id_patient,
 			sbp.code_repository,
 			sbp.id_mpi,
@@ -103,7 +106,8 @@ INSERT INTO
 			COALESCE(rd.id_subject, pp.id_subject) registry_id_subject,
 			COALESCE(rd.sex, pp.sex) registry_sex,
 			patient_categ,
-			biosample_id
+			biosample_id,
+			origin_code_repository
 		FROM
 			sbp
 			LEFT JOIN regina_demography rd ON sbp.id_subject = rd.id_subject
