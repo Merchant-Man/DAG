@@ -70,7 +70,7 @@ INSERT INTO
 					LEFT JOIN simbiox_master_status_proses t4 ON t1.proses_status = t4.id
 					LEFT JOIN simbiox_master_status_proses t5 ON t1.proses_receive_status = t5.id
 					LEFT JOIN master_biobank t6 ON t1.id_biobank = t6.id_biobank
-					LEFT JOIN master_biobank t7 ON t1.id_biobank_tujuan = t7.id_biobank
+					LEFT JOIN master_biobank t7 ON t2.id_biobank_tujuan = t7.id_biobank
 					LEFT JOIN simbiox_transfer_formulir t2 ON t1.transfer_formulir_id = t2.id
 					LEFT JOIN simbiox_master_status_transfer t8 ON t2.transfer_status = t8.id
 			) t
