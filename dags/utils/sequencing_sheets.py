@@ -14,12 +14,11 @@ def _parse_sequencing_sheet() -> pd.DataFrame:
     ILL_2024 = f"1yRRjqoNfsbaEp14Jx1md7oudqAWw2bbLwXK3Uc2mlQI/export?gid=1944745795&{EXP_FORM}"
     ILL_2025 = f"1L-mrdJSYNgu4Jq3tRNliQgeZX9MhDnlOyd6YwR9Nx8s/export?gid=0&{EXP_FORM}"
     MGI_2024 = f"1xvFL2WB7b2B4iYwvgw43BIQL7O8DZpqhDtwXbXr5KBY/export?gid=1944745795&{EXP_FORM}"
-    # MGI_2025 = f"1yRRjqoNfsbaEp14Jx1md7oudqAWw2bbLwXK3Uc2mlQI/export?gid=1944745795&{EXP_FORM}"
+    MGI_2025 = f"1R8I7MakGrJJwiyHLDbU7Nii18qWhFIHFeOxwAQ9bUok/export?gid=0&{EXP_FORM}"
     ONT = f"1pMmO4wHAGwyBMQoUT5H8ann6BFfW6sb8OLq5x50zpuY/export?gid=1243138284&{EXP_FORM}"
 
     # ILLUMINA
     ill_2025 = pd.read_csv(f"{MAIN_URL}{ILL_2025}")
-    ill_2025_cols = ill_2025.columns
     ill_2025.iloc[:, 9] = ill_2025.iloc[:, 9].astype(float)  # volume_remain
     ill_2025.iloc[:, 10] = pd.to_datetime(
         ill_2025.iloc[:, 10], format='%Y-%m-%d', errors='coerce')  # delivery_date
@@ -37,7 +36,6 @@ def _parse_sequencing_sheet() -> pd.DataFrame:
     ill_2025 = ill_2025[ill_2025['code_repository'].notna()]
 
     ill_2024 = pd.read_csv(f"{MAIN_URL}{ILL_2024}")
-    ill_2024_cols = ill_2024.columns
     ill_2024.iloc[:, 10] = pd.to_datetime(
         ill_2024.iloc[:, 10], format='%Y-%m-%d', errors='coerce')  # delivery_date
     ill_2024.iloc[:, 16] = pd.to_datetime(
@@ -56,7 +54,6 @@ def _parse_sequencing_sheet() -> pd.DataFrame:
 
     # ONT
     ont = pd.read_csv(f"{MAIN_URL}{ONT}")
-    ont_cols = ont.columns
     ont.iloc[:, 7] = ont.iloc[:, 7].astype(float)  # volume_remain
     ont.iloc[:, 6] = pd.to_datetime(
         ont.iloc[:, 6], format='%y%m%d', errors='coerce')  # delivery_date
@@ -76,7 +73,6 @@ def _parse_sequencing_sheet() -> pd.DataFrame:
 
     # MGI
     mgi_2024 = pd.read_csv(f"{MAIN_URL}{MGI_2024}")
-    mgi_2024_cols = mgi_2024.columns
     mgi_2024.iloc[:, 7] = pd.to_numeric(
         mgi_2024.iloc[:, 7], errors='coerce')  # volume_remain
     mgi_2024.iloc[:, 11] = pd.to_datetime(
@@ -96,7 +92,23 @@ def _parse_sequencing_sheet() -> pd.DataFrame:
     mgi_2024["platform"] = "MGI"
     mgi_2024 = mgi_2024[mgi_2024['code_repository'].notna()]
 
-    res = pd.concat([ill_2024, ill_2025, ont, mgi_2024], ignore_index=True)
+
+    mgi_2025 = pd.read_csv(f"{MAIN_URL}{MGI_2025}")
+    mgi_2025.iloc[:, 7] =  pd.to_numeric(mgi_2025.iloc[:, 7] , errors='coerce')  #volume_remain
+    mgi_2025.iloc[:, 10] = pd.to_datetime(mgi_2025.iloc[:, 10], format='%y%m%d; %H:%M', errors='coerce') #extraction_date
+    mgi_2025.iloc[:, 58] = pd.to_datetime(mgi_2025.iloc[:, 58], errors='coerce') #sequencing_start_date
+    mgi_2025.iloc[:, 59] = pd.to_datetime(mgi_2025.iloc[:, 59], errors='coerce') #sequencing_finish_date
+    # code_repo, volume_remain, delivery_date, extraction_date, extraction_status, libprep_status, sequencing_start_date, sequencing_finish_date, sequencing_status
+    mgi_2025 = mgi_2025.iloc[:, [4,8,10,23,40,58,59,61]]
+    mgi_2025.columns = ["code_repository",  "volume_remain", "extraction_date", "extraction_status", "libprep_status", "sequencing_start_date", "sequencing_finish_date", "sequencing_status"]
+    mgi_2025["delivery_date"] = pd.NaT
+
+    mgi_2025 = mgi_2025[["code_repository",  "volume_remain", "delivery_date", "extraction_date", "extraction_status", "libprep_status", "sequencing_start_date", "sequencing_finish_date", "sequencing_status"]]
+    mgi_2025["platform"] = "MGI"
+    mgi_2025 = mgi_2025[mgi_2025['code_repository'].notna()]
+
+
+    res = pd.concat([ill_2024, ill_2025, ont, mgi_2024, mgi_2025], ignore_index=True)
     res['code_repository'] = res['code_repository'].str.replace(
         r'\.', '_', regex=True)
     res.set_index(["code_repository", "platform", "extraction_status",
