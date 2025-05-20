@@ -60,7 +60,6 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-    print(df.columns)
     return df
 
 
