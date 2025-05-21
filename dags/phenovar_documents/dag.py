@@ -39,7 +39,7 @@ dag = DAG(
     "phenovar-documents",
     default_args=default_args,
     description="ETL pipeline for Phenovar Docuements API. Separated due to long processes",
-    schedule_interval="0 0 * * 0",
+    schedule_interval="0 18 * * *",
     max_active_runs=1, # Only allowing one DAG run at a time
     concurrency=3, # Reduce the load on the phenovar server
     catchup=False

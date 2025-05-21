@@ -103,7 +103,7 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'bcftools_stats-number_of_SNPs': 'snp',
         'bcftools_stats-number_of_indels': 'indel',
         'bcftools_stats-tstv': 'ts_tv',
-        'peddy-predicted_sex_sex_check': 'ploidy_estimation',
+        'predicted_sex': 'ploidy_estimation',
         "created_at": "created_at",
         "updated_at": "updated_at",
         "run_name":"run_name"

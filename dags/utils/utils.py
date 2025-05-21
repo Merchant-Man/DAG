@@ -415,7 +415,7 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
         pattern=re.compile(rf".*{re.escape(curr_ds)}.*\.csv")
         matched_file_list=[]
         for key in file_keys:
-            print(f"checking {key}")
+            # print(f"checking {key}")
             if pattern.match(key):
                 matched_file_list.append(key)
 
