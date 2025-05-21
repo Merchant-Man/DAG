@@ -18,6 +18,26 @@ default_retry_args = dict(
     retry=tenacity.retry_if_exception_type(Exception),
 )
 
+def get_token_request(api_conn_id:str, jwt_end_point:str, jwt_headers:Optional[Dict[str, Any]] = {}, jwt_payload:Optional[Dict[str, Any]] = {}, get_token_function:Optional[Callable[[Dict[str, Any]], str]] = None, retry_args:Dict[str, Any] = default_retry_args) -> str:
+    http_hook = HttpHook(method="POST", http_conn_id=api_conn_id)
+
+    response = http_hook.run_with_advanced_retry(
+        endpoint=jwt_end_point,
+        headers=jwt_headers,
+        # In POST method, the http_hook will pass to the BODY of the request. Therefore it should be JSON stringified!
+        data=json.dumps(jwt_payload),
+        _retry_args=retry_args
+    )
+    try:
+        response_header = response.headers
+        response = response.json()
+        # The get_token_function should return a dictionary containing either "headers" or "params" key. i.e. {"headers": {"Authorization": "<token>"}}
+        headers = get_token_function(response, response_header)
+    except json.JSONDecodeError as e:
+        print(f"Decoding into JSON failed: {e}")
+        print(f"Failed response: {response}")
+        raise ValueError("Failed to decode the response")
+    return headers
 
 def extract_db_url(db_secret: str) -> Tuple[str, str, str, str]:
     """
