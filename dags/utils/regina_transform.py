@@ -2,11 +2,77 @@ import pandas as pd
 from typing import Callable, Optional, Dict, Any, List, Union
 from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from .utils import dict_csv_buf_transform, default_retry_args, extract_db_url
+from .utils import dict_csv_buf_transform, default_retry_args, extract_db_url, get_token_request
 import json
 import pandas as pd
 import mysql.connector as sql
 import time
+import io
+from sqlalchemy import create_engine, VARCHAR, DATETIME, JSON
+from airflow.models import Variable
+
+def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) -> Dict[str, Any]: 
+    """
+    Get token data from RegINA response.
+    """
+    return {
+        "headers": {
+            "Authorization": f"Bearer {resp['data']['access_token']}",
+            "Connection": "keep-alive",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+        }
+    }
+
+def fetch_regina_log_to_db(api_conn_id:str, data_end_point:str, jwt_end_point:str, object_path:str, aws_conn_id:str, db_secret_url:str, bucket_name:str, jwt_headers:Optional[Dict[str, Any]] = {}, jwt_payload:Optional[Dict[str, Any]] = {}, get_token_function:Optional[Callable[[Dict[str, Any]], str]] = None, **kwargs):
+    # Get JWT Token from RegINA and get the headers
+    headers = get_token_request(api_conn_id, jwt_end_point, jwt_headers, jwt_payload, get_token_function)["headers"]
+    http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
+    data_payload = {
+        "start_date": kwargs["curr_ds"],
+        "end_date": kwargs["curr_ds"],
+    }
+    resp = http_hook.run(
+        endpoint=data_end_point,
+        headers=headers,
+        data=data_payload
+    ).json()
+
+    if resp["code"] != 200:
+        raise Exception(f"Failed to get composition: <{resp['code']}> {resp['message']}")
+    resp = resp.get("data", {})
+    if not resp:
+        print("No data to update")
+        return
+    df = pd.DataFrame(resp)
+    print(df.head())
+    print(df.columns)
+    df.set_index(["logged_at", "template_id", "hospital", "crud_type"], inplace=True)
+
+    csv_buffer = io.StringIO()
+    file_name = f"{object_path}/{kwargs['curr_ds']}.csv"
+
+    print(f" == Save result to s3 == ")
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3.load_string(
+        string_data=csv_buffer.getvalue(),
+        key=file_name,
+        bucket_name=bucket_name,
+        replace=True
+    )
+    engine=create_engine(db_secret_url)
+
+    print(f" == Save result to dwh == ")
+    with engine.begin() as conn:
+        df.to_sql(
+                name=f"regina_log",
+                if_exists="append",
+                schema=f"{Variable.get('dwh_schema')}",
+                con=conn,
+                dtype={"logged_at": DATETIME, "template_id": VARCHAR(128), "hospital": VARCHAR(32), "crud_type": VARCHAR(8), "composition": JSON}
+            )
 
 
 def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
