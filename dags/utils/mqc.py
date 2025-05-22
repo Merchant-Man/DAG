@@ -49,8 +49,8 @@ def fetch_qc_files(aws_conn_id, **kwargs):
     }
 
     # Use Airflow Execution Date (ds) or a default timestamp
-    # ts = str(kwargs.get("ds", "2025-03-02"))
-    ts="2025-04-02"
+    ts = str(kwargs.get("ds", "2025-03-02"))
+    # ts="2025-04-02"
     timestamps = datetime.strptime(ts, "%Y-%m-%d").date()
     
     def sync_s3_buckets():
@@ -92,13 +92,13 @@ def fetch_qc_files(aws_conn_id, **kwargs):
                     except s3_client.exceptions.ClientError as e:
                         if e.response['Error']['Code'] != "404":
                             raise
-                    logging.info(f"[Dry Run] Would copy {src_key} -> {dest_key}")
-                    # logging.info(f"Copying {src_key} -> {dest_key}")
-                    # s3_client.copy_object(
-                    #     Bucket=dest_bucket,
-                    #     CopySource={'Bucket': src_bucket, 'Key': src_key},
-                    #     Key=dest_key
-                    # )
+                    # logging.info(f"[Dry Run] Would copy {src_key} -> {dest_key}")
+                    logging.info(f"Copying {src_key} -> {dest_key}")
+                    s3_client.copy_object(
+                        Bucket=dest_bucket,
+                        CopySource={'Bucket': src_bucket, 'Key': src_key},
+                        Key=dest_key
+                    )
 
     sync_s3_buckets()
 
