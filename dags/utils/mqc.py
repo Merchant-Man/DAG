@@ -92,13 +92,17 @@ def fetch_qc_files(aws_conn_id, **kwargs):
                     except s3_client.exceptions.ClientError as e:
                         if e.response['Error']['Code'] != "404":
                             raise
+                    
                     # logging.info(f"[Dry Run] Would copy {src_key} -> {dest_key}")
-                    logging.info(f"Copying {src_key} -> {dest_key}")
+                    # logging.info(f"Copying {src_key} -> {dest_key}")
+                    copied_count = 0
                     s3_client.copy_object(
                         Bucket=dest_bucket,
                         CopySource={'Bucket': src_bucket, 'Key': src_key},
                         Key=dest_key
                     )
+                    copied_count += 1
+                    logging.info(f"Synced {copied_count} file(s) from {src_bucket} to {dest_bucket}")
 
     sync_s3_buckets()
 
