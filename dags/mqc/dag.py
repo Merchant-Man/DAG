@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from utils.mqc import extract_incomplete_qc 
+from utils.mqc import extract_incomplete_qc, fetch_qc_files
 from airflow.models import Variable
 
 AWS_CONN_ID = "aws"
@@ -28,8 +28,18 @@ dag = DAG(
 )
 
 with dag:
-    extract_gold_qc_task = PythonOperator(
-        task_id='extract_incomplete_qc',
+    sync_qc_files_to_mqc_bucket_task = PythonOperator(
+        task_id='sync_qc_files_to_mqc_bucket',
+        python_callable=fetch_qc_files,
+        op_kwargs={
+            "aws_conn_id": AWS_CONN_ID,
+            "curr_ds": "{{ ds }}"
+        },
+        provide_context=True
+    )
+
+    create_pl_mqc_samplesheets_task = PythonOperator(
+        task_id='create_pl_mqc_samplesheets',
         python_callable=extract_incomplete_qc,
         op_kwargs={
             "aws_conn_id": AWS_CONN_ID,
@@ -43,4 +53,4 @@ with dag:
         provide_context=True
     )
 
-extract_gold_qc_task
+sync_qc_files_to_mqc_bucket_task >> create_pl_mqc_samplesheets_task
