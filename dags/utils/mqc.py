@@ -3,6 +3,105 @@ from sqlalchemy import create_engine
 import pandas as pd
 from io import StringIO
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from datetime import datetime, timedelta
+import re
+import os
+
+import os
+import re
+import logging
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+def fetch_qc_files(aws_conn_id, **kwargs):
+
+    """
+    Sync QC files from source S3 buckets to destination buckets based on filename patterns
+    and last modified time. Supports dry run mode for previewing actions.
+
+    :param aws_conn_id: Airflow connection ID for AWS credentials
+    """
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
+    s3_client = s3_hook.get_conn()
+
+    DESTINATION_MAP = {
+        'bgsi-data-illumina': 'bgsi-data-dragen-qc',
+        'bgsi-data-citus-output': 'bgsi-data-citus-qc',
+    }
+
+    TEMPLATES = {
+        'bgsi-data-illumina': [
+            r'.+\.cnv_metrics\.csv$', r'.+\.gvcf_hethom_ratio_metrics\.csv$',
+            r'.+\.gvcf_metrics\.csv$', r'.+\.hla_metrics\.csv$',
+            r'.+\.mapping_metrics\.csv$', r'.+\.ploidy_estimation_metrics\.csv$',
+            r'.+\.qc-coverage-region-1_coverage_metrics\.csv$',
+            r'.+\.roh_metrics\.csv$', r'.+\.sv_metrics\.csv$',
+            r'.+\.time_metrics\.csv$', r'.+\.vc_hethom_ratio_metrics\.csv$',
+            r'.+\.vc_metrics\.csv$', r'.+\.wgs_coverage_metrics\.csv$',
+        ],
+        'bgsi-data-citus-output': [
+            r'.+\.bcftools_stats_metrics\.txt$', r'.+\.het_check_metrics\.csv$',
+            r'.+\.mosdepth\.global\.dist_metrics\.txt$',
+            r'.+\.mosdepth\.region\.dist_metrics\.txt$',
+            r'.+\.mosdepth\.summary_metrics\.txt$', r'.+\.sex_check_metrics\.csv$',
+            r'.+_1_fastqc_metrics\.zip$', r'.+_2_fastqc_metrics\.zip$',
+            r'.+_metrics\.stats$',
+        ]
+    }
+
+    # Use Airflow Execution Date (ds) or a default timestamp
+    # ts = str(kwargs.get("ds", "2025-03-02"))
+    ts="2025-04-02"
+    timestamps = datetime.strptime(ts, "%Y-%m-%d").date()
+    
+    def sync_s3_buckets():
+        for src_bucket, dest_bucket in DESTINATION_MAP.items():
+            allowed_patterns = TEMPLATES[src_bucket]
+            paginator = s3_client.get_paginator('list_objects_v2')
+
+            for page in paginator.paginate(Bucket=src_bucket):
+                for obj in page.get('Contents', []):
+                    src_key = obj['Key']
+                    filename = os.path.basename(src_key)
+
+                    # Skip if not modified by timestamps or later
+                    last_modified = obj['LastModified'].date()
+                    if last_modified < timestamps:
+                        continue
+
+                    if not any(re.fullmatch(p, filename) for p in allowed_patterns):
+                        continue
+
+                    try:
+                        parts = src_key.split('/')
+                        if src_bucket == 'bgsi-data-illumina':
+                            folder_id, sample_id = parts[2], parts[3]
+                            dest_key = f"{folder_id}/{sample_id}/{filename}"
+                        elif src_bucket == 'bgsi-data-citus-output':
+                            folder_id = parts[0]
+                            dest_key = f"{folder_id}/{filename}"
+                        else:
+                            continue
+                    except IndexError:
+                        logging.warning(f"Bad key format: {src_key}")
+                        continue
+
+                    try:
+                        s3_client.head_object(Bucket=dest_bucket, Key=dest_key)
+                        logging.info(f"Skipping {src_key}, already exists.")
+                        continue
+                    except s3_client.exceptions.ClientError as e:
+                        if e.response['Error']['Code'] != "404":
+                            raise
+                    logging.info(f"[Dry Run] Would copy {src_key} -> {dest_key}")
+                    # logging.info(f"Copying {src_key} -> {dest_key}")
+                    # s3_client.copy_object(
+                    #     Bucket=dest_bucket,
+                    #     CopySource={'Bucket': src_bucket, 'Key': src_key},
+                    #     Key=dest_key
+                    # )
+
+    sync_s3_buckets()
+
 
 def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str, object_path: str, 
                         citus_bucket:str, db_uri: str, **kwargs) -> None:
@@ -80,5 +179,13 @@ def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str,
         print(f"[INFO] Saved {prefix.upper()} CSV to s3://{bucket_name}/{key}")
 
 
-    upload_df(dragen_paths, "dragen")
-    upload_df(citus_paths, "citus")
+    # Only upload if there is data
+    if not dragen_result_df.empty:
+        upload_df(dragen_paths, "dragen")
+    else:
+        print("[INFO] No DRAGEN results found. Skipping upload.")
+
+    if not citus_result_df.empty:
+        upload_df(citus_paths, "citus")
+    else:
+        print("[INFO] No CITUS results found. Skipping upload.")
