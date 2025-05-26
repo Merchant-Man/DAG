@@ -5,7 +5,8 @@ from utils.mqc import extract_incomplete_qc, fetch_qc_files
 from airflow.models import Variable
 
 AWS_CONN_ID = "aws"
-S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
+# S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
+S3_BUCKET = "bgsi-data-dev"
 RDS_SECRET = Variable.get("RDS_SECRET")
 S3_DRAGEN_QC = "bgsi-data-dragen-qc"
 S3_CITUS_QC = "bgsi-data-citus-qc"
@@ -43,7 +44,7 @@ with dag:
         python_callable=extract_incomplete_qc,
         op_kwargs={
             "aws_conn_id": AWS_CONN_ID,
-            "bucket_name": S3_DWH_BRONZE,
+            "bucket_name": S3_BUCKET,
             "dragen_bucket": S3_DRAGEN_QC,
             "citus_bucket": S3_CITUS_QC,
             "object_path": OBJECT_PATH,
