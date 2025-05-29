@@ -100,10 +100,31 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df["pipeline_name"] = df["pipeline"].apply(
         lambda x: ast.literal_eval(x)["code"])
     df["pipeline_type"] = "secondary"
+
+    def _split_reference(ref: str) -> str:
+        """
+        Handling edgecases for the path of CRAM and VCF from Illumina Analysis "reference" field.
+        """
+        temp_code_repo = ""
+        if re.match(r"SKI_.*", ref):
+            # SKI_3175140_9efb681c-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-8b97ceb8-ab78-489a-8d48-901f1b240c79
+            temp_code_repo = re.search(r"SKI_[^_]+", ref)[0]
+        elif re.match(r"[^_]+_[\d]{6}_M_.*", ref):
+            # 0C0123801C03_250209_M_1a75a295-ede8212c-9b83-4029-bade-7c19493b2fe7
+            temp_code_repo = re.search(r"[^_]+_[\d]{6}_[TM]{1}", ref)[0]
+        elif re.match(r"[^_-]+-1-DRAGEN-4-2-6-Germline.*", ref):
+            # 0H0066801C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-b0a743a0-4762-436d-a988-4cd2be474910
+            temp_code_repo = re.search(r"[^_-]+", ref)[0]
+        else:
+            # 0C0067101C03_8b688247-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-df9ac94b-dbe8-4eb9-b377-6b0946661c4a
+            temp_code_repo = ref.split('_')[0]
+        
+        return temp_code_repo
+
     df["cram"] = df["reference"].apply(
-        lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.cram")
+        lambda x: (lambda ref: f"s3://bgsi-data-illumina/pro/analysis/{x}/{ref}/{ref}.cram")(_split_reference(x)))
     df["vcf"] = df["reference"].apply(
-        lambda x: f"s3://bgsi-data-illumina/pro/analysis/{x}/{x.split('_')[0]}/{x.split('_')[0]}.hard-filtered.vcf.gz")
+        lambda x: (lambda ref: f"s3://bgsi-data-illumina/pro/analysis/{x}/{ref}/{ref}.hard-filtered.vcf.gz")(_split_reference(x)))
     df["tags"] = df["tags"].apply(ast.literal_eval)
     df = df.join(pd.json_normalize(df["tags"]).add_prefix("tags_"))
 
