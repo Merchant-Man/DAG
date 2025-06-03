@@ -5,12 +5,10 @@ from utils.mqc import extract_incomplete_qc, fetch_qc_files
 from airflow.models import Variable
 
 AWS_CONN_ID = "aws"
-# S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
-S3_BUCKET = "bgsi-data-dev"
+S3_BUCKET = Variable.get("S3_MQC_CONFIG")
 RDS_SECRET = Variable.get("RDS_SECRET")
 S3_DRAGEN_QC = "bgsi-data-dragen-qc"
 S3_CITUS_QC = "bgsi-data-citus-qc"
-OBJECT_PATH = "RT/mqc/samplesheets"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -47,7 +45,6 @@ with dag:
             "bucket_name": S3_BUCKET,
             "dragen_bucket": S3_DRAGEN_QC,
             "citus_bucket": S3_CITUS_QC,
-            "object_path": OBJECT_PATH,
             "db_uri": RDS_SECRET,
             "curr_ds": "{{ ds }}"
         },

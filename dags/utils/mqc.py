@@ -107,7 +107,7 @@ def fetch_qc_files(aws_conn_id, **kwargs):
     sync_s3_buckets()
 
 
-def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str, object_path: str, 
+def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str, 
                         citus_bucket:str, db_uri: str, **kwargs) -> None:
     """
     Extracts incomplete QC data and matches to relevant S3 paths for CITUS and DRAGEN.
@@ -173,7 +173,7 @@ def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str,
         buffer = StringIO()
         buffer.write('\n'.join(sorted(set(paths))))  # No header, no duplicates
         buffer.seek(0)
-        key = f"{object_path}/{prefix}/{curr_ds}.csv"
+        key = f"{prefix}/{curr_ds}.csv"
         s3_hook.load_string(
             string_data=buffer.getvalue(),
             key=key,
@@ -181,7 +181,6 @@ def extract_incomplete_qc(aws_conn_id: str, bucket_name: str, dragen_bucket:str,
             replace=True
         )
         print(f"[INFO] Saved {prefix.upper()} CSV to s3://{bucket_name}/{key}")
-
 
     # Only upload if there is data
     if not dragen_result_df.empty:
