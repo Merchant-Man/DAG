@@ -177,6 +177,8 @@ CREATE INDEX id_library_idx
 ON ica_samples (id_library);
 CREATE INDEX id_repository_idx
 ON ica_samples (id_repository);
+CREATE INDEX `status_idx`
+ON ica_samples (`status`);
 
 -- Already check for illumina_qc id_repository should be unique
 CREATE TABLE illumina_qc(

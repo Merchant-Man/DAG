@@ -10,6 +10,7 @@
 				 13-03-2025 Adding window function for filtering multiple entries of samples due to top up.
 				 15-03-2025 Adding filter for testing id repositories for illumina.
 				 29-04-2025 Adding ztron pro samples
+				 07-06-2025 Adding filter for ICA Sample by filtering out non "AVAILABLE" Samples s.t. any arbitary samples written by the users will not be included.
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -175,6 +176,7 @@ INSERT INTO staging_seq
 					ica_samples
 				WHERE
 					NOT REGEXP_LIKE(ica_samples.id_repository, "(?i)(demo|test|benchmark|dev)")
+					AND `status` != "DELETED"
 				) seq_ica
 				LEFT JOIN (
 					SELECT DISTINCT
