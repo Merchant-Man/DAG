@@ -10,7 +10,7 @@ def hello_world():
     print("")
 
 dag = DAG(
-    "my_da(w)g",
+    "my_dawg",
     start_date=days_ago(1),
     schedule_interval="@daily",
     catchup=False,
