@@ -54,7 +54,7 @@ jobs:
         run: |
           IMAGE_NAME=${{ matrix.dag }}
           IMAGE_TAG=$(date +%Y%m%d%H%M%S)
-          FULL_TAG=${{ vars.ECR_URI }}/$IMAGE_NAME:$IMAGE_TAG
+          FULL_TAG=${{ vars.ECR_URI }}-$IMAGE_NAME:$IMAGE_TAG
 
           echo "Building $FULL_TAG"
 
