@@ -1,20 +1,53 @@
-name: Docker Image CI
+name: Build and Push DAG Docker Images
 
 on:
   push:
     branches: [ "feat/custom_image" ]
-  # pull_request:
-  #   branches: [ "main" ]
+    paths:
+      - 'dags/**'  # Only run when something inside `dags/` changes
 
 jobs:
-
-  build:
-
+  detect-changed:
     runs-on: ubuntu-latest
-
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: |
-          cd dags/custom_image 
-          docker build . --file Dockerfile --tag airflow-custom:$(date +%s)
+      - uses: actions/checkout@v4
+
+      - name: Get Changed DAG Folders
+        id: set-matrix
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD | grep '^dags/' | cut -d/ -f2 | sort -u | uniq)
+          LIST=$(echo "$CHANGED" | jq -R . | jq -s .)
+          echo "matrix={\"dag\": $LIST}" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: detect-changed
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changed.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ vars.AWS_ACTION_ROLE }}
+          aws-region: ${{ vars.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin --password-stdin ${{ vars.ECR_URI }}
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_NAME=${{ matrix.dag }}
+          IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+          FULL_TAG=${{ vars.ECR_URI }}/$IMAGE_NAME:$IMAGE_TAG
+
+          echo "Building $FULL_TAG"
+
+          cd dags/$IMAGE_NAME
+          docker build -t $FULL_TAG .
+          docker push $FULL_TAG
