@@ -20,9 +20,13 @@ jobs:
         id: set-matrix
         run: |
           CHANGED=$(git diff --name-only origin/main...HEAD | grep '^dags/' | cut -d/ -f2 | sort -u | uniq)
-          LIST=$(echo "$CHANGED" | jq -R . | jq -s .)
-          echo "matrix={\"dag\": $LIST}" >> $GITHUB_OUTPUT
-
+          if [[ -z "$CHANGED" ]]; then
+            echo "No DAG changes detected."
+            echo "matrix={\"dag\":[]}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          LIST=$(echo "$CHANGED" | jq -R . | jq -s -c .)
+          echo "matrix={\"dag\":$LIST}" >> $GITHUB_OUTPUT
   build-and-push:
     needs: detect-changed
     runs-on: ubuntu-latest
