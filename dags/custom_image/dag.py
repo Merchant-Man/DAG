@@ -3,7 +3,7 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.kubernetes.pod import Pod
 from airflow.utils.kubernetes.kube_secrets import Secret
-
+from kubernetes.client import models as k8s
 from airflow.models import Variable
 
 IMAGE_URI = Variable.get("IMAGE_URI")
@@ -19,12 +19,19 @@ dag = DAG(
 )
 
 PythonOperator(
-    task_id="say_hello",
+    task_id="run_in_custom_image",
     python_callable=hello_world,
     dag=dag,
     executor_config={
-        "KubernetesExecutor": {
-            "image": IMAGE_URI,
-        }
+        "pod_override": k8s.V1Pod(
+            spec=k8s.V1PodSpec(
+                containers=[
+                    k8s.V1Container(
+                        name="base",
+                        image=IMAGE_URI,
+                    )
+                ]
+            )
+        )
     },
 )
