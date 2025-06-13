@@ -69,4 +69,4 @@ CREATE TABLE gold_sheets_sequencing AS (
 		END duplicate_origin_code_repo_status
 	FROM
 		temp_data
-)
+);
