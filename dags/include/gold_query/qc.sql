@@ -4,7 +4,8 @@
 -- Author   :   Abdullah Faqih
 -- Created  :   16-02-2025
 -- Changes	: 
-				- 24-02-2025: Adding new columns for QC categories
+				- 24-02-2025: Adding new columns for QC categories.
+				- 13-06-2025: Adding indexes for performance improvement.
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -368,3 +369,23 @@ final_qc AS (
 )
 
 SELECT * FROM final_qc;
+
+
+CREATE INDEX id_repository_idx
+ON gold_qc(id_repository);
+CREATE INDEX origin_biobank_idx
+ON gold_qc(origin_biobank);
+CREATE INDEX sequencer_idx
+ON gold_qc(sequencer);
+CREATE INDEX sex_missing_idx
+ON gold_qc(sex_missing);
+CREATE INDEX ploidy_missing_idx
+ON gold_qc(ploidy_missing);
+CREATE INDEX coverage_ok_idx
+ON gold_qc(coverage_ok);
+CREATE INDEX breadth_ok_idx
+ON gold_qc(breadth_ok);
+CREATE INDEX qc_category_idx
+ON gold_qc(qc_category);
+CREATE INDEX qc_category2_idx
+ON gold_qc(qc_category2);

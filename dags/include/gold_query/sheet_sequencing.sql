@@ -70,3 +70,16 @@ CREATE TABLE gold_sheets_sequencing AS (
 	FROM
 		temp_data
 );
+
+CREATE INDEX platform_idx
+ON gold_sheets_sequencing(platform);
+CREATE INDEX code_repository_idx
+ON gold_sheets_sequencing(code_repository);
+CREATE INDEX extraction_status_idx
+ON gold_sheets_sequencing(extraction_status);
+CREATE INDEX libprep_status_idx
+ON gold_sheets_sequencing(libprep_status);
+CREATE INDEX sequencing_status_idx
+ON gold_sheets_sequencing(sequencing_status);
+CREATE INDEX registry_status_idx
+ON gold_sheets_sequencing(registry_status);

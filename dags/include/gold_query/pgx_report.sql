@@ -3,7 +3,7 @@
 -- Purpose  :   This query is intended to be used as the source of PGx report data.
 -- Author   :   Abdullah Faqih
 -- Created  :   24-02-2025
--- Changes:
+-- Changes  :   13-06-2025: Adding indexes for performance improvement
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -54,3 +54,10 @@ FROM (
 		gold_qc.qc_category2 = "Pass"
 ) t
 );
+
+CREATE INDEX id_repository_idx
+ON gold_pgx_report(id_repository);
+CREATE INDEX origin_biobank_idx
+ON gold_pgx_report(origin_biobank);
+CREATE INDEX sequencer_idx
+ON gold_pgx_report(sequencer);
