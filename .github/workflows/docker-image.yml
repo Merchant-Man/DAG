@@ -1,0 +1,20 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "feat/custom_image" ]
+  # pull_request:
+  #   branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: |
+          cd dags/custom_image 
+          docker build . --file Dockerfile --tag airflow-custom:$(date +%s)
