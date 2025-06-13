@@ -1,18 +1,10 @@
-from requests import Response
 from datetime import datetime, timedelta
 import pandas as pd
 import os
 from airflow import DAG
 from airflow.models import Variable
-from urllib.parse import urlparse
-from airflow.models import Connection
 from airflow.operators.python import PythonOperator
 from utils.utils import fetch_and_dump, silver_transform_to_db
-import json
-from typing import Dict, Any
-import ast
-import boto3
-import re
 
 AWS_CONN_ID = "aws"
 BSSH_CONN_ID = "bssh"
@@ -96,4 +88,4 @@ silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-fetch_and_dump_task >> silver_transform_to_db_task
+fetch_and_dump_task >> silver_transform_to_db_task # type: ignore

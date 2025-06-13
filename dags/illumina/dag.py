@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import pandas as pd
 import os
 from airflow import DAG
 from airflow.models import Variable
@@ -10,8 +9,7 @@ from utils.illumina_transform import transform_qc_data, transform_qs_data
 AWS_CONN_ID = "aws"
 QC_OBJECT_PATH = "illumina/qc"
 QS_OBJECT_PATH = "illumina/qs"
-# S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE") 
-S3_DWH_BRONZE = "bgsi-data-dwh-bronze"
+S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 QC_LOADER_QEURY = "illumina_qc_loader.sql"
 QS_LOADER_QEURY = "illumina_qs_loader.sql"
@@ -34,10 +32,10 @@ dag = DAG(
     catchup=False
 )
 
-with open(os.path.join("dags/repo/dags/include/loader", QC_LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", QC_LOADER_QEURY), encoding="utf-8") as f:
     qc_loader_query = f.read()
 
-with open(os.path.join("dags/repo/dags/include/loader", QS_LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", QS_LOADER_QEURY), encoding="utf-8") as f:
     qs_loader_query = f.read()
 
 

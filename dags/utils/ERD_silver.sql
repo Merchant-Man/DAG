@@ -655,17 +655,15 @@ ON simbiox_log_visit_biospc(px_id);
 
 
 CREATE TABLE staging_fix_ski_id_repo (
-	SELECT
-		code_repository,
-		origin_code_repository,
-		CONCAT(REGEXP_SUBSTR(origin_code_repository, "SKI"), "_", REGEXP_SUBSTR(origin_code_repository, "\\d+")) new_origin_code_repository
-	FROM
-		simbiox_biosamples
-	WHERE
-		origin_code_repository LIKE "%SKI%"
+  code_repository varchar(16) comment 'Code of the repository',
+  origin_code_repository varchar(16) comment 'Original code of the repository',
+  new_origin_code_repository varchar(16) comment 'New code of the repository',
 );
-
-CREATE INDEX new_origin_code_repository
+CREATE INDEX code_repository_idx
+ON staging_fix_ski_id_repo(code_repository);
+CREATE INDEX origin_code_repository_idx
+ON staging_fix_ski_id_repo(origin_code_repository);
+CREATE INDEX new_origin_code_repository_idx
 ON staging_fix_ski_id_repo(new_origin_code_repository);
 
 
