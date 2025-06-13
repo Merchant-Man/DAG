@@ -3,8 +3,8 @@ name: Build and Push DAG Docker Images
 on:
   push:
     branches: [ "feat/custom_image" ]
-    paths:
-      - 'dags/**'  # Only run when something inside `dags/` changes
+    # paths:
+    #   - 'dags/**'  # Only run when something inside `dags/` changes
 
 jobs:
   detect-changed:
@@ -13,6 +13,8 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
 
       - name: Get Changed DAG Folders
         id: set-matrix
