@@ -1,18 +1,17 @@
-from requests import Response
 from datetime import datetime, timedelta
-import pandas as pd
 import os
+import re
+import ast
+import json
+import pandas as pd
 from airflow import DAG
 from airflow.models import Variable
 from urllib.parse import urlparse
 from airflow.models import Connection
 from airflow.operators.python import PythonOperator
 from utils.utils import fetch_and_dump, silver_transform_to_db
-import json
 from typing import Dict, Any
-import ast
 import boto3
-import re
 
 AWS_CONN_ID = "aws"
 ICA_CONN_ID = "ica"
@@ -80,10 +79,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.drop_duplicates()
 
     # TODO It might good to filter the delta based on timeModified and/or timeCreated
-
-    # Clean up
-    # Split the user_reference into id_repository basede on conditoin
-    def split_user(ref:str):
+    # Split the user_reference into id_repository based on conditions
+    def split_user(ref: str):
         if re.match(r"^SKI", ref):
             # For SKI_XXX_YYY get the SKI_XXXX
             return "_".join(ref.split("_")[0:2])
@@ -93,10 +90,11 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         elif re.match(r"DRAGEN", ref):
             return ref.split("-")[0]
         return ref.split("_")[0]
-    
+
     df["id_repository"] = df["userReference"].apply(split_user)
     # New regex for extracting id_batch
-    df["id_batch"] = df["tags"].apply(lambda x: re.search(r"(LP[\w\d]+)", str(ast.literal_eval(x)["userTags"])))
+    df["id_batch"] = df["tags"].apply(lambda x: re.search(
+        r"(LP[\w\d]+)", str(ast.literal_eval(x)["userTags"]))) # type: ignore
     df["pipeline_name"] = df["pipeline"].apply(
         lambda x: ast.literal_eval(x)["code"])
     df["pipeline_type"] = "secondary"
@@ -108,17 +106,17 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         temp_code_repo = ""
         if re.match(r"SKI_.*", ref):
             # SKI_3175140_9efb681c-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-8b97ceb8-ab78-489a-8d48-901f1b240c79
-            temp_code_repo = re.search(r"SKI_[^_]+", ref)[0]
+            temp_code_repo = re.search(r"SKI_[^_]+", ref)[0] # type: ignore
         elif re.match(r"[^_]+_[\d]{6}_M_.*", ref):
             # 0C0123801C03_250209_M_1a75a295-ede8212c-9b83-4029-bade-7c19493b2fe7
-            temp_code_repo = re.search(r"[^_]+_[\d]{6}_[TM]{1}", ref)[0]
+            temp_code_repo = re.search(r"[^_]+_[\d]{6}_[TM]{1}", ref)[0] # type: ignore
         elif re.match(r"[^_-]+-1-DRAGEN-4-2-6-Germline.*", ref):
             # 0H0066801C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-b0a743a0-4762-436d-a988-4cd2be474910
-            temp_code_repo = re.search(r"[^_-]+", ref)[0]
+            temp_code_repo = re.search(r"[^_-]+", ref)[0] # type: ignore
         else:
             # 0C0067101C03_8b688247-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-df9ac94b-dbe8-4eb9-b377-6b0946661c4a
             temp_code_repo = ref.split('_')[0]
-        
+
         return temp_code_repo
 
     df["cram"] = df["reference"].apply(
@@ -126,7 +124,7 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df["vcf"] = df["reference"].apply(
         lambda x: (lambda ref: f"s3://bgsi-data-illumina/pro/analysis/{x}/{ref}/{ref}.hard-filtered.vcf.gz")(_split_reference(x)))
     df["tags"] = df["tags"].apply(ast.literal_eval)
-    df = df.join(pd.json_normalize(df["tags"]).add_prefix("tags_"))
+    df = df.join(pd.json_normalize(df["tags"].tolist()).add_prefix("tags_"))
 
     rename_map = {
         # old: new
@@ -177,7 +175,7 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     df = df[["id", "time_created", "time_modified", "created_at", "updated_at", "id_repository", "id_batch", "date_start",
              "date_end", "pipeline_name", "pipeline_type", "run_name", "run_status", "cram", "cram_size", "vcf", "vcf_size", "tag_technical_tags", "tag_user_tags", "tag_reference_tags"]]
-    
+
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record by id (unique)
     df['time_modified'] = pd.to_datetime(df['time_modified'])
@@ -224,4 +222,4 @@ silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-fetch_and_dump_task >> silver_transform_to_db_task
+fetch_and_dump_task >> silver_transform_to_db_task # type: ignore

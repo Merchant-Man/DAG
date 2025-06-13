@@ -39,7 +39,7 @@ def get_token_request(api_conn_id:str, jwt_end_point:str, jwt_headers:Optional[D
         raise ValueError("Failed to decode the response")
     return headers
 
-def extract_db_url(db_secret: str) -> Tuple[str, str, str, str]:
+def extract_db_url(db_secret: str) -> Tuple[str, str, str, str, str]:
     """
     Extract database information from db_secret in the format
 
@@ -294,7 +294,7 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
 
 
 def dynamo_and_dump(aws_conn_id: str, table_name: str, bucket_name: str,
-                   object_path: str, **kwargs) -> None:
+                   object_path: str, **kwargs) -> bool:
     """
     Fetching data from dynamodb and dump it into s3 bucket. Currently only support ALL_SELECTION with scan operation.
 
@@ -359,7 +359,7 @@ def dynamo_and_dump(aws_conn_id: str, table_name: str, bucket_name: str,
 
     return True
 
-def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, db_secret_url: str, transform_func: Callable[[pd.DataFrame], pd.DataFrame] = None, multi_files: bool=False, all_files=False, **kwargs) -> None:
+def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str, db_secret_url: str, transform_func: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None, multi_files: bool=False, all_files=False, **kwargs) -> None:
     """
     Transforming s3 data and insert into db.
 

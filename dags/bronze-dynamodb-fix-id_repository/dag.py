@@ -1,16 +1,14 @@
 from datetime import datetime, timedelta
-import pandas as pd
 from io import StringIO
-
+import pandas as pd
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.http_operator import SimpleHttpOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.hooks.dynamodb import DynamoDBHook
 
-S3_DWH_BRONZE=Variable.get("S3_DWH_BRONZE")
-DYNAMODB_TABLE=Variable.get("DYNAMODB_TABLE")
+S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
+DYNAMODB_TABLE = Variable.get("DYNAMODB_TABLE")
 
 default_args = {
     'owner': 'bgsi-data',
@@ -31,39 +29,43 @@ dag = DAG(
 
 
 def fetch_data(**kwargs):
-    table = DynamoDBHook(aws_conn_id='aws', resource_type='dynamodb').conn.Table(DYNAMODB_TABLE)
-    
+    table = DynamoDBHook(
+        aws_conn_id='aws', resource_type='dynamodb').get_conn().Table(DYNAMODB_TABLE) # type: ignore
+
     # Fetch data count from DynamoDB
     response = table.scan(Select='ALL_ATTRIBUTES')
     data_items = response.get('Items', [])
-    
+
     # Push data to XCom for downstream tasks
     kwargs['ti'].xcom_push(key='dynamodb_data', value=data_items)
 
+
 def extract_transform_data(**kwargs):
     # Pull data from XCom
-    dynamodb_data = kwargs['ti'].xcom_pull(task_ids='fetch_data', key='dynamodb_data')
+    dynamodb_data = kwargs['ti'].xcom_pull(
+        task_ids='fetch_data', key='dynamodb_data')
     if not dynamodb_data:
         raise ValueError("No data retrieved from DynamoDB.")
-    
+
     # Transform data into a DataFrame
     df = pd.DataFrame(dynamodb_data)
-    
+
     # Convert DataFrame to CSV format
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
-    
+
     # Return the CSV data as string
     return csv_buffer.getvalue()
+
 
 def load_data(**kwargs):
     # Retrieve the transformed CSV from XCom
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
-    
+
     # Generate S3 key using data_interval_start
     data_interval_start = kwargs['ti'].get_dagrun().data_interval_start
     s3_key = f'dynamodb/fix/id_repository/{data_interval_start.isoformat()}.csv'
-    
+
     # Use S3Hook to upload the data to S3
     s3 = S3Hook(aws_conn_id='aws')
     s3.load_string(
@@ -72,6 +74,7 @@ def load_data(**kwargs):
         bucket_name=S3_DWH_BRONZE,
         replace=True
     )
+
 
 # Define tasks
 fetch_data_task = PythonOperator(

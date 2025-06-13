@@ -73,7 +73,7 @@ def ica_paginate(response: Dict[str, Any]) -> str:
     return pageToken
 
 
-def fetch_runname(id:str, headers:str) -> Optional[Tuple[Optional[Any], List[str], List[str], List[str], List[str], List[str], List[str]]]:
+def fetch_runname(id: str, headers: dict) -> Optional[Tuple[Optional[Any], List[str], List[str], List[str], List[str], List[str], List[str]]]:
     """Fetch runname from API."""
     url = f"https://ica.illumina.com/ica/rest/api/projects/{ICA_PROJECT}/samples/{id}/data?filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
     for i in range(3):  # Retry up to 3 times
@@ -118,11 +118,13 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     print(f"Rows before filter: {len(df)}")
     df["timeModified"] = pd.to_datetime(df["timeModified"])
     df["timeCreated"] = pd.to_datetime(df["timeCreated"])
-    ts = pd.to_datetime(ts).tz_localize("UTC") # From ICA API the timeModified is in UTC and the Airflow run in UTC
+    # From ICA API the timeModified is in UTC and the Airflow run in UTC
+    ts = pd.to_datetime(ts).tz_localize("UTC")
     td = pd.Timedelta(1, "days")
     ts_1 = ts - td
     print(f"ts: {ts}, td: {td}, ts_1: {ts_1}")
-    df = df.loc[(((df["timeModified"] <= ts) & (df["timeModified"] >= ts_1)) | ((df["timeCreated"] <= ts) & (df["timeCreated"] >= ts_1)))]
+    df = df.loc[(((df["timeModified"] <= ts) & (df["timeModified"] >= ts_1)) | (
+        (df["timeCreated"] <= ts) & (df["timeCreated"] >= ts_1)))]
     print(f"Rows after filter: {len(df)}")
 
     # Check if filtered_df is not empty before processing
@@ -130,7 +132,8 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     print("=== Starting to fetch the id library ===")
-    def safe_fetch(sample_id):  
+
+    def safe_fetch(sample_id):
         result = fetch_runname(sample_id, ICA_HEADERS)
         if result is None:
             # Return a tuple of Nones for the 7 expected values
@@ -157,9 +160,9 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     df["application"] = df["application"].apply(ast.literal_eval)
     df = df.join(pd.json_normalize(
-        df["application"]).add_prefix("application_"))
+        df["application"].tolist()).add_prefix("application_"))
     df["tags"] = df["tags"].apply(ast.literal_eval)
-    df = df.join(pd.json_normalize(df["tags"]).add_prefix("tags_"))
+    df = df.join(pd.json_normalize(df["tags"].tolist()).add_prefix("tags_"))
 
     rename_map = {
         # old: new
@@ -186,7 +189,7 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df.fillna(value="", inplace=True)
     df = df[["id", "id_library", "time_created", "time_modified", "created_at", "updated_at", "owner_id", "tenant_id", "tenant_name",
              "id_repository", "status", "tag_technical_tags", "tag_user_tags", "tag_connetor_tags", "tag_run_in_tags", "application_id", "application_name",
-            "sample_list_technical_tags","sample_list_user_tags","sample_list_connector_tags","sample_list_run_in_tags","sample_list_run_out_tags","sample_list_reference_tags"]]
+            "sample_list_technical_tags", "sample_list_user_tags", "sample_list_connector_tags", "sample_list_run_in_tags", "sample_list_run_out_tags", "sample_list_reference_tags"]]
 
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record by id (unique)
@@ -235,4 +238,4 @@ silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-fetch_and_dump_task >> silver_transform_to_db_task
+fetch_and_dump_task >> silver_transform_to_db_task # type: ignore
