@@ -21,6 +21,7 @@ SIMBIOX_REPORT_FIX_PROGRESS = "staging_report_fix_simbiox.sql"
 SKI_FIX_ID_REPO = "staging_fix_ski_id_repo.sql"
 SIMBIOX_TRANSFER_STAG = "staging_simbiox_transfer.sql"
 SIMBIOX_TRANSFER_REPORT = "simbiox_transfer.sql"
+SHEETS_SEQUENCING_REPORT = "sheet_sequencing.sql"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -62,6 +63,8 @@ simbiox_transfer_stag_query = load_query(
     "staging_query", SIMBIOX_TRANSFER_STAG)
 simbiox_transfer_report_query = load_query(
     "gold_query", SIMBIOX_TRANSFER_REPORT)
+sheets_sequencing_query = load_query(
+    "gold_query", SHEETS_SEQUENCING_REPORT)
 
 with dag:
     # Create sensors with similar parameters using a loop.
@@ -91,6 +94,8 @@ with dag:
                 "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
             {"task_id": "ica_samples", "external_dag_id": "ica-samples", "external_task_id": "silver_transform_to_db",
                 "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
+            {"task_id": "sheets_daily", "external_dag_id": "sheets_daily", "execution_delta": timedelta(
+                hours=1, minutes=30), "allowed_states": ["success"]}
         ]
         sensors = {}
         for cfg in sensor_configs:
@@ -146,7 +151,7 @@ with dag:
             sql=staging_simbiox_report_fix_progress_query
         )
         staging_simbiox_transfer_task = SQLExecuteQueryOperator(
-            task_id="sstaging_simbiox_transfer",
+            task_id="staging_simbiox_transfer",
             conn_id=conn_id,
             sql=simbiox_transfer_stag_query
         )
@@ -165,7 +170,15 @@ with dag:
             conn_id=conn_id,
             sql=pgx_report_query
         )
-        staging_ski_fix_id_repo_task >> [staging_simbiox_task, staging_simbiox_transfer_task] # type: ignore
+
+        gold_sheet_sequencing_task = SQLExecuteQueryOperator(
+            task_id="sheet_sequencing",
+            conn_id=conn_id,
+            sql=sheets_sequencing_query
+        )
+
+        staging_ski_fix_id_repo_task >> [
+            staging_simbiox_task, staging_simbiox_transfer_task, gold_sheet_sequencing_task]  # type: ignore
         [
             staging_mgi_sec_task,
             staging_ont_sec_task,
@@ -173,7 +186,7 @@ with dag:
             staging_seq_task,
             staging_simbiox_task,
         ] >> gold_qc_task  # type: ignore
-        
+
         [gold_qc_task, sensors["pgx_report"]] >> gold_pgx_report_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
 
