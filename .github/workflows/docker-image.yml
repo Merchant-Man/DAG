@@ -6,6 +6,10 @@ on:
     # paths:
     #   - 'dags/**'  # Only run when something inside `dags/` changes
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   detect-changed:
     runs-on: ubuntu-latest
