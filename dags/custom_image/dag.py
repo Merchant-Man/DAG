@@ -1,8 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
-from airflow.kubernetes.pod import Pod
-from airflow.utils.kubernetes.kube_secrets import Secret
 from kubernetes.client import models as k8s
 from airflow.models import Variable
 
