@@ -4,6 +4,7 @@
 -- Author   :   Abdullah Faqih
 -- Created  :   14-05-2025
 -- Changes	:   16-05-2025 Adding origin_code_repository
+			    16-06-2025 Adding backdoor for RSJPDHK/2024/01 form
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -124,6 +125,54 @@ CREATE TABLE gold_simbiox_transfer (
 		t1.origin_code_repository LIKE "SKI%"
 		OR t1.code_repository LIKE "SKI%"
 );
+
+
+# From here We will hard-coded this specific formulir until bakcend fix it! 
+INSERT INTO gold_simbiox_transfer(SELECT
+	biosample_id,
+	id,
+	nomor_formulir,
+	tanggal_formulir,
+	biobank_asal,
+	'Biobank Sentral (BB Binomika)' biobank_tujuan,
+	tanggal_pengiriman,
+	waktu_pengiriman,
+	suhu_pengiriman,
+	keterangan_pengiriman,
+	status_pengiriman,
+	petugas_pengirim,
+	DATE('2024-05-08') tanggal_penerimaan, # hard-coded
+	waktu_penerimaan,
+	suhu_penerimaan,
+	keterangan_penerimaan,
+	"OK" status_penerimaan,
+	petugas_penerima,
+	status_transfer_name,
+	1 tujuan_is_biobank,
+	non_biobank_nama,
+	triple_packaging,
+	is_to_central_seq,
+	code_repository,
+	origin_code_repository,
+	id_subject,
+	patient_biobank,
+	patient_categ,
+	registry_sex,
+	year_formulir,
+	year_pengiriman,
+	'2024' year_penerimaan,
+	month_formulir,
+	month_pengiriman,
+	'May' month_penerimaan,
+	origin_code_repository_non_dup
+FROM
+	gold_simbiox_transfer
+WHERE
+	nomor_formulir = 'RSJPDHK/2024/01');
+
+# Delete the wrong records
+DELETE FROM gold_simbiox_transfer WHERE nomor_formulir = 'RSJPDHK/2024/01' AND biobank_tujuan IS NULL;
+
 
 CREATE INDEX idx_gold_simbiox_transfer_nomor_formulir ON gold_simbiox_transfer (nomor_formulir);
 CREATE INDEX idx_gold_simbiox_transfer_biobank_asal ON gold_simbiox_transfer (biobank_asal);
