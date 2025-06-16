@@ -174,5 +174,5 @@ def dump_sequencing_sheets_to_s3_and_db(aws_conn_id: str, bucket_name: str,
             schema=f"{Variable.get('dwh_schema')}",
             con=conn,
             dtype={'code_repository': VARCHAR(16), 'platform': VARCHAR(8), 'extraction_status': VARCHAR(
-                32), 'libprep_status': VARCHAR(32), 'sequencing_finish_date': DATETIME, 'sequencing_status': VARCHAR(8)}
+                32), 'libprep_status': VARCHAR(32), 'sequencing_finish_date': DATETIME, 'sequencing_status': VARCHAR(32)}
         )
