@@ -68,8 +68,7 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df.fillna(value="", inplace=True)
     return df
 
-
-def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefix: str, aws_conn_id: str) -> pd.DataFrame:
+def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefixes: list, aws_conn_id: str) -> pd.DataFrame:
     # Drop duplicates, keeping the row with most data
     df["non_null_count"] = df.notnull().sum(axis=1)
     df = df.sort_values("non_null_count", ascending=False).drop_duplicates(subset="bam_folder", keep="first")
@@ -77,18 +76,22 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
     print("Total appended:")
     print(len(df))
 
-    # Load fix file for id_repository remapping
     try:
         s3_hook = S3Hook(aws_conn_id=aws_conn_id)
         s3_client = s3_hook.get_conn()
-        response = s3_client.list_objects_v2(Bucket=fix_bucket, Prefix=fix_prefix)
 
-        files = sorted(
-            [obj["Key"] for obj in response.get("Contents", []) if obj["Key"].endswith(".csv")],
-            reverse=True
-        )
+        for fix_prefix in fix_prefixes:
+            response = s3_client.list_objects_v2(Bucket=fix_bucket, Prefix=fix_prefix)
 
-        if files:
+            files = sorted(
+                [obj["Key"] for obj in response.get("Contents", []) if obj["Key"].endswith(".csv")],
+                reverse=True
+            )
+
+            if not files:
+                print(f"[INFO] No fix files found in S3 under prefix: {fix_prefix}")
+                continue
+
             latest_fix_key = files[0]
             print(f"[INFO] Found fix file: {latest_fix_key}")
             fix_obj = s3_client.get_object(Bucket=fix_bucket, Key=latest_fix_key)
@@ -96,19 +99,54 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
 
             if not fix_bytes.strip():
                 print("[WARNING] Fix file is empty, skipping mapping.")
-            else:
-                fix_df = pd.read_csv(io.BytesIO(fix_bytes))
-                fix_df_ont = fix_df[fix_df.get("sequencer") == "ONT"]
-                if not fix_df_ont.empty and "id_repository" in fix_df_ont.columns and "new_repository" in fix_df_ont.columns:
-                    id_mapping = fix_df_ont.set_index("id_repository")["new_repository"].to_dict()
-                    df["id_repository"] = df["id_repository"].replace(id_mapping)
+                continue
+
+            fix_df = pd.read_csv(io.BytesIO(fix_bytes))
+            fix_df_ont = fix_df[fix_df.get("sequencer") == "ONT"]
+
+            if fix_df_ont.empty:
+                print("[INFO] No valid ONT rows in fix file.")
+                continue
+
+            # Apply id_library fix
+            if {"id_repository", "id_library", "new_library"}.issubset(fix_df_ont.columns):
+                fix_pairs = fix_df_ont[["id_repository", "id_library", "new_library"]].dropna()
+                if not fix_pairs.empty:
+                    fix_pairs["key"] = fix_pairs["id_repository"].astype(str).str.strip() + "|" + fix_pairs["id_library"].astype(str).str.strip()
+                    library_map = fix_pairs.set_index("key")["new_library"].to_dict()
+
+                    df["match_key"] = df["id_repository"].astype(str).str.strip() + "|" + df["id_library"].astype(str).str.strip()
+
+                    def update_and_log(row):
+                        old = row["id_library"]
+                        new = library_map.get(row["match_key"], old)
+                        # if old != new:
+                        #     print(f"[REMAPPED] Row index {row.name}: match_key={row['match_key']}, id_library: {old} → {new}")
+                        #     print(row.to_dict())  # print full row as dict
+                        return new
+
+                    df["id_library"] = df.apply(update_and_log, axis=1)
+
+                    print("[INFO] Applied id_library remapping.")
                 else:
-                    print("[INFO] No valid ONT mappings found in fix file.")
-        else:
-            print("[INFO] No fix files found in S3.")
+                    print("[INFO] No valid id_library mappings found.")
+                    
+            # Apply id_repository fix
+            if "id_repository" in fix_df_ont.columns and "new_repository" in fix_df_ont.columns:
+                id_mapping = fix_df_ont.set_index("id_repository")["new_repository"].to_dict()
+
+                # Debugging: Check some mappings
+                # print(f"Sample id_repository mappings: {list(id_mapping.items())[:5]}")
+                # Clean mapping to exclude NaN values
+                id_mapping = fix_df_ont.dropna(subset=["new_repository"])
+                id_mapping = id_mapping.set_index("id_repository")["new_repository"].to_dict()
+
+                df["id_repository"] = df["id_repository"].replace(id_mapping)
+                print("[INFO] Applied id_repository remapping.")
+
 
     except Exception as e:
-        print(f"[ERROR] Failed to fetch or process fix file: {e}")
+        print(f"[ERROR] Failed to apply S3 fix mappings: {e}")
 
     # Standardize datetime columns
     datetime_cols = ['date_upload', 'started_at', 'acquisition_stopped', 'processing_stopped']
@@ -124,14 +162,16 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
     ]
 
     grouped_df = df.groupby('id_repository')[agg_fields].agg(list).reset_index()
+    # print("[DEBUG] id_library values for id_repository 0C0254501C05:")
+    # print(grouped_df[grouped_df["id_repository"] == "0C0254501C05"]["id_library"])
 
     # Compute totals
     grouped_df['total_bam_size'] = grouped_df['bam_size'].apply(
-        lambda x: sum(filter(None, [int(i) for i in x if pd.notnull(i)]))
+        lambda x: sum([int(i) for i in x if pd.notnull(i) and str(i).isdigit()])
     ).astype(str)
 
     grouped_df['sum_of_total_passed_bases'] = grouped_df['total_passed_bases'].apply(
-        lambda x: sum(filter(None, [int(i) for i in x if pd.notnull(i)]))
+        lambda x: sum([int(i) for i in x if pd.notnull(i) and str(i).isdigit()])
     ).astype(str)
 
     # Set batch and timestamps
@@ -159,5 +199,7 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
     ]
 
     return grouped_df[final_columns]
+
+
 
 
