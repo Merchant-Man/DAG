@@ -40,13 +40,16 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
 def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path,
                                headers, transform_func, curr_ds, **kwargs):
+    import re
 
     timestamp_str = datetime.strptime(curr_ds, "%Y-%m-%d")
     limit = 25
     offset = 0
-    all_sessions = []
+    last_fetched_dt = timestamp_str
+    all_rows = []
+    stop = False
 
-    while True:
+    while not stop:
         resp = requests.get(
             f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
             headers=headers
@@ -55,93 +58,88 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
         if not sessions:
             break
 
-        
-    for session in sessions:
-        created_dt = isoparse(session["DateCreated"])
-        if created_dt <= LAST_FETCHED_DT:
-            stop = True
-            break
+        for session in sessions:
+            created_dt = isoparse(session["DateCreated"])
+            if created_dt <= last_fetched_dt:
+                stop = True
+                break
 
-        if "BCLConvert" not in session.get("Name", ""):
-            continue
+            if "BCLConvert" not in session.get("Name", ""):
+                continue
 
-        session_id = session["Id"]
-        detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=HEADERS).json()
+            session_id = session["Id"]
+            detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
 
-        properties = {
-            item["Name"]: item.get("Content")
-            for item in detail.get("Properties", {}).get("Items", [])
-            if item.get("Name")
-        }
+            properties = {
+                item["Name"]: item.get("Content")
+                for item in detail.get("Properties", {}).get("Items", [])
+                if item.get("Name")
+            }
 
-        # --- RUN ITEMS ---
-        run_items = []
-        for item in detail.get("Properties", {}).get("Items", []):
-            if item.get("Name") == "Input.Runs":
-                run_items = item.get("RunItems", [])
+            run_items = []
+            for item in detail.get("Properties", {}).get("Items", []):
+                if item.get("Name") == "Input.Runs":
+                    run_items = item.get("RunItems", [])
 
-        for run in run_items:
-            all_rows.append({
-                "RowType": "Run",
-                "SessionId": session_id,
-                "SessionName": detail.get("Name"),
-                "DateCreated": detail.get("DateCreated"),
-                "DateModified": detail.get("DateModified"),
-                "ExecutionStatus": detail.get("ExecutionStatus"),
-                "ICA_Link": detail.get("HrefIcaAnalysis"),
-                "ICA_ProjectId": properties.get("ICA.ProjectId"),
-                "WorkflowReference": properties.get("ICA.WorkflowSessionUserReference"),
-                "RunId": run.get("Id"),
-                "RunName": run.get("Name"),
-                "PercentGtQ30": run.get("SequencingStats", {}).get("PercentGtQ30"),
-                "FlowcellBarcode": run.get("FlowcellBarcode"),
-                "ReagentBarcode": run.get("ReagentBarcode"),
-                "Status": run.get("Status"),
-                "ExperimentName": run.get("ExperimentName"),
-                "RunDateCreated": run.get("DateCreated")
-            })
+            for run in run_items:
+                all_rows.append({
+                    "RowType": "Run",
+                    "SessionId": session_id,
+                    "SessionName": detail.get("Name"),
+                    "DateCreated": detail.get("DateCreated"),
+                    "DateModified": detail.get("DateModified"),
+                    "ExecutionStatus": detail.get("ExecutionStatus"),
+                    "ICA_Link": detail.get("HrefIcaAnalysis"),
+                    "ICA_ProjectId": properties.get("ICA.ProjectId"),
+                    "WorkflowReference": properties.get("ICA.WorkflowSessionUserReference"),
+                    "RunId": run.get("Id"),
+                    "RunName": run.get("Name"),
+                    "PercentGtQ30": run.get("SequencingStats", {}).get("PercentGtQ30"),
+                    "FlowcellBarcode": run.get("FlowcellBarcode"),
+                    "ReagentBarcode": run.get("ReagentBarcode"),
+                    "Status": run.get("Status"),
+                    "ExperimentName": run.get("ExperimentName"),
+                    "RunDateCreated": run.get("DateCreated")
+                })
 
-        # --- BIOSAMPLE PARSING ---
-        logs_tail = next(
-            (item.get("Content") for item in detail.get("Properties", {}).get("Items", [])
-             if item.get("Name") == "Logs.Tail"),
-            ""
-        )
+            logs_tail = next(
+                (item.get("Content") for item in detail.get("Properties", {}).get("Items", [])
+                 if item.get("Name") == "Logs.Tail"),
+                ""
+            )
 
-        for line in logs_tail.splitlines():
-            if "Computed yield for biosample" in line:
-                match = re.search(
-                    r"Computed yield for biosample '([^']+)' \(Id: (\d+)\): (\d+) Bps", line)
-                if match:
-                    biosample_name = match.group(1)
-                    biosample_id = match.group(2)
-                    yield_bps = match.group(3)
+            for line in logs_tail.splitlines():
+                if "Computed yield for biosample" in line:
+                    match = re.search(
+                        r"Computed yield for biosample '([^']+)' \(Id: (\d+)\): (\d+) Bps", line)
+                    if match:
+                        biosample_name = match.group(1)
+                        biosample_id = match.group(2)
+                        yield_bps = match.group(3)
 
-                    gen_sample_match = re.search(
-                        rf"{biosample_name}.*?Generated new Sample: (\d+)",
-                        logs_tail, re.DOTALL)
-                    generated_sample_id = gen_sample_match.group(1) if gen_sample_match else None
+                        gen_sample_match = re.search(
+                            rf"{biosample_name}.*?Generated new Sample: (\d+)",
+                            logs_tail, re.DOTALL)
+                        generated_sample_id = gen_sample_match.group(1) if gen_sample_match else None
 
-                    all_rows.append({
-                        "RowType": "BioSample",
-                        "SessionId": session_id,
-                        "SessionName": detail.get("Name"),
-                        "DateCreated": detail.get("DateCreated"),
-                        "RunName": run.get("Name"),
-                        "ExperimentName": run.get("ExperimentName"),
-                        "RunDateCreated": run.get("DateCreated"),
-                        "BioSampleName": biosample_name,
-                        "BioSampleId": biosample_id,
-                        "ComputedYieldBps": yield_bps,
-                        "GeneratedSampleId": generated_sample_id
-                    })
+                        all_rows.append({
+                            "RowType": "BioSample",
+                            "SessionId": session_id,
+                            "SessionName": detail.get("Name"),
+                            "DateCreated": detail.get("DateCreated"),
+                            "RunName": run.get("Name"),
+                            "ExperimentName": run.get("ExperimentName"),
+                            "RunDateCreated": run.get("DateCreated"),
+                            "BioSampleName": biosample_name,
+                            "BioSampleId": biosample_id,
+                            "ComputedYieldBps": yield_bps,
+                            "GeneratedSampleId": generated_sample_id
+                        })
 
-    if stop:
-        break
+        offset += limit
 
-    OFFSET += LIMIT
-                                   
-    df = pd.DataFrame(all_sessions)
+    # Transform and save
+    df = pd.DataFrame(all_rows)
     df = transform_func(df, curr_ds)
 
     buffer = io.StringIO()
