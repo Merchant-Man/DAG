@@ -41,7 +41,6 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path,
                                headers, transform_func, curr_ds, **kwargs):
 
-    ACCESS_TOKEN = Variable.get{"BSSH_APIKEY1"}
     timestamp_str = datetime.strptime(curr_ds, "%Y-%m-%d")
     limit = 25
     offset = 0
