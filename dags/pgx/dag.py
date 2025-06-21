@@ -153,8 +153,6 @@ def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh
     for i, file in enumerate(files):
         if i % 100 == 0:
             print(f"Processing file {i} of {len(files)}: {file['Key']}")
-        if i == 10:
-            break
         # Get object, parse the body string, and decode into utf-8 (i.e. the '\n' newline), and concat into pandas.
         temp_df = pd.read_csv(StringIO(s3_client.get_object(
             Bucket=input_bucket_name, Key=file["Key"])["Body"].read().decode('utf-8')))
