@@ -56,7 +56,7 @@ def get_pgx_summary(aws_conn_id: str, db_secret_url: str, **kwargs) -> None:
     pgx_report_bucket = "nl-data-pgx-output"
     query = """
     SELECT 
-    DISTINCT REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(report_path_ind, "s3://{pgx_report_bucket}/", ""), "pdf", "json"), "report", "report_ind") path
+    DISTINCT report_path_ind path
     FROM (SELECT id_subject, report_path_ind, pgx_input_creation_date, ROW_NUMBER() OVER(PARTITION BY id_subject ORDER BY ind_report_creation_date) rn FROM gold_pgx_report WHERE ind_report_creation_date > "{date_filter}" AND report_path_ind IS NOT NULL
     ) t WHERE t.rn = 1 
     """
