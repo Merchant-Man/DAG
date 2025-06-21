@@ -21,6 +21,7 @@ QC_LOADER_QEURY = "wfhv_qc_loader.sql"
 SAMPLES_LOADER_QEURY = "wfhv_samples_loader.sql"
 ANALYSIS_LOADER_QEURY = "wfhv_analysis_loader.sql"
 S3_DYNAMODB_FIX_ID = "dynamodb/fix/id_repository/"
+S3_DYNAMODB_FIX_LIBRARY = "dynamodb/fix/id_library/"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -96,8 +97,8 @@ samples_bronze_s3_to_s3_task = PythonOperator(
     provide_context=True
 )
 
-check_samples_fix_task = PythonOperator(
-    task_id="check_samples_fix_file",
+check_fix_id = PythonOperator(
+    task_id="check_samples_fix_id",
     python_callable=check_fix_file_exists,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
@@ -110,21 +111,26 @@ check_samples_fix_task = PythonOperator(
     dag=dag
 )
 
-samples_silver_transform_partial = lambda df, ts: transform_samples_data(
-    df,
-    ts,
-    fix_bucket=S3_DWH_BRONZE,
-    fix_prefix=S3_DYNAMODB_FIX_ID,
-    aws_conn_id=AWS_CONN_ID
+check_fix_library = PythonOperator(
+    task_id="check_samples_fix_library",
+    python_callable=check_fix_file_exists,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": S3_DYNAMODB_FIX_LIBRARY,
+        "curr_ds": "{{ ds }}"
+    },
+    dag=dag
 )
 
 # Conditional silver transform task
 def create_samples_transform_task():
     def _transform(**kwargs):
         ti = kwargs['ti']
-        fix_exists = ti.xcom_pull(task_ids='check_samples_fix_file')
-        all_files = fix_exists
-        print(f"[INFO] Setting all_files = {all_files} based on fix file check.")
+        fix_id_exists = ti.xcom_pull(task_ids='check_samples_fix_id')
+        fix_batch_exists = ti.xcom_pull(task_ids='check_samples_fix_library')
+        all_files = fix_id_exists or fix_batch_exists
+        print(f"[INFO] Setting all_files = {all_files} based on fix file checks.")
 
         return silver_transform_to_db(
             aws_conn_id=AWS_CONN_ID,
@@ -177,8 +183,16 @@ analysis_silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
+samples_silver_transform_partial = lambda df, ts: transform_samples_data(
+    df,
+    ts,
+    fix_bucket=S3_DWH_BRONZE,
+    fix_prefixes=[S3_DYNAMODB_FIX_ID, S3_DYNAMODB_FIX_LIBRARY],
+    aws_conn_id=AWS_CONN_ID
+)
+
 samples_silver_transform_to_db_task = create_samples_transform_task()
 
-samples_bronze_s3_to_s3_task >> check_samples_fix_task >> samples_silver_transform_to_db_task
+samples_bronze_s3_to_s3_task >> [check_fix_id, check_fix_library] >> samples_silver_transform_to_db_task
 analysis_bronze_s3_to_s3_task >> analysis_silver_transform_to_db_task
 qc_bronze_s3_to_s3_task >> qc_silver_transform_to_db_task
