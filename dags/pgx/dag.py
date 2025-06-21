@@ -1,5 +1,6 @@
 import os
 from io import StringIO
+from pdb import run
 from typing import Tuple
 import re
 import json
@@ -58,14 +59,23 @@ def extract_info(pd_row: pd.DataFrame, col) -> Tuple[str, str]:
 
     Returns a tuple (id_repository, run_name) or (None, None) if no pattern is matched.
     """
+    run_name = ""
+    id_repository = ""
+
     s3_path = pd_row[col]
-    if "bgsi-data-citus-output" in s3_path:
+    # Example s3://bgsi-data-citus-output-liquid/0E0050901C01_9fb9a9ea/0E0050901C01.cram/0E0050901C01.cram
+    if "bgsi-data-citus-output-liquid" in s3_path:
+        pattern = r"bgsi-data-citus-output-liquid/([^/]+)/"
+        match = re.search(pattern, s3_path)
+        if match:
+            long_run_name = match.group(1)
+            run_name = long_run_name.split("-")[0]
+    elif "bgsi-data-citus-output" in s3_path:
         pattern = r"bgsi-data-citus-output/([^/]+)/"
         match = re.search(pattern, s3_path)
         if match:
             run_name = match.group(1)
             id_repository = run_name.split("_")[0]
-            return id_repository, run_name
     # s3://bgsi-data-illumina/pro/analysis/0H0124401C01_5e62498f_rerun_2024-08-13_012704-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-eb5da97e-ea84-416d-8e3e-eeb7733f49fb/0H0124401C01/0H0124401C01.cram
     elif "bgsi-data-illumina" in s3_path:
         pattern = r"bgsi-data-illumina/pro/analysis/([^/]+)/"
@@ -73,18 +83,21 @@ def extract_info(pd_row: pd.DataFrame, col) -> Tuple[str, str]:
         if match:
             long_run_name = match.group(1)
             run_name = long_run_name.split("-")[0]
-            id_repository = run_name.split("_")[0]
-            return id_repository, run_name
-    # Example s3://bgsi-data-citus-output-liquid/0E0050901C01_9fb9a9ea/0E0050901C01.cram/0E0050901C01.cram
-    elif "bgsi-data-citus-output-liquid" in s3_path:
-        pattern = r"bgsi-data-citus-output-liquid/([^/]+)/"
-        match = re.search(pattern, s3_path)
-        if match:
-            long_run_name = match.group(1)
-            run_name = long_run_name.split("-")[0]
-            id_repository = run_name.split("_")[0]
-            return id_repository, run_name
-    return "", ""
+    
+    if re.match(r"SKI_.*", run_name):
+        # SKI_3175140_9efb681c-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-8b97ceb8-ab78-489a-8d48-901f1b240c79
+        id_repository = re.search(r"SKI_[^_]+", run_name)[0] # type: ignore
+    elif re.match(r"[^_]+_[\d]{6}_M_.*", run_name):
+        # 0C0123801C03_250209_M_1a75a295-ede8212c-9b83-4029-bade-7c19493b2fe7
+        id_repository = re.search(r"[^_]+_[\d]{6}_[TM]{1}", run_name)[0] # type: ignore
+    elif re.match(r"[^_-]+-1-DRAGEN-4-2-6-Germline.*", run_name):
+        # 0H0066801C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-b0a743a0-4762-436d-a988-4cd2be474910
+        id_repository = re.search(r"[^_-]+", run_name)[0] # type: ignore
+    else:
+        # 0C0067101C03_8b688247-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-df9ac94b-dbe8-4eb9-b377-6b0946661c4a
+        id_repository = run_name.split('_')[0]
+
+    return id_repository, run_name
 
 
 def _get_report_info(pd_row: pd.DataFrame, col:str, client:BaseClient, bucket_name:str, key:str, report_type=["ind", "eng"]) -> Tuple[str, str, str, str]:
@@ -119,6 +132,51 @@ def _get_report_info(pd_row: pd.DataFrame, col:str, client:BaseClient, bucket_na
         res.append("")
     return tuple(res[:5])
 
+def _fix_id_repository(df:pd.DataFrame, query:str, db_secret_url:str) -> pd.DataFrame:
+    """
+    Fix the id_repository in the DataFrame df by querying the database with the provided query.
+    
+    Parameters
+    ----------
+    df: pd.DataFrame
+        Dataframe containing the id_repository column to be fixed.
+    query: str 
+        Query to fetch the id_repository and new_repository from the database.
+    db_secret_url: str 
+        Secret to connect to the database.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with the id_repository fixed based on the query results.
+    """
+    
+    if "id_repository" not in df:
+        raise ValueError("The DataFrame df must contain 'id_repository' column.")
+
+    engine = create_engine(db_secret_url)
+
+    print(f" == Get PGx report list == ")
+    with engine.connect() as conn:  # type: ignore
+        df_fix_id_repo = pd.read_sql(
+            sql=query,
+            con=conn.connection
+        )
+
+    if "id_repository" not in df_fix_id_repo.columns or "new_repository" not in df_fix_id_repo.columns:
+        raise ValueError("The DataFrame df_fix_id_repo must contain 'id_repository' and 'new_repository' columns. Please fix your query from DWH to include these columns.")
+
+    print("Fixing id_repository")
+    # https://stackoverflow.com/questions/50649853/trying-to-merge-2-dataframes-but-get-valueerror
+    df = df.merge(df_fix_id_repo, on="id_repository",
+                 how="left", suffixes=('', '_right'))
+    
+    df["temp_id_repository"] = df.new_repository.combine_first(
+        df.id_repository)
+    df.drop(columns=["id_repository", "new_repository"], inplace=True)
+    df.rename(columns={"temp_id_repository": "id_repository"}, inplace=True)
+    
+    return df
 
 def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh_bucket_name: str, object_path: str, db_secret_url: str, aws_conn_id=AWS_CONN_ID, **kwargs) -> None:
     """
@@ -165,7 +223,7 @@ def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh
     print("Finished get input metadata")
 
     # ================ Get .csv files for PGx Output ================
-    print("Get output metadata for each input which taken from the samlesheets")
+    print("Get output metadata for each input which taken from the sample sheets")
     df[["report_path_ind", "ind_report_creation_date", "report_path_eng", "eng_report_creation_date", "pipeline_version"]] = df.apply(
         _get_report_info, col="sample_id", client=s3_client, bucket_name=output_bucket_name, key=OUTPUT_PATH_TEMPLATE, axis=1, result_type="expand")
     s3_client.close()
@@ -176,34 +234,20 @@ def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh
     df.fillna(value="", inplace=True)
     print("Finished get output metadata")
 
-    # Fix id_repository since sometimes input valeus are broken
-    # Read from DWH
+    # Fix id_repository since sometimes input valeus are broken from the sample sheets.
     print("Get id_repository fix from DWH")
     query = """
         SELECT DISTINCT id_repository, new_repository FROM superset_dev.dynamodb_fix_id_repository_latest;
     """
-    engine = create_engine(db_secret_url)
+    df = _fix_id_repository(df, query, db_secret_url)
 
-    print(f" == Get PGx report list == ")
-    with engine.connect() as conn:  # type: ignore
-        df_fix_id_repo = pd.read_sql(
-            sql=query,
-            con=conn.connection
-        )
-
-    # To ensure that the join works correctly, we need to convert the id_repository columns to int64 type.
-    df['id_repository'] = df['id_repository'].astype(str)
-    df_fix_id_repo['id_repository'] = df_fix_id_repo['id_repository'].astype(str)
-
-    print("Fixing id_repository")
-    # https://stackoverflow.com/questions/50649853/trying-to-merge-2-dataframes-but-get-valueerror
-    df = df.merge(df_fix_id_repo, on="id_repository",
-                 how="left", suffixes=('', '_right'))
-    
-    df["temp_id_repository"] = df.new_repository.combine_first(
-        df.id_repository)
-    df.drop(columns=["id_repository", "new_repository"], inplace=True)
-    df.rename(columns={"temp_id_repository": "id_repository"}, inplace=True)
+    # Fix SKI id_repository from DWH
+    print("Get id_repository SKI fix from DWH")
+    query = """
+        SELECT DISTINCT new_origin_code_repository id_repository, code_repository new_repository FROM staging_fix_ski_id_repo;
+    """
+    df = _fix_id_repository(df, query, db_secret_url)
+    print("Finished fixing id_repository")
 
     df = dict_csv_buf_transform(df.to_dict(orient="records"))
 
