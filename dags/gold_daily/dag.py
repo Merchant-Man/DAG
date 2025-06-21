@@ -5,6 +5,8 @@ from airflow.models import Variable
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.task_group import TaskGroup
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.operators.python import PythonOperator
+from utils.pgx import get_pgx_summary
 
 AWS_CONN_ID = "aws"
 RDS_SECRET = Variable.get("RDS_SECRET")
@@ -68,6 +70,18 @@ sheets_sequencing_query = load_query(
 
 with dag:
     # Create sensors with similar parameters using a loop.
+
+    get_pgx_summary_and_detail_task = PythonOperator(
+        task_id="get_pgx_summary_and_details",
+        python_callable=get_pgx_summary,
+        op_kwargs={
+            "db_secret_url": RDS_SECRET,
+            "aws_conn_id": AWS_CONN_ID,
+            "curr_ds": "{{ ds }}"
+        },
+        provide_context=True
+    )
+
     with TaskGroup('loader_sensors') as loader_sensors:
         sensor_configs = [
             {"task_id": "pgx_report", "external_dag_id": "pgx_report", "execution_delta": timedelta(
@@ -187,7 +201,8 @@ with dag:
             staging_simbiox_task,
         ] >> gold_qc_task  # type: ignore
 
-        [gold_qc_task, sensors["pgx_report"]] >> gold_pgx_report_task  # type: ignore
+        [gold_qc_task, sensors["pgx_report"]
+         ] >> gold_pgx_report_task >> get_pgx_summary_and_detail_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
 
     loader_sensors >> queries  # type: ignore
