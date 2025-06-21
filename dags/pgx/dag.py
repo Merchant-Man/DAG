@@ -96,7 +96,6 @@ def _get_report_info(pd_row: pd.DataFrame, col:str, client:BaseClient, bucket_na
     for lang in report_type:
         temp = key
         file_key = temp.format(sample_id=sample_id, report_type=lang)
-        print(f"Checking S3 path: s3://{bucket_name}/{file_key}")
         try:
             response = client.head_object(Bucket=bucket_name, Key=file_key)
             date_modified = response['LastModified']
