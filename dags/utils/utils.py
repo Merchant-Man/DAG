@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Dict, Any, Tuple, List, Union
+from typing import Callable, Hashable, Iterable, Optional, Dict, Any, Tuple, List, Union
 from airflow.providers.http.hooks.http import HttpHook
 import tenacity
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -65,7 +65,7 @@ def extract_db_url(db_secret: str) -> Tuple[str, str, str, str, str]:
     return user_name, passwd, host, port, db_name
 
 
-def dict_csv_buf_transform(data: Dict[str, Any]) -> str:
+def dict_csv_buf_transform(data: List[Dict[Hashable, Any]]) -> str:
     """
     Transfrom the dictionary data to CSV buffer and return as string of csv.
 
@@ -79,10 +79,10 @@ def dict_csv_buf_transform(data: Dict[str, Any]) -> str:
     str
         The CSV string
     """
-    data = pd.DataFrame(data)
+    temp_df = pd.DataFrame(data)
 
     csv_buffer = io.StringIO()
-    data.to_csv(csv_buffer, index=False)
+    temp_df.to_csv(csv_buffer, index=False)
 
     return csv_buffer.getvalue()
 

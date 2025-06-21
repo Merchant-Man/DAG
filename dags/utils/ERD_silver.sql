@@ -543,6 +543,7 @@ CREATE TABLE staging_pgx_report_status (
   ind_report_creation_date DATETIME,
   report_path_eng TEXT,
   eng_report_creation_date DATETIME,
+  pipeline_version VARCHAR(32),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 );
