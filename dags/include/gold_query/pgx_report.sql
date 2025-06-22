@@ -50,7 +50,16 @@ FROM (
         CURRENT_TIMESTAMP udpated_at
 	FROM
 		gold_qc
-		LEFT JOIN staging_pgx_report_status prs ON gold_qc.id_repository = prs.id_repository
+		LEFT JOIN (SELECT * FROM (SELECT
+	*,
+	ROW_NUMBER() OVER (
+		PARTITION BY
+			id_repository
+		ORDER BY
+			input_creation_date DESC, report_path_ind DESC
+	) rn
+FROM
+	superset_dev.staging_pgx_report_status) t WHERE rn = 1) prs ON gold_qc.id_repository = prs.id_repository
 	WHERE
 		gold_qc.qc_category2 = "Pass"
 ) t
@@ -62,5 +71,4 @@ CREATE INDEX origin_biobank_idx
 ON gold_pgx_report(origin_biobank);
 CREATE INDEX sequencer_idx
 ON gold_pgx_report(sequencer);
-CREATE INDEX file_name_idx
-ON gold_pgx_report(file_name);
+CREATE INDEX file_name_idx ON gold_pgx_report (file_name);
