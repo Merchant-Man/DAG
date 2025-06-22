@@ -23,6 +23,7 @@ FROM (
 		gold_qc.id_repository,
 		gold_qc.id_patient,
 		gold_qc.id_subject,
+		prs.file_name,
 		gold_qc.origin_biobank,
 		gold_qc.sex,
 		gold_qc.sequencer,
@@ -61,3 +62,5 @@ CREATE INDEX origin_biobank_idx
 ON gold_pgx_report(origin_biobank);
 CREATE INDEX sequencer_idx
 ON gold_pgx_report(sequencer);
+CREATE INDEX file_name_idx
+ON gold_pgx_report(file_name);

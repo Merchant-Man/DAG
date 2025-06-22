@@ -840,3 +840,36 @@ CREATE TABLE regina_documents(
 )
 CREATE INDEX composition_name_idx
 ON regina_documents(composition_name);
+
+
+CREATE TABLE dwh_restricted.gold_pgx_detail_report(
+  order_id	VARCHAR(36),
+  hubs	VARCHAR(128),
+  drug_category	VARCHAR(128),
+  drug_name	VARCHAR(128),
+  drug_classification	VARCHAR(128),
+  phenotype_text	TEXT,
+  gene_symbol	varchar(16),
+  branded_drug	TEXT,
+  nala_score_v2	TEXT,
+  rec_category	TINYINT UNSIGNED,
+  rec_source	TEXT,
+  rec_text	TEXT,
+  run_id	TEXT,
+  scientific_evidence_symbol	TEXT,
+  implication_text	TEXT,
+  test_method	TEXT,
+  `version`	TEXT
+)
+ALTER TABLE dwh_restricted.gold_pgx_detail_report
+ADD CONSTRAINT PK_pgx PRIMARY KEY (order_id, drug_name, gene_symbol);
+CREATE INDEX rec_category_idx
+ON dwh_restricted.gold_pgx_detail_report(rec_category);
+CREATE INDEX hubs_idx
+ON dwh_restricted.gold_pgx_detail_report(hubs);
+CREATE INDEX drug_category_idx
+ON dwh_restricted.gold_pgx_detail_report(drug_category);
+CREATE INDEX drug_name_idx
+ON dwh_restricted.gold_pgx_detail_report(drug_name);
+CREATE INDEX drug_classification_idx
+ON dwh_restricted.gold_pgx_detail_report(drug_classification);
