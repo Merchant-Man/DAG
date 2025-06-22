@@ -329,13 +329,10 @@ def get_pgx_detail_to_dwh(aws_conn_id: str, pgx_report_output_bucket:str, db_sec
                 staging_pgx_report_status
             WHERE
                 ind_report_creation_date > "{date_filter}"
-                AND report_path_ind IS NOT NULL
+                AND (report_path_ind IS NOT NULL OR report_path_ind != "" OR report_path_ind != "nan")
         ) t
     """
-    # TODO - Fix the query to use pgx_report_bucket and date_filter from kwargs
-    # query = query.format(pgx_report_bucket=pgx_report_bucket,
-    #                      date_filter="2024-10-01" if kwargs.get("curr_ds") is None else kwargs.get("curr_ds"))
-    query = query.format(date_filter="2024-10-01")
+    query = query.format(date_filter="2024-10-01" if kwargs.get("curr_ds") is None else kwargs.get("curr_ds"))
     engine = create_engine(db_secret_url)
 
     print(query)

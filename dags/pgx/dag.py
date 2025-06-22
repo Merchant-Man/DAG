@@ -14,8 +14,8 @@ OUTPUT_PATH_TEMPLATE = "production/{sample_id}/report_{report_type}/production.{
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 SIMBIOX_APIKEY = Variable.get("SIMBIOX_APIKEY")
 RDS_SECRET = Variable.get("RDS_SECRET")
-REPORT_STATUS_LOADER_QEURY = "staging_pgx_report_status.sql"
-REPORT_DETAIL_LOADER_QEURY = "dwh_restricted_pgx_detail_report.sql"
+REPORT_STATUS_LOADER_QUERY = "staging_pgx_report_status.sql"
+REPORT_DETAIL_LOADER_QUERY = "dwh_restricted_pgx_detail_report.sql"
 
 default_args = {
     "owner": "bgsi_data",
@@ -35,10 +35,10 @@ dag = DAG(
     catchup=False
 )
 
-with open(os.path.join("dags/repo/dags/include/loader", REPORT_STATUS_LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", REPORT_STATUS_LOADER_QUERY)) as f:
     staging_pgx_report_status_loader_query = f.read()
 
-with open(os.path.join("dags/repo/dags/include/loader", REPORT_DETAIL_LOADER_QEURY)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", REPORT_DETAIL_LOADER_QUERY)) as f:
     pgx_report_detail_loader_query = f.read()
 
 fetch_and_dump_pgx_report_metadata_task = PythonOperator(
