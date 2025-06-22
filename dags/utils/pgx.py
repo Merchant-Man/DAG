@@ -330,7 +330,7 @@ def get_pgx_detail_to_dwh(aws_conn_id: str, pgx_report_output_bucket:str, db_sec
             WHERE
                 ind_report_creation_date > "{date_filter}"
                 AND report_path_ind IS NOT NULL
-        ) 
+        ) t
     """
     # TODO - Fix the query to use pgx_report_bucket and date_filter from kwargs
     # query = query.format(pgx_report_bucket=pgx_report_bucket,
