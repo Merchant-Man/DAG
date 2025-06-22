@@ -14,7 +14,7 @@ CREATE TABLE gold_pgx_report (
 SELECT
     *
     ,CASE
-        WHEN pgx_input_creation_date IS NOT NULL AND (eng_report_creation_date IS NULL OR ind_report_creation_date IS NULL ) THEN "Failed Run"
+        WHEN pgx_input_creation_date IS NOT NULL AND (eng_report_creation_date IS NULL AND ind_report_creation_date IS NULL ) THEN "Failed Run"
         WHEN pgx_input_creation_date IS NOT NULL AND (eng_report_creation_date IS NOT NULL OR ind_report_creation_date IS NOT NULL ) THEN "Successful Run"
         WHEN pgx_input_creation_date IS NULL AND (eng_report_creation_date IS  NULL AND ind_report_creation_date IS NULL ) THEN "Uncompleted Run"
     END AS pgx_status
@@ -61,7 +61,7 @@ FROM (
 FROM
 	superset_dev.staging_pgx_report_status) t WHERE rn = 1) prs ON gold_qc.id_repository = prs.id_repository
 	WHERE
-		gold_qc.qc_category2 = "Pass"
+		gold_qc.qc_category = "Pass"
 ) t
 );
 
