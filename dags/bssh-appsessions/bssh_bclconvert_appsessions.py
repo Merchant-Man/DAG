@@ -33,10 +33,9 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
                                headers, transform_func, curr_ds, **kwargs):
     import re
 
-    timestamp_str = datetime.strptime(curr_ds, "%Y-%m-%d")
+    last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
     offset = 0
-    last_fetched_dt = timestamp_str
     all_rows = []
     stop = False
 
@@ -145,7 +144,7 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{timestamp_str}.csv"
+    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
     print(f"✅ Saved to S3: {s3_path}")
 
