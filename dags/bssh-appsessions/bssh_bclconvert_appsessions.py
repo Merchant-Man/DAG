@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import requests
 import pandas as pd
 import io
+import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
 
