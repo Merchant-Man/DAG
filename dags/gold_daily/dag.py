@@ -12,6 +12,7 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 
 # SQL file names
 QC_QUERY = "qc.sql"
+ONQ_LIMS_QUERY = "lims_report.sql"
 PGX_REPORT_QUERY = "pgx_report.sql"
 ILLUMINA_SEC = "staging_illumina_sec.sql"
 MGI_SEC = "staging_mgi_sec.sql"
@@ -50,6 +51,7 @@ def load_query(folder, filename):
 
 
 # Load SQL queries
+onq_lims_query = load_query("gold_query", QC_QUERY)
 qc_query = load_query("gold_query", QC_QUERY)
 pgx_report_query = load_query("gold_query", PGX_REPORT_QUERY)
 staging_illumina_sec_query = load_query("staging_query", ILLUMINA_SEC)
@@ -161,6 +163,11 @@ with dag:
             conn_id=conn_id,
             sql=qc_query
         )
+        onq_lims_analysis_report_task = SQLExecuteQueryOperator(
+            task_id="onq_lims_analysis_report",
+            conn_id=conn_id,
+            sql=onq_lims_query
+        )
         gold_simbiox_transfer_task = SQLExecuteQueryOperator(
             task_id="simbiox_transfer_report",
             conn_id=conn_id,
@@ -190,6 +197,7 @@ with dag:
 
         [gold_qc_task, sensors["pgx_report"]
          ] >> gold_pgx_report_task  # type: ignore
+        [gold_pgx_report_task, gold_qc_task] >> onq_lims_analysis_report_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
 
     loader_sensors >> queries  # type: ignore

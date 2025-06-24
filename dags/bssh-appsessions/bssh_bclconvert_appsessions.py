@@ -5,8 +5,12 @@ from datetime import datetime, timedelta
 import requests
 import pandas as pd
 import io
+import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
+from datetime import timezone
+# Silver task
+from utils.utils import fetch_and_dump, silver_transform_to_db
 
 # ----------------------------
 # Constants and Config
@@ -19,20 +23,7 @@ BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 OBJECT_PATH = "bssh/appsessions"
-LOADER_QUERY_PATH = ""
-
-# Read loader query for silver
-with open(LOADER_QUERY_PATH) as f:
-    loader_query = f.read()
-
-# ----------------------------
-# Transform Function
-# ----------------------------
-
-def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
-    df = df.drop_duplicates()
-    df = df.astype(str)
-    return df
+LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # ----------------------------
 # Bronze: Fetch from API and Dump to S3
@@ -42,10 +33,9 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
                                headers, transform_func, curr_ds, **kwargs):
     import re
 
-    timestamp_str = datetime.strptime(curr_ds, "%Y-%m-%d")
+    last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
     offset = 0
-    last_fetched_dt = timestamp_str
     all_rows = []
     stop = False
 
@@ -59,7 +49,14 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
             break
 
         for session in sessions:
-            created_dt = isoparse(session["DateCreated"])
+            created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
+    
+            # Ensure last_fetched_dt is timezone-aware in UTC
+            if last_fetched_dt.tzinfo is None:
+                last_fetched_dt = last_fetched_dt.replace(tzinfo=timezone.utc)
+            else:
+                last_fetched_dt = last_fetched_dt.astimezone(timezone.utc)
+        
             if created_dt <= last_fetched_dt:
                 stop = True
                 break
@@ -147,7 +144,7 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{timestamp_str}.csv"
+    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
     print(f"✅ Saved to S3: {s3_path}")
 
@@ -172,6 +169,16 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QUERY_PATH)) as f:
+    loader_query = f.read()
+
+def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+
+    # Remove duplicates from the main DataFrame
+    df = df.drop_duplicates()
+
+    df = df.astype(str)
+    return df
 
 # Bronze task
 fetch_and_dump_task = PythonOperator(
@@ -192,9 +199,6 @@ fetch_and_dump_task = PythonOperator(
     },
     provide_context=True
 )
-
-# Silver task
-from dags.repo.dags.utils.loaders import silver_transform_to_db
 
 silver_transform_to_db_task = PythonOperator(
     task_id="silver_transform_to_db",
