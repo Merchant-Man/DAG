@@ -8,6 +8,7 @@ import io
 import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
+from datetime import timezone
 # Silver task
 from utils.utils import fetch_and_dump, silver_transform_to_db
 
@@ -49,7 +50,14 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
             break
 
         for session in sessions:
-            created_dt = isoparse(session["DateCreated"])
+            created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
+    
+            # Ensure last_fetched_dt is timezone-aware in UTC
+            if last_fetched_dt.tzinfo is None:
+                last_fetched_dt = last_fetched_dt.replace(tzinfo=timezone.utc)
+            else:
+                last_fetched_dt = last_fetched_dt.astimezone(timezone.utc)
+        
             if created_dt <= last_fetched_dt:
                 stop = True
                 break
