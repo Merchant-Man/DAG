@@ -160,7 +160,7 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
-with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY_PATH)) as f:
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QUERY_PATH)) as f:
     loader_query = f.read()
 
 def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
