@@ -8,6 +8,8 @@ import io
 import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
+# Silver task
+from utils.utils import fetch_and_dump, silver_transform_to_db
 
 # ----------------------------
 # Constants and Config
@@ -190,9 +192,6 @@ fetch_and_dump_task = PythonOperator(
     },
     provide_context=True
 )
-
-# Silver task
-from dags.repo.dags.utils.loaders import silver_transform_to_db
 
 silver_transform_to_db_task = PythonOperator(
     task_id="silver_transform_to_db",
