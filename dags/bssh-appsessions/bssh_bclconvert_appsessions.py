@@ -19,7 +19,7 @@ BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 OBJECT_PATH = "bssh/appsessions"
-LOADER_QUERY_PATH = ""
+LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # Read loader query for silver
 with open(LOADER_QUERY_PATH) as f:
@@ -172,6 +172,16 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
+    loader_query = f.read()
+
+def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+
+    # Remove duplicates from the main DataFrame
+    df = df.drop_duplicates()
+
+    df = df.astype(str)
+    return df
 
 # Bronze task
 fetch_and_dump_task = PythonOperator(
