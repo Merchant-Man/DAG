@@ -79,7 +79,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                 continue  # Skip this session
             
             detail = detail_resp.json()
-            full_sessions.append(detail)
+            full_sessions = []
           
             properties = {
                 item["Name"]: item.get("Content")
