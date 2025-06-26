@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import requests
 import pandas as pd
 import io
+import re
 import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
@@ -31,13 +32,21 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 # ----------------------------
 
 def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path,
-                               headers, transform_func, curr_ds, **kwargs):
-    import re
+                               headers=None, transform_func=None, curr_ds=None, **kwargs):
+    if headers is None:
+        from airflow.hooks.base import BaseHook
+        conn = BaseHook.get_connection(api_conn_id)
+        token = conn.extra_dejson.get("BSSH_APIKEY1")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
 
     last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
     offset = 0
     all_rows = []
+    full_sessions = []  # ✅ Store full appsession JSONs
     stop = False
 
     while not stop:
@@ -51,13 +60,7 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
 
         for session in sessions:
             created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
-    
-            # Ensure last_fetched_dt is timezone-aware in UTC
-            if last_fetched_dt.tzinfo is None:
-                last_fetched_dt = last_fetched_dt.replace(tzinfo=timezone.utc)
-            else:
-                last_fetched_dt = last_fetched_dt.astimezone(timezone.utc)
-        
+
             if created_dt <= last_fetched_dt:
                 stop = True
                 break
@@ -67,6 +70,8 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
 
             session_id = session["Id"]
             detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
+
+            full_sessions.append(detail)  # ✅ Add full session to the list
 
             properties = {
                 item["Name"]: item.get("Content")
@@ -136,7 +141,7 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
 
         offset += limit
 
-    # Transform and save
+    # Transform and save CSV
     df = pd.DataFrame(all_rows)
     df = transform_func(df, curr_ds)
 
@@ -145,7 +150,6 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    # Updated to use the base path structure (without the templated parts)
     s3_path = f"bssh/appsessions/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
     print(f"✅ Saved to S3: {s3_path}")
