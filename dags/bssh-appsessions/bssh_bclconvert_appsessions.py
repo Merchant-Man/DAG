@@ -60,8 +60,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
             created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
 
             if created_dt <= last_fetched_dt:
-                stop = True
-                break
+                continue
 
             if "BCLConvert" not in session.get("Name", ""):
                 continue
