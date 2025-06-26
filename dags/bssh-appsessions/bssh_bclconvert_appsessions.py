@@ -48,9 +48,8 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
     limit = 25
     offset = 0
-    all_rows = []
-    full_sessions = []
-
+    all_session_ids = []
+    
     while True:
         resp = requests.get(
             f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
@@ -64,19 +63,13 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
         for session in sessions:
             name = session.get("Name", "")
-            created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
-
-            logger.info(f"➡ Session: {session['Id']} | {name} | {created_dt.isoformat()}")
-
+            logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
+            all_session_ids.append(session_id)
             if "BCLConvert" not in name:
-                continue
-            
-            if not (curr_date_start <= created_dt < curr_date_end):
                 continue
             
             session_id = session["Id"]
             detail_url = f"{API_BASE}/appsessions/{session_id}"
-            
             logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {detail_url}")
             
             detail_resp = requests.get(detail_url, headers=headers)
