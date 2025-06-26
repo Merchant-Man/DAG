@@ -31,16 +31,12 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 # Bronze: Fetch from API and Dump to S3
 # ----------------------------
 
-def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path,
-                               headers=None, transform_func=None, curr_ds=None, **kwargs):
-    if headers is None:
-        from airflow.hooks.base import BaseHook
-        conn = BaseHook.get_connection(api_conn_id)
-        token = conn.extra_dejson.get("BSSH_APIKEY1")
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
+                               transform_func=None, curr_ds=None, **kwargs):
+    headers = {
+        "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
+        "Content-Type": "application/json"
+    }
 
     last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
