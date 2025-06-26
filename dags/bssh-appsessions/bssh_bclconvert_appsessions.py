@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.models import Variable
 from datetime import datetime, timedelta
 import requests
@@ -30,7 +31,7 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 # ----------------------------
 # Bronze: Fetch from API and Dump to S3
 # ----------------------------
-
+logger = LoggingMixin().log
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                                transform_func=None, **kwargs):
     curr_ds = kwargs["ds"]
