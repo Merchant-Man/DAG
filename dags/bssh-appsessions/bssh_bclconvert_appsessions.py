@@ -36,8 +36,8 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                                transform_func=None, **kwargs):
     logger = LoggingMixin().log
     curr_ds = kwargs["ds"]
-    curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    curr_date_end = curr_date_start + timedelta(days=1)
+    curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
+    curr_date_end = curr_date_start + timedelta(days=2)
 
     logger.info(f"📅 Fetching sessions for: {curr_ds}")
 
