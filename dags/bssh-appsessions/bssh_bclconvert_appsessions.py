@@ -22,7 +22,8 @@ BSSH_CONN_ID = "bssh"
 BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
-OBJECT_PATH = "bssh/appsessions"
+# Updated OBJECT_PATH to match the actual S3 structure
+OBJECT_PATH = "bssh/appsessions/{{ ds }}/bclconvert_appsessions-{{ ds }}.csv"
 LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # ----------------------------
@@ -144,7 +145,8 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
+    # Updated to use the base path structure (without the templated parts)
+    s3_path = f"bssh/appsessions/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
     print(f"✅ Saved to S3: {s3_path}")
 
@@ -218,4 +220,3 @@ silver_transform_to_db_task = PythonOperator(
 
 # DAG flow
 fetch_and_dump_task >> silver_transform_to_db_task
-
