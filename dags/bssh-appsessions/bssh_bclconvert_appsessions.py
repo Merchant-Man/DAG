@@ -22,8 +22,8 @@ BSSH_CONN_ID = "bssh"
 BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
-# Updated OBJECT_PATH to match the actual S3 directory structure
-OBJECT_PATH = "bssh/appsessions/{{ ds }}"
+# Updated OBJECT_PATH to match what silver_transform_to_db expects
+OBJECT_PATH = "bssh/appsessions"
 LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # ----------------------------
@@ -209,7 +209,7 @@ silver_transform_to_db_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": OBJECT_PATH,
+        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}/bclconvert_appsessions-{{{{ ds }}}}.csv",
         "transform_func": transform_data,
         "db_secret_url": RDS_SECRET,
         "curr_ds": "{{ ds }}"
