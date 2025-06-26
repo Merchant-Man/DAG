@@ -143,6 +143,9 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
     df = transform_func(df, curr_ds)
 
     buffer = io.StringIO()
+    logger.info(f"✔ Total sessions fetched: {len(full_sessions)}")
+    logger.info(f"✔ Total rows parsed: {len(all_rows)}")
+    logger.info(f"✔ Final DataFrame shape: {df.shape}")
     df.to_csv(buffer, index=False)
     buffer.seek(0)
 
