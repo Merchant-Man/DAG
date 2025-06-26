@@ -33,30 +33,28 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 # ----------------------------
 logger = LoggingMixin().log
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
-                               transform_func=None, **kwargs):
+                               transform_func=None, curr_ds=None, **kwargs):
     logger = LoggingMixin().log
     curr_ds = kwargs["ds"]
     curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
     curr_date_end = curr_date_start + timedelta(days=2)
-
-    logger.info(f"📅 Fetching sessions for: {curr_ds}")
-
     headers = {
         "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
         "Content-Type": "application/json"
     }
+logger.info(f"📅 Fetching sessions for: {curr_ds}")
 
     limit = 25
     offset = 0
-    all_session_ids = []
-    
+    all_rows = []
+
     while True:
         resp = requests.get(
             f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
             headers=headers
         )
 
-        resp.raise_for_status()  # Raise error if bad response
+        resp.raise_for_status()
         sessions = resp.json().get("Items", [])
         if not sessions:
             break
@@ -65,22 +63,18 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
             name = session.get("Name", "")
             if "BCLConvert" not in name:
                 continue
-            
+
             session_id = session["Id"]
             logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
-            all_session_ids.append(session_id)
-            detail_url = f"{API_BASE}/appsessions/{session_id}"
-            logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {detail_url}")
-            
-            detail_resp = requests.get(detail_url, headers=headers)
-            
+            logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {API_BASE}/appsessions/{session_id}")
+
+            detail_resp = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers)
             if detail_resp.status_code != 200:
-                logger.warning(f"⚠ Failed to fetch session detail for {session_id} — {detail_resp.status_code}: {detail_resp.text}")
-                continue  # Skip this session
-            
+                logger.warning(f"⚠ Failed to fetch session detail for {session_id}: {detail_resp.status_code}")
+                continue
+
             detail = detail_resp.json()
-            full_sessions = []
-          
+
             properties = {
                 item["Name"]: item.get("Content")
                 for item in detail.get("Properties", {}).get("Items", [])
@@ -149,11 +143,10 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
         offset += limit
 
-    logger.info(f"✔ Total sessions fetched: {len(full_sessions)}")
     logger.info(f"✔ Total rows parsed: {len(all_rows)}")
 
     df = pd.DataFrame(all_rows)
-    df = transform_func(df, curr_ds)
+    df = transform_func(df, curr_ds) if transform_func else df
 
     logger.info(f"✔ Final DataFrame shape: {df.shape}")
 
