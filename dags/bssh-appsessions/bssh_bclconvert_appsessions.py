@@ -34,41 +34,50 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 logger = LoggingMixin().log
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                                transform_func=None, **kwargs):
+    logger = LoggingMixin().log
     curr_ds = kwargs["ds"]
+    curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    curr_date_end = curr_date_start + timedelta(days=1)
+
+    logger.info(f"📅 Fetching sessions for: {curr_ds}")
+
     headers = {
         "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
         "Content-Type": "application/json"
     }
 
-    last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
     offset = 0
     all_rows = []
-    full_sessions = []  # ✅ Store full appsession JSONs
-    stop = False
+    full_sessions = []
 
-    while not stop:
+    while True:
         resp = requests.get(
             f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
             headers=headers
         )
+
+        resp.raise_for_status()  # Raise error if bad response
         sessions = resp.json().get("Items", [])
         if not sessions:
             break
 
         for session in sessions:
+            name = session.get("Name", "")
             created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
 
-            if created_dt <= last_fetched_dt:
+            logger.info(f"➡ Session: {session['Id']} | {name} | {created_dt.isoformat()}")
+
+            # ✅ Filter to only include BCLConvert created on ds
+            if "BCLConvert" not in name:
                 continue
 
-            if "BCLConvert" not in session.get("Name", ""):
+            if not (curr_date_start <= created_dt < curr_date_end):
                 continue
 
             session_id = session["Id"]
             detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
-
-            full_sessions.append(detail)  # ✅ Add full session to the list
+            full_sessions.append(detail)
 
             properties = {
                 item["Name"]: item.get("Content")
@@ -138,20 +147,23 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
         offset += limit
 
-    # Transform and save CSV
+    logger.info(f"✔ Total sessions fetched: {len(full_sessions)}")
+    logger.info(f"✔ Total rows parsed: {len(all_rows)}")
+
     df = pd.DataFrame(all_rows)
     df = transform_func(df, curr_ds)
 
-    buffer = io.StringIO()
-    logger.info(f"✔ Total sessions fetched: {len(full_sessions)}")
-    logger.info(f"✔ Total rows parsed: {len(all_rows)}")
     logger.info(f"✔ Final DataFrame shape: {df.shape}")
+
+    buffer = io.StringIO()
     df.to_csv(buffer, index=False)
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"bssh/appsessions/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
+    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
+
+    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
     print(f"✅ Saved to S3: {s3_path}")
 
 # ----------------------------
