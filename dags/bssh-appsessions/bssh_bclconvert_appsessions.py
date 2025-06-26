@@ -68,24 +68,26 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
             logger.info(f"➡ Session: {session['Id']} | {name} | {created_dt.isoformat()}")
 
-            # ✅ Filter to only include BCLConvert created on ds
             if "BCLConvert" not in name:
                 continue
-
+            
             if not (curr_date_start <= created_dt < curr_date_end):
                 continue
-
+            
             session_id = session["Id"]
-            detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
-            detail_resp = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers)
-
+            detail_url = f"{API_BASE}/appsessions/{session_id}"
+            
+            logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {detail_url}")
+            
+            detail_resp = requests.get(detail_url, headers=headers)
+            
             if detail_resp.status_code != 200:
-              logger.warning(f"⚠ Failed to fetch session detail for {session_id}: {detail_resp.status_code} {detail_resp.text}")
-              continue  # Skip this session
-
+                logger.warning(f"⚠ Failed to fetch session detail for {session_id} — {detail_resp.status_code}: {detail_resp.text}")
+                continue  # Skip this session
+            
             detail = detail_resp.json()
             full_sessions.append(detail)
-
+          
             properties = {
                 item["Name"]: item.get("Content")
                 for item in detail.get("Properties", {}).get("Items", [])
