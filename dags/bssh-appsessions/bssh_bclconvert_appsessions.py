@@ -42,7 +42,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
         "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
         "Content-Type": "application/json"
     }
-logger.info(f"📅 Fetching sessions for: {curr_ds}")
+    logger.info(f"📅 Fetching sessions for: {curr_ds}")
 
     limit = 25
     offset = 0
