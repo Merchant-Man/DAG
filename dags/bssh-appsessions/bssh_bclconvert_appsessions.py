@@ -209,10 +209,11 @@ silver_transform_to_db_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}/bclconvert_appsessions-{{{{ ds }}}}.csv",
+        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}",
         "transform_func": transform_data,
         "db_secret_url": RDS_SECRET,
-        "curr_ds": "{{ ds }}"
+        "curr_ds": "{{ ds }}",
+        "multi_files": True  # Enable multi-files mode to find files with date in name
     },
     templates_dict={"insert_query": loader_query},
     provide_context=True
