@@ -11,6 +11,7 @@
 				 15-03-2025 Adding filter for testing id repositories for illumina.
 				 29-04-2025 Adding ztron pro samples
 				 07-06-2025 Adding filter for ICA Sample by filtering out non "AVAILABLE" Samples s.t. any arbitary samples written by the users will not be included.
+				 26-06-2025 Excluding the SKI samples that do not have informed consent. Currently only apply to the Illumina data. Should reduce 102 SKI samples.
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -174,9 +175,13 @@ INSERT INTO staging_seq
 					time_modified
 				FROM
 					ica_samples
+					LEFT JOIN ski_exclusion ski
+				ON
+					ica_samples.id_repository = ski.origin_code_repository
 				WHERE
 					NOT REGEXP_LIKE(ica_samples.id_repository, "(?i)(demo|test|benchmark|dev)")
 					AND `status` != "DELETED"
+					AND ski.origin_code_repository IS NULL # Deleting SKI samples that do not have informed consent
 				) seq_ica
 				LEFT JOIN (
 					SELECT DISTINCT
