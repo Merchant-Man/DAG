@@ -63,12 +63,12 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
         for session in sessions:
             name = session.get("Name", "")
-            logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
-            all_session_ids.append(session_id)
             if "BCLConvert" not in name:
                 continue
             
             session_id = session["Id"]
+            logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
+            all_session_ids.append(session_id)
             detail_url = f"{API_BASE}/appsessions/{session_id}"
             logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {detail_url}")
             
