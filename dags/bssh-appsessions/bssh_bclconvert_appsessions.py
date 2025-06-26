@@ -32,7 +32,8 @@ LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 # ----------------------------
 
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
-                               transform_func=None, curr_ds=None, **kwargs):
+                               transform_func=None, **kwargs):
+    curr_ds = kwargs["ds"]
     headers = {
         "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
         "Content-Type": "application/json"
@@ -188,16 +189,10 @@ fetch_and_dump_task = PythonOperator(
     python_callable=fetch_bclconvert_and_dump,
     dag=dag,
     op_kwargs={
-        "api_conn_id": BSSH_CONN_ID,
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": OBJECT_PATH,
-        "headers": {
-            "x-access-token": BSSH_APIKEY,
-            "Accept": "application/json"
-        },
         "transform_func": transform_data,
-        "curr_ds": "{{ ds }}"
     },
     provide_context=True
 )
