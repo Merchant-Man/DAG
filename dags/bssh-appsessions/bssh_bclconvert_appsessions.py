@@ -77,6 +77,13 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
             session_id = session["Id"]
             detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
+            detail_resp = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers)
+
+            if detail_resp.status_code != 200:
+              logger.warning(f"⚠ Failed to fetch session detail for {session_id}: {detail_resp.status_code} {detail_resp.text}")
+              continue  # Skip this session
+
+            detail = detail_resp.json()
             full_sessions.append(detail)
 
             properties = {
