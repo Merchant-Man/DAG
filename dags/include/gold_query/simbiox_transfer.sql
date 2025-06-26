@@ -5,6 +5,7 @@
 -- Created  :   14-05-2025
 -- Changes	:   16-05-2025 Adding origin_code_repository
 			    16-06-2025 Adding backdoor for RSJPDHK/2024/01 form
+				25-06-2025 Excluding the Biobank Pusat from the transfer report
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -61,6 +62,7 @@ CREATE TABLE gold_simbiox_transfer (
 		LEFT JOIN log_visit t5 ON t3.id_patient = t5.px_id
 		LEFT JOIN regina_demography rd ON t3.id_subject = rd.id_subject
 		LEFT JOIN phenovar_participants pp ON t3.id_subject = pp.id_subject
+ 		WHERE t1.biobank_asal != 'Biobank Pusat'
 		),
 		
 		dupl_to_seq_temp AS (
@@ -104,7 +106,7 @@ CREATE TABLE gold_simbiox_transfer (
 		NULL triple_packaging,
 		FALSE is_to_central_seq, 
 		t1.code_repository,
-		CONCAT(SUBSTR(t1.origin_code_repository, 1, 3),"_",SUBSTR(t1.origin_code_repository, 4)) origin_code_repository,
+		CONCAT(SUBSTR(t1.origin_code_repository, 1, 3),SUBSTR(t1.origin_code_repository, 4)) origin_code_repository,
 		t2.id_subject,
 		t3.biobank_nama patient_biobank,
 		"Control" patient_categ,
