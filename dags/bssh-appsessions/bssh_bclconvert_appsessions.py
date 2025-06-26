@@ -22,8 +22,8 @@ BSSH_CONN_ID = "bssh"
 BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
-# Updated OBJECT_PATH to match the actual S3 structure
-OBJECT_PATH = "bssh/appsessions/{{ ds }}/bclconvert_appsessions-{{ ds }}.csv"
+# Updated OBJECT_PATH to match the actual S3 directory structure
+OBJECT_PATH = "bssh/appsessions/{{ ds }}"
 LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # ----------------------------
