@@ -1,10 +1,12 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.models import Variable
 from datetime import datetime, timedelta
 import requests
 import pandas as pd
 import io
+import re
 import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
@@ -22,50 +24,56 @@ BSSH_CONN_ID = "bssh"
 BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
+# Updated OBJECT_PATH to match what silver_transform_to_db expects
 OBJECT_PATH = "bssh/appsessions"
 LOADER_QUERY_PATH = "illumina_appsession_loader.sql"
 
 # ----------------------------
 # Bronze: Fetch from API and Dump to S3
 # ----------------------------
+logger = LoggingMixin().log
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
+                               transform_func=None, curr_ds=None, **kwargs):
+    logger = LoggingMixin().log
+    curr_ds = kwargs["ds"]
+    curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
+    curr_date_end = curr_date_start + timedelta(days=2)
+    headers = {
+        "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
+        "Content-Type": "application/json"
+    }
+    logger.info(f"📅 Fetching sessions for: {curr_ds}")
 
-def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path,
-                               headers, transform_func, curr_ds, **kwargs):
-    import re
-
-    last_fetched_dt = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     limit = 25
     offset = 0
     all_rows = []
-    stop = False
 
-    while not stop:
+    while True:
         resp = requests.get(
             f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
             headers=headers
         )
+
+        resp.raise_for_status()
         sessions = resp.json().get("Items", [])
         if not sessions:
             break
 
         for session in sessions:
-            created_dt = isoparse(session["DateCreated"]).astimezone(timezone.utc)
-    
-            # Ensure last_fetched_dt is timezone-aware in UTC
-            if last_fetched_dt.tzinfo is None:
-                last_fetched_dt = last_fetched_dt.replace(tzinfo=timezone.utc)
-            else:
-                last_fetched_dt = last_fetched_dt.astimezone(timezone.utc)
-        
-            if created_dt <= last_fetched_dt:
-                stop = True
-                break
-
-            if "BCLConvert" not in session.get("Name", ""):
+            name = session.get("Name", "")
+            if "BCLConvert" not in name:
                 continue
 
             session_id = session["Id"]
-            detail = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers).json()
+            logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
+            logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {API_BASE}/appsessions/{session_id}")
+
+            detail_resp = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers)
+            if detail_resp.status_code != 200:
+                logger.warning(f"⚠ Failed to fetch session detail for {session_id}: {detail_resp.status_code}")
+                continue
+
+            detail = detail_resp.json()
 
             properties = {
                 item["Name"]: item.get("Content")
@@ -135,9 +143,12 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
 
         offset += limit
 
-    # Transform and save
+    logger.info(f"✔ Total rows parsed: {len(all_rows)}")
+
     df = pd.DataFrame(all_rows)
-    df = transform_func(df, curr_ds)
+    df = transform_func(df, curr_ds) if transform_func else df
+
+    logger.info(f"✔ Final DataFrame shape: {df.shape}")
 
     buffer = io.StringIO()
     df.to_csv(buffer, index=False)
@@ -146,6 +157,8 @@ def fetch_bclconvert_and_dump(api_conn_id, aws_conn_id, bucket_name, object_path
     s3 = S3Hook(aws_conn_id=aws_conn_id)
     s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
+
+    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
     print(f"✅ Saved to S3: {s3_path}")
 
 # ----------------------------
@@ -186,16 +199,10 @@ fetch_and_dump_task = PythonOperator(
     python_callable=fetch_bclconvert_and_dump,
     dag=dag,
     op_kwargs={
-        "api_conn_id": BSSH_CONN_ID,
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": OBJECT_PATH,
-        "headers": {
-            "x-access-token": BSSH_APIKEY,
-            "Accept": "application/json"
-        },
         "transform_func": transform_data,
-        "curr_ds": "{{ ds }}"
     },
     provide_context=True
 )
@@ -207,10 +214,11 @@ silver_transform_to_db_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": OBJECT_PATH,
+        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}",
         "transform_func": transform_data,
         "db_secret_url": RDS_SECRET,
-        "curr_ds": "{{ ds }}"
+        "curr_ds": "{{ ds }}",
+        "multi_files": True  # Enable multi-files mode to find files with date in name
     },
     templates_dict={"insert_query": loader_query},
     provide_context=True
@@ -218,4 +226,3 @@ silver_transform_to_db_task = PythonOperator(
 
 # DAG flow
 fetch_and_dump_task >> silver_transform_to_db_task
-
