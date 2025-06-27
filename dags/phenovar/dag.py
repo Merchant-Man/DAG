@@ -3,9 +3,9 @@ from airflow import DAG
 from airflow.models import Variable
 from utils.utils import fetch_and_dump, silver_transform_to_db
 from airflow.operators.python import PythonOperator
-from utils.phenovar_transform import transform_demography_data, transform_variable_data
+from utils.phenovar_transform import transform_demography_data, transform_variable_data, transform_digital_consent_data
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Union
 
 AWS_CONN_ID = "aws"
 PHENOVAR_CONN_ID = "phenovar-prod"
@@ -15,19 +15,22 @@ JWT_PAYLOAD = {
     "password": Variable.get("PHENOVAR_PASSWORD")
 }
 
-DEMOGRAPHY_END_POINT = "api/v1/participants?perpage=50000" # current limit of our programs is 10k
-CATEGORY_END_POINT = "api/v1/category?page=1&perpage=10000"
-VARIABLE_END_POINT = "api/v1/variables?page=1&perpage=100000"
+# current limit of our programs is 20k
+DEMOGRAPHY_END_POINT = "api/v1/participants?perpage=50000"
+CATEGORY_END_POINT = "api/v1/category?page=1&perpage=50000"
+VARIABLE_END_POINT = "api/v1/variables?page=1&perpage=200000"
+DIGITAL_CONSENT_END_POINT = "api/v1/digital-consent" # Per page defined on the body
 
-DEMOGRAPHY_OBJECT_PATH = "phenovar/participants"  # SHOULD CHANGE TODO
-CATEGORY_OBJECT_PATH = "phenovar/category"  # SHOULD CHANGE TODO
-VARIABLE_OBJECT_PATH = "phenovar/variable"  # SHOULD CHANGE TODO
-# OBJECT_PATH = "phenovar/demography" # SHOULD CHANGE TODO
+DEMOGRAPHY_OBJECT_PATH = "phenovar/participants"
+CATEGORY_OBJECT_PATH = "phenovar/category"
+VARIABLE_OBJECT_PATH = "phenovar/variable"
+DIGITAL_CONSENT_OBJECT_PATH = "phenovar/digital_consent"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 DEMOGRAPHY_LOADER_QEURY = "phenovar_particip_loader.sql"
 CATEGORY_LOADER_QEURY = "phenovar_category_loader.sql"
 VARIABLE_LOADER_QEURY = "phenovar_variable_loader.sql"
+DIGITAL_CONSENT_LOADER_QEURY = "phenovar_digital_consent_loader.sql"
 
 
 default_args = {
@@ -45,8 +48,8 @@ dag = DAG(
     default_args=default_args,
     description="ETL pipeline for Phenovar participants data using Phenovar API",
     schedule_interval=timedelta(days=1),
-    max_active_runs=1, # Only allowing one DAG run at a time
-    concurrency=3, # Reduce the load on the phenovar server
+    max_active_runs=1,  # Only allowing one DAG run at a time
+    concurrency=3,  # Reduce the load on the phenovar server
     catchup=False
 )
 
@@ -62,6 +65,17 @@ def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) ->
         }
     }
 
+def phenovar_api_paginate(resp: Dict[str, Any]) -> Union[str, None]:
+    """
+    Get page data from Phenovar response.
+    """
+    cur_page = resp["meta_data"]["page"]
+    max_page = resp["meta_data"]["total_page"]
+    print(f"Current page: {cur_page}, Max page: {max_page}")
+    if cur_page < max_page:
+        return cur_page + 1
+    return None
+
 with open(os.path.join("dags/repo/dags/include/loader", DEMOGRAPHY_LOADER_QEURY)) as f:
     demography_loader_query = f.read()
 
@@ -70,6 +84,54 @@ with open(os.path.join("dags/repo/dags/include/loader", CATEGORY_LOADER_QEURY)) 
 
 with open(os.path.join("dags/repo/dags/include/loader", VARIABLE_LOADER_QEURY)) as f:
     variable_loader_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/loader", DIGITAL_CONSENT_LOADER_QEURY)) as f:
+    digital_consent_loader_query = f.read()
+
+bronze_fetch_jwt_and_dump_data_digital_consent_task = PythonOperator(
+    task_id="bronze_fetch_jwt_and_dump_data_digital_consent",
+    python_callable=fetch_and_dump,
+    dag=dag,
+    op_kwargs={
+        "api_conn_id": PHENOVAR_CONN_ID,
+        "data_end_point": DIGITAL_CONSENT_END_POINT,
+        "jwt_end_point": JWT_END_POINT,
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": DIGITAL_CONSENT_OBJECT_PATH,
+        "jwt_payload": JWT_PAYLOAD,
+        "data_payload": {
+            "date": "{{ ds }}",
+            "per_page": 50,
+            "page": 1
+        },
+        "pagination_function": phenovar_api_paginate,
+        "cursor_token_param": "page",
+        "method_request": "POST",
+        "jwt_headers": {"Content-Type": "application/json"},
+        "headers": {"Content-Type": "application/json"},
+        "get_token_function": get_token_function,
+        "response_key_data": "data",
+        "curr_ds": "{{ ds }}",
+        "prev_ds": "{{ prev_ds }}"
+    }
+)
+
+silver_transform_digital_consent_to_db_task = PythonOperator(
+    task_id="silver_transform_digital_consent_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": DIGITAL_CONSENT_OBJECT_PATH,
+        "transform_func": transform_digital_consent_data,
+        "db_secret_url": RDS_SECRET,
+        "curr_ds": "{{ ds }}"
+    },
+    templates_dict={"insert_query": digital_consent_loader_query},
+    provide_context=True
+)
 
 bronze_fetch_jwt_and_dump_data_demography_task = PythonOperator(
     task_id="bronze_fetch_jwt_and_dump_data_demography",
@@ -180,6 +242,7 @@ silver_transform_variable_to_db_task = PythonOperator(
     provide_context=True
 )
 
-bronze_fetch_jwt_and_dump_data_demography_task >> silver_transform_demography_to_db_task
-bronze_fetch_jwt_and_dump_data_category_task >> silver_transform_category_to_db_task
-bronze_fetch_jwt_and_dump_data_variable_task >> silver_transform_variable_to_db_task
+bronze_fetch_jwt_and_dump_data_demography_task >> silver_transform_demography_to_db_task  # type: ignore
+bronze_fetch_jwt_and_dump_data_category_task >> silver_transform_category_to_db_task  # type: ignore
+bronze_fetch_jwt_and_dump_data_variable_task >> silver_transform_variable_to_db_task  # type: ignore
+bronze_fetch_jwt_and_dump_data_digital_consent_task >> silver_transform_digital_consent_to_db_task  # type: ignore

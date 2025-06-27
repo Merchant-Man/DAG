@@ -79,6 +79,17 @@ def transform_variable_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.astype(str)
     return df
 
+def transform_digital_consent_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    df = df.astype(str)
+    df = df.fillna('')
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+    return df
+
 
 def fetch_documents_all_participants_and_dump(api_conn_id: str, db_secret_url: str, data_end_point: str, aws_conn_id: str, bucket_name: str,
                                               object_path: str, headers: Optional[Dict[str, Any]] = {},

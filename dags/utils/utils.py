@@ -109,6 +109,7 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
                        Dict[str, Any]], str]] = None,
                    retry_args: Dict[str, Any] = default_retry_args,
                    response_key_data: Union[List[str], str] = "data", transform_func: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = dict_csv_buf_transform,
+                   method_request: str = "GET",
                    pagination_function: Optional[Callable[[
                        Dict[str, Any]], str]] = None,
                    offset_pagination: Optional[bool] = False, cursor_token_param: str = "pageToken", offset_param: str = "offset",
@@ -194,7 +195,7 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
         else:
             raise ValueError(
                 "get_token_function doesn't return 'headers' or 'params'! which is required to be integrated for subsequence response to get the data.")
-    http_hook = HttpHook(method="GET", http_conn_id=api_conn_id)
+    http_hook = HttpHook(method=method_request, http_conn_id=api_conn_id)
 
     # Whether using cursor, offset, or bulk, if the API provide limit parameter.
     if limit and limit_param:
@@ -206,11 +207,12 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
     if offset_pagination:
         data_payload[offset_param] = offset
     while True:
+        print(f"Requesting with payload: {data_payload}")
         response = http_hook.run_with_advanced_retry(
             endpoint=data_end_point,
             headers=headers,
             # In GET, the data will be directed to the params which shoul be okay to have python Dict. This fixes the bug with ICA token where previously we have json.dumps(data_payload)!
-            data=data_payload,
+            data= data_payload if method_request == "GET" else json.dumps(data_payload), # Else if POST
             _retry_args=retry_args
         )
         try:
@@ -235,7 +237,6 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
             else:
                 raise ValueError(
                     "Invalid response_key_data! It should be either string or list of string!")
-
             # Handle the case when the key is found but the value is empty.
             # If yeas, let's just leave the loop.
             if not data:
@@ -256,8 +257,10 @@ def fetch_and_dump(api_conn_id: str, data_end_point: str, aws_conn_id: str, buck
                 if not nextPageToken:
                     # If next cursor pagination token not found, terminated
                     break
+                print(data_payload)
                 data_payload[cursor_token_param] = nextPageToken
                 print(f'Next cursor token: {nextPageToken}')
+                print(data_payload)
             elif pagination_function and offset_pagination:
                 print("=== PAGINATING ===")
                 # if cur_data less than limit, then there will be no more data for the nexzt offset pagination page!

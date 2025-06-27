@@ -873,3 +873,30 @@ CREATE INDEX drug_name_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_name);
 CREATE INDEX drug_classification_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_classification);
+
+
+CREATE TABLE phenovar_digital_consent (
+  id_subject VARCHAR(10) PRIMARY KEY comment 'Encrypted subject ID from PhenoVar',
+  is_interview VARCHAR(5) NOT NULL,
+  is_taking_blood_sample VARCHAR(5) NOT NULL,
+  is_taking_blood_network VARCHAR(5) NOT NULL,
+  is_taking_additional_test VARCHAR(5) NOT NULL,
+  is_access_record_to_medical_record VARCHAR(5) NOT NULL,
+  is_data_exchanged_with_other_researcher VARCHAR(5) NOT NULL,
+  is_family_have_access_sample VARCHAR(5) NOT NULL,
+  is_know_result_researcher VARCHAR(5) NOT NULL,
+  ratification_date DATETIME,
+  withness VARCHAR(255) NOT NULL comment 'Witness name from PhenoVar',
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  creation_date DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar',
+  updation_date DATETIME NOT NULL comment 'Timestamp of last update from PhenoVar',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation on DWH. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update on DWH. Using MySQL TZ.'
+);
+CREATE INDEX id_subject
+ON phenovar_digital_consent(id_subject);
+CREATE INDEX is_taking_blood_sample_idx
+ON phenovar_digital_consent(is_taking_blood_sample);
+CREATE INDEX is_access_record_to_medical_record_idx
+ON phenovar_digital_consent(is_access_record_to_medical_record);
