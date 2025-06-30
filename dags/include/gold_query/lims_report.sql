@@ -3,13 +3,15 @@
 -- Purpose  :   This query is intended to be used as the source of ONQ LIMS secondary and tertiery analysis status.
 -- Author   :   Abdullah Faqih
 -- Created  :   24-06-2025
+-- Changes  :   30-06-2025 Adding pattern to prevent unlucky read access
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
 -- Your SQL code goes here;
-DROP TABLE IF EXISTS gold_lims_report;
 
-CREATE TABLE gold_lims_report (
+
+DROP TABLE IF EXISTS gold_lims_report_new;
+CREATE TABLE gold_lims_report_new (
     SELECT
         t1.id_repository,
         t1.sequencer,
@@ -34,12 +36,20 @@ CREATE TABLE gold_lims_report (
 );
 
 CREATE INDEX id_repository_idx
-ON gold_lims_report(id_repository);
+ON gold_lims_report_new(id_repository);
 CREATE INDEX sequencer_idx
-ON gold_lims_report(sequencer);
+ON gold_lims_report_new(sequencer);
 CREATE INDEX is_secondary_analysed_idx
-ON gold_lims_report(is_secondary_analysed);
+ON gold_lims_report_new(is_secondary_analysed);
 CREATE INDEX qc_category_idx
-ON gold_lims_report(qc_category);
+ON gold_lims_report_new(qc_category);
 CREATE INDEX is_tertiary_pgx_analysed_idx
-ON gold_lims_report(is_tertiary_pgx_analysed);
+ON gold_lims_report_new(is_tertiary_pgx_analysed);
+
+
+RENAME TABLE
+    gold_lims_report       TO gold_lims_report_old,
+    gold_lims_report_new   TO gold_lims_report;
+
+-- 4. Drop the old table as cleanup
+DROP TABLE IF EXISTS gold_lims_report_old;

@@ -3,14 +3,14 @@
 -- Purpose  :   This query is intended as dashboard for QC of sequencing data.
 -- Author   :   Abdullah Faqih
 -- Created  :   13-06-2025
--- Changes	: 
+-- Changes	:   30-06-2025 Adding pattern to prevent unlucky read access
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
 -- Your SQL code goes here 
-DROP TABLE IF EXISTS gold_sheets_sequencing;
+DROP TABLE IF EXISTS gold_sheets_sequencing_new;
 
-CREATE TABLE gold_sheets_sequencing AS (
+CREATE TABLE gold_sheets_sequencing_new AS (
 	WITH
 		temp_data AS (
 			SELECT
@@ -72,14 +72,21 @@ CREATE TABLE gold_sheets_sequencing AS (
 );
 
 CREATE INDEX platform_idx
-ON gold_sheets_sequencing(platform);
+ON gold_sheets_sequencing_new(platform);
 CREATE INDEX code_repository_idx
-ON gold_sheets_sequencing(code_repository);
+ON gold_sheets_sequencing_new(code_repository);
 CREATE INDEX extraction_status_idx
-ON gold_sheets_sequencing(extraction_status);
+ON gold_sheets_sequencing_new(extraction_status);
 CREATE INDEX libprep_status_idx
-ON gold_sheets_sequencing(libprep_status);
+ON gold_sheets_sequencing_new(libprep_status);
 CREATE INDEX sequencing_status_idx
-ON gold_sheets_sequencing(sequencing_status);
+ON gold_sheets_sequencing_new(sequencing_status);
 CREATE INDEX registry_status_idx
-ON gold_sheets_sequencing(registry_status);
+ON gold_sheets_sequencing_new(registry_status);
+
+RENAME TABLE
+    gold_sheets_sequencing       TO gold_sheets_sequencing_old,
+    gold_sheets_sequencing_new   TO gold_sheets_sequencing;
+
+-- 4. Drop the old table as cleanup
+DROP TABLE IF EXISTS gold_sheets_sequencing_old;

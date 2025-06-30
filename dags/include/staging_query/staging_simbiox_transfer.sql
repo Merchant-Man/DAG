@@ -4,8 +4,10 @@
 -- Author   :   Abdullah Faqih
 -- Created  :   14-05-2025
 -- Changes	:   15-05-2025  Adding columns for transfer within the same hubs
+				30-06-2025 Adding transcation lock to the query
 ---------------------------------------------------------------------------------------------------------------------------------
 */
+START TRANSACTION;
 DELETE FROM staging_simbiox_transfer;
 INSERT INTO
 	staging_simbiox_transfer (
@@ -87,4 +89,5 @@ INSERT INTO
 					LEFT JOIN simbiox_transfer_formulir t2 ON t1.transfer_formulir_id = t2.id
 					LEFT JOIN simbiox_master_status_transfer t8 ON t2.transfer_status = t8.id
 			) t
-	)
+	);
+COMMIT;

@@ -3,10 +3,11 @@
  -- Purpose  :   This query is created to switch any SKI code repo into existing, real id repositories..
  -- Author   :   Abdullah Faqih
  -- Created  :   13-06-2025
- -- Changes	 :	 
+ -- Changes	 :	 30-06-2025 Adding transcation lock to the query
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
+START TRANSACTION;
 DELETE FROM staging_fix_ski_id_repo;
 INSERT INTO staging_fix_ski_id_repo(
 	SELECT
@@ -18,3 +19,4 @@ INSERT INTO staging_fix_ski_id_repo(
 	WHERE
 		origin_code_repository LIKE "%SKI%"
 );
+COMMIT;
