@@ -167,11 +167,10 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
 
     # Compute totals
     grouped_df['total_bam_size'] = grouped_df['bam_size'].apply(
-        lambda x: sum([int(float(i)) for i in x if pd.notnull(i) and str(i).isdigit()])
-    ).astype(str)
+        lambda x: sum(int(float(i)) for i in x if pd.notnull(i) and str(i).strip() != "")).astype(str)
 
     grouped_df['sum_of_total_passed_bases'] = grouped_df['total_passed_bases'].apply(
-    lambda x: sum([int(float(i)) for i in x if pd.notnull(i)])).astype(str)
+        lambda x: sum(int(float(i)) for i in x if pd.notnull(i) and str(i).strip() != "")).astype(str)
     # Print total_passed_bases (raw input column)
     # print("[DEBUG] total_passed_bases values for id_repository 0C0254501C05:")
     # print(grouped_df.loc[grouped_df["id_repository"] == "0C0254501C05", "total_passed_bases"])
