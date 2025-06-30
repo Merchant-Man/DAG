@@ -167,12 +167,19 @@ def transform_samples_data(df: pd.DataFrame, ts: str, fix_bucket: str, fix_prefi
 
     # Compute totals
     grouped_df['total_bam_size'] = grouped_df['bam_size'].apply(
-        lambda x: sum([int(i) for i in x if pd.notnull(i) and str(i).isdigit()])
+        lambda x: sum([int(float(i)) for i in x if pd.notnull(i) and str(i).isdigit()])
     ).astype(str)
 
     grouped_df['sum_of_total_passed_bases'] = grouped_df['total_passed_bases'].apply(
-        lambda x: sum([int(i) for i in x if pd.notnull(i) and str(i).isdigit()])
-    ).astype(str)
+    lambda x: sum([int(float(i)) for i in x if pd.notnull(i)])).astype(str)
+    # Print total_passed_bases (raw input column)
+    # print("[DEBUG] total_passed_bases values for id_repository 0C0254501C05:")
+    # print(grouped_df.loc[grouped_df["id_repository"] == "0C0254501C05", "total_passed_bases"])
+
+    # Print sum_of_total_passed_bases (result column)
+    # print("[DEBUG] sum_of_total_passed_bases values for id_repository 0C0254501C05:")
+    # print(grouped_df.loc[grouped_df["id_repository"] == "0C0254501C05", "sum_of_total_passed_bases"])
+
 
     # Set batch and timestamps
     grouped_df["id_batch"] = grouped_df["id_library"].apply(lambda x: x[0] if x else "")
