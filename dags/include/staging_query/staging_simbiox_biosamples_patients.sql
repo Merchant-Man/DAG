@@ -7,9 +7,10 @@
 					 "Biobank Sentral (BB Binomika)" --> SKI samples
 			    14-05-2025 Add patient category from visit log
 				19-05-2025 Add origin_code_repository
+				30-06-2025 Adding transcation lock to the query
 ---------------------------------------------------------------------------------------------------------------------------------
 */
-
+START TRANSACTION;
 DELETE FROM staging_simbiox_biosamples_patients;
 INSERT INTO
 	staging_simbiox_biosamples_patients (
@@ -112,4 +113,5 @@ INSERT INTO
 			sbp
 			LEFT JOIN regina_demography rd ON sbp.id_subject = rd.id_subject
 			LEFT JOIN phenovar_participants pp ON sbp.id_subject = pp.id_subject
-	)
+	);
+COMMIT;

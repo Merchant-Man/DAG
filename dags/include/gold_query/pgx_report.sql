@@ -3,14 +3,15 @@
 -- Purpose  :   This query is intended to be used as the source of PGx report data.
 -- Author   :   Abdullah Faqih
 -- Created  :   24-02-2025
--- Changes  :   13-06-2025: Adding indexes for performance improvement
+-- Changes  :   13-06-2025 Adding indexes for performance improvement
+				30-06-2025 Adding pattern to prevent unlucky read access
+				
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
 -- Your SQL code goes here DROP TABLE IF EXISTS  gold_pgx_report;
-DROP TABLE IF EXISTS gold_pgx_report;
-
-CREATE TABLE gold_pgx_report (
+DROP TABLE IF EXISTS gold_pgx_report_new;
+CREATE TABLE gold_pgx_report_new(
 SELECT
     *
     ,CASE
@@ -66,9 +67,18 @@ FROM
 );
 
 CREATE INDEX id_repository_idx
-ON gold_pgx_report(id_repository);
+ON gold_pgx_report_new(id_repository);
 CREATE INDEX origin_biobank_idx
-ON gold_pgx_report(origin_biobank);
+ON gold_pgx_report_new(origin_biobank);
 CREATE INDEX sequencer_idx
-ON gold_pgx_report(sequencer);
-CREATE INDEX file_name_idx ON gold_pgx_report (file_name);
+ON gold_pgx_report_new(sequencer);
+CREATE INDEX file_name_idx 
+ON gold_pgx_report_new (file_name);
+
+
+RENAME TABLE
+    gold_pgx_report       TO gold_pgx_report_old,
+    gold_pgx_report_new   TO gold_pgx_report;
+
+-- 4. Drop the old table as cleanup
+DROP TABLE IF EXISTS gold_pgx_report_old;

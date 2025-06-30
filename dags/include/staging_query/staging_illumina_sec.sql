@@ -5,9 +5,12 @@
  -- Created  :   14-02-2025
  -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
 				 15-03-2025 Adding filter to remove test, demo, benchmark, and dev id repositories.
+				 30-06-2025 Adding transcation lock to the query
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
+
+START TRANSACTION;
 DELETE FROM staging_illumina_sec;
 INSERT INTO staging_illumina_sec(
 SELECT
@@ -125,3 +128,4 @@ FROM
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
 WHERE
 	ica_sec.rn = 1)
+COMMIT;

@@ -5,9 +5,11 @@
  -- Created  :   14-02-2025
  -- Changes	 :	 15-03-2025 Adding filter to remove test, demo, benchmark, and dev id repositories.
 				 30-04-2025 Adding ztron pro analysis
+				 30-06-2025 Adding transcation lock to the query
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
+START TRANSACTION;
 DELETE FROM staging_mgi_sec;
 INSERT INTO
 	staging_mgi_sec (
@@ -185,4 +187,5 @@ INSERT INTO
 			) t
 		WHERE
 			rn = 1
-	)
+	);
+COMMIT;

@@ -12,9 +12,11 @@
 				 29-04-2025 Adding ztron pro samples
 				 07-06-2025 Adding filter for ICA Sample by filtering out non "AVAILABLE" Samples s.t. any arbitary samples written by the users will not be included.
 				 26-06-2025 Excluding the SKI samples that do not have informed consent. Currently only apply to the Illumina data. Should reduce 102 SKI samples.
+				 30-06-2025 Adding transcation lock to the query
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
+START TRANSACTION;
 DELETE FROM staging_seq;
 INSERT INTO staging_seq
 (
@@ -220,4 +222,5 @@ INSERT INTO staging_seq
 		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository	
 	WHERE
 		NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
-)
+);
+COMMIT;
