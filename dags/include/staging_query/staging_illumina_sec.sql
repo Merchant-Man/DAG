@@ -127,5 +127,5 @@ FROM
 	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
 WHERE
-	ica_sec.rn = 1)
+	ica_sec.rn = 1);
 COMMIT;
