@@ -41,6 +41,12 @@ def extract_info(pd_row: pd.DataFrame, col) -> Tuple[str, str]:
         if match:
             long_run_name = match.group(1)
             run_name = long_run_name.split("-")[0]
+    elif "bgsi-data-dragen-output-liquid" in s3_path:
+        pattern = r"bgsi-data-dragen-output-liquid/pro/analysis/([^/]+)/"
+        match = re.search(pattern, s3_path)
+        if match:
+            long_run_name = match.group(1)
+            run_name = long_run_name.split("-")[0]
     elif "bgsi-data-citus-output" in s3_path:
         pattern = r"bgsi-data-citus-output/([^/]+)/"
         match = re.search(pattern, s3_path)
