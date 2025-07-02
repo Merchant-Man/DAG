@@ -13,9 +13,9 @@
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
-DROP TABLE IF EXISTS temp_gold_qc_new;
+DROP TABLE IF EXISTS gold_qc_new;
 
-CREATE TABLE temp_gold_qc_new AS
+CREATE TABLE gold_qc_new AS
 WITH
 	cte AS (
 		SELECT
@@ -491,8 +491,8 @@ CREATE INDEX qc_category_idx ON gold_qc_new (qc_category);
 
 CREATE INDEX qc_category2_idx ON gold_qc_new (qc_category2);
 
-RENAME TABLE temp_gold_qc TO temp_gold_qc_old,
-temp_gold_qc_new TO temp_gold_qc;
+RENAME TABLE gold_qc TO gold_qc_old,
+gold_qc_new TO gold_qc;
 
 -- 4. Drop the old table as cleanup
-DROP TABLE IF EXISTS temp_gold_qc_old;
+DROP TABLE IF EXISTS gold_qc_old;
