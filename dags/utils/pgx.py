@@ -1,4 +1,4 @@
-import os
+from datetime import datetime
 import re
 from io import StringIO
 from typing import Tuple
@@ -180,13 +180,18 @@ def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh
 
     # Get .csv filles for PGx input
     print("Get PGx input files from S3")
+    cur_datetime = datetime.strptime(kwargs.get("curr_ds") or "2023-01-01", "%Y-%m-%d")
+    print(cur_datetime)
     files = []
     for page in page_iterator:
         # Page object returns: ResponseMetadata and the response Contentents.
         # Example: {'Key': 'foo.csv', 'LastModified': datetime.datetime(2025, 2, 5, 14, 0, 36, tzinfo=tzutc()), 'ETag': '"123455"', 'ChecksumAlgorithm': ['CRC64NVME'], 'Size': 608, 'StorageClass': 'STANDARD'}
         files.extend([obj for obj in page.get('Contents', [])
-                     if obj["Key"].endswith(".csv")])
+                      # LastModified boto3 contains tzlocal() which chould be removed. tzinfo of airflow (utc) and s3 (ap-southeast-3) are different
+                      # https://stackoverflow.com/questions/13218506/how-to-get-system-timezone-setting-and-pass-it-to-pytz-timezone
+                     if (obj["Key"].endswith(".csv") and (obj["LastModified"].replace(tzinfo = None) >= cur_datetime ) )]) 
 
+    print(f"Find {len(files)} files.")
     # Read csv for each object
     print("Get input information from sample sheets")
     df = pd.DataFrame()
