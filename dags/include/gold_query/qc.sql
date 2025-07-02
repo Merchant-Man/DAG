@@ -487,9 +487,9 @@ CREATE INDEX coverage_ok_idx ON gold_qc_new (coverage_ok);
 
 CREATE INDEX breadth_ok_idx ON gold_qc_new (breadth_ok);
 
-CREATE INDEX qc_category_idx ON gold_qc_new (qc_category);
+CREATE INDEX qc_strict_status_idx ON gold_qc_new (qc_strict_status);
 
-CREATE INDEX qc_category2_idx ON gold_qc_new (qc_category2);
+CREATE INDEX qc_strict_progress_idx ON gold_qc_new (qc_strict_progress);
 
 RENAME TABLE gold_qc TO gold_qc_old,
 gold_qc_new TO gold_qc;
