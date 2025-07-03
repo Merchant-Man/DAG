@@ -27,10 +27,9 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 # Updated OBJECT_PATH to match what silver_transform_to_db expects
 OBJECT_PATH = "bssh/Demux"
 
-def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
+def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
                                transform_func=None, curr_ds=None, **kwargs):
-    import urllib.parse
-
+    s3 = S3Hook(aws_conn_id=AWS_CONN_ID) 
     logger = LoggingMixin().log
     curr_ds = kwargs["ds"]
     curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
@@ -101,8 +100,15 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
             return download_url
 
         download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
-        logger.info(f"⬇️ Download URL: {download_url}")
-        break  # Stop after the first successful match
+        logger.info(f" Download URL: {download_url}")
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            response = requests.get(download_url)
+            tmp_file.write(response.content)
+            tmp_file.flush()
+            s3_key = f"{object_path_prefix}/{reference}/Demultiplex_Stats-{curr_ds}.csv"
+            s3.load_file(tmp_file.name, key=s3_key, bucket_name=bucket_name, replace=True)
+            logger.info(f"✅ Uploaded to S3: s3://{bucket_name}/{s3_key}")
+            os.unlink(tmp_file.name)
 
 # ----------------------------
 # DAG Definition
@@ -125,3 +131,17 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+fetch_demux_to_s3 = PythonOperator(
+    task_id='fetch_bclconvert_demux_qc',
+    python_callable=fetch_bclconvertDemux_and_dump,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path_prefix": OBJECT_PATH,
+        "transform_func": None
+    },
+    provide_context=True,
+    dag=dag
+)
+
+fetch_demux_to_s3
