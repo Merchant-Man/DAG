@@ -50,19 +50,26 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
     analyses = resp.json().get("items", [])
 
     if not analyses:
-        logger.info("❌ No analyses found.")
+        logger.info("No analyses found.")
         return
 
     # Sort by timeCreated (latest first)
     latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
 
+    def extract_lp_reference(reference_str):
+    match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
+    if match: 
+        return match.group(1)
+    return None
+                                 
     for analysis in latest_analyses:
         reference = analysis.get("reference")
         if not reference:
             continue
 
         logger.info(f"🧬 Checking analysis reference: {reference}")
-
+        lp_ref = extract_lp_reference(reference)
+        print(f"LP reference match: {lp_ref}")
         file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
         encoded_path = urllib.parse.quote(file_path)
 
@@ -77,13 +84,12 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
         file_response = requests.get(file_query_url, headers=HEADERS)
         file_response.raise_for_status()
         file_items = file_response.json().get("items", [])
-
         if not file_items:
-            logger.info(f"📁 Demultiplex_Stats.csv not found for {reference}")
+            logger.info(f"Demultiplex_Stats.csv not found for {reference}")
             continue
 
         file_id = file_items[0]["data"]["id"]
-        logger.info(f"✅ Found file with ID: {file_id}")
+        logger.info(f"Found file with ID: {file_id}")
 
         def create_download_url(api_key: str, project_id: str, file_id: str) -> str:
             url = f"{BASE_URL}/projects/{project_id}/data/{file_id}:createDownloadUrl"
@@ -107,7 +113,7 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
             tmp_file.flush()
             s3_key = f"{object_path_prefix}/{reference}/Demultiplex_Stats-{curr_ds}.csv"
             s3.load_file(tmp_file.name, key=s3_key, bucket_name=bucket_name, replace=True)
-            logger.info(f"✅ Uploaded to S3: s3://{bucket_name}/{s3_key}")
+            logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
             os.unlink(tmp_file.name)
 
 # ----------------------------
