@@ -11,6 +11,7 @@ import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
 from datetime import timezone
+import urllib.parse
 # Silver task
 from utils.utils import fetch_and_dump, silver_transform_to_db
 
