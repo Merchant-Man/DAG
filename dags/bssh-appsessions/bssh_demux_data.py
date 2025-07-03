@@ -40,7 +40,7 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
         "X-API-Key": API_KEY
     }
 
-    logger.info(f"📅 Fetching sessions for: {curr_ds}")
+    logger.info(f" Fetching sessions for: {curr_ds}")
 
     resp = requests.get(
         f"{BASE_URL}/projects/{PROJECT_ID}/analyses",
@@ -107,14 +107,21 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
 
         download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
         logger.info(f" Download URL: {download_url}")
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            response = requests.get(download_url)
-            tmp_file.write(response.content)
-            tmp_file.flush()
-            s3_key = f"{object_path_prefix}/{reference}/{lp_ref}Demultiplex_Stats-{curr_ds}.csv"
-            s3.load_file(tmp_file.name, key=s3_key, bucket_name=bucket_name, replace=True)
-            logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
-            os.unlink(tmp_file.name)
+        response = requests.get(download_url)
+        response.raise_for_status()
+        
+        s3_key = f"{object_path_prefix}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
+        
+        # Use BytesIO for in-memory upload
+        csv_buffer = io.BytesIO(response.content)
+        s3.load_bytes(
+            bytes_data=csv_buffer.getvalue(),
+            key=s3_key,
+            bucket_name=bucket_name,
+            replace=True
+        )
+        
+        logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
 
 # ----------------------------
 # DAG Definition
