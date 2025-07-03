@@ -111,7 +111,7 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
             response = requests.get(download_url)
             tmp_file.write(response.content)
             tmp_file.flush()
-            s3_key = f"{object_path_prefix}/{reference}/Demultiplex_Stats-{curr_ds}.csv"
+            s3_key = f"{object_path_prefix}/{reference}/{lp_ref}Demultiplex_Stats-{curr_ds}.csv"
             s3.load_file(tmp_file.name, key=s3_key, bucket_name=bucket_name, replace=True)
             logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
             os.unlink(tmp_file.name)
