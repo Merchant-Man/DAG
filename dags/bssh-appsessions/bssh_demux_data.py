@@ -57,10 +57,10 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
     latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
 
     def extract_lp_reference(reference_str):
-    match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
-    if match: 
-        return match.group(1)
-    return None
+      match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
+      if match: 
+          return match.group(1)
+      return None
                                  
     for analysis in latest_analyses:
         reference = analysis.get("reference")
