@@ -103,3 +103,25 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
         download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
         logger.info(f"⬇️ Download URL: {download_url}")
         break  # Stop after the first successful match
+
+# ----------------------------
+# DAG Definition
+# ----------------------------
+
+default_args = {
+    'owner': 'bgsi-data',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 7, 3),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=1)
+}
+
+dag = DAG(
+    'bssh_demuxQC',
+    default_args=default_args,
+    description='Fetch BCLConvert Demux QC from BSSH and load to S3 + RDS',
+    schedule_interval=timedelta(days=1),
+    catchup=False
+)
