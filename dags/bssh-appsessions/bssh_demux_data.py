@@ -16,8 +16,8 @@ import urllib.parse
 from utils.utils import fetch_and_dump, silver_transform_to_db
 
 # --- Configuration ---
-API_KEY = "04LlMKg4K0asFGREmIXhucZ3IV2Hinx"
-PROJECT_ID = "7feb6619-714b-48f7-a7fd-75ad264f9c55"
+API_KEY = Variable.get("API_KEY_ICA")
+PROJECT_ID = Variable.get("ICA_Project_id")
 BASE_URL = "https://ica.illumina.com/ica/rest/api"
 AWS_CONN_ID = "aws"
 BSSH_CONN_ID = "bssh"
