@@ -64,10 +64,11 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
                                  
     for analysis in latest_analyses:
         reference = analysis.get("reference")
+        print(f" Latest analysis reference: {reference}")
         if not reference:
             continue
 
-        logger.info(f"🧬 Checking analysis reference: {reference}")
+        logger.info(f" Checking analysis reference: {reference}")
         lp_ref = extract_lp_reference(reference)
         print(f"LP reference match: {lp_ref}")
         file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
