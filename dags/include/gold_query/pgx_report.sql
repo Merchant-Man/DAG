@@ -62,7 +62,7 @@ FROM (
 FROM
 	superset_dev.staging_pgx_report_status) t WHERE rn = 1) prs ON gold_qc.id_repository = prs.id_repository
 	WHERE
-		gold_qc.qc_category = "Pass"
+		gold_qc.qc_strict_status = "Pass"
 ) t
 );
 
