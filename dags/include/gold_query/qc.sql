@@ -483,10 +483,6 @@ CREATE INDEX sex_missing_idx ON gold_qc_new (sex_missing);
 
 CREATE INDEX ploidy_missing_idx ON gold_qc_new (ploidy_missing);
 
-CREATE INDEX coverage_ok_idx ON gold_qc_new (coverage_ok);
-
-CREATE INDEX breadth_ok_idx ON gold_qc_new (breadth_ok);
-
 CREATE INDEX qc_strict_status_idx ON gold_qc_new (qc_strict_status);
 
 CREATE INDEX qc_strict_progress_idx ON gold_qc_new (qc_strict_progress);
