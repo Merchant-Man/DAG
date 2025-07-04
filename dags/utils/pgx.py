@@ -192,6 +192,12 @@ def get_pgx_report_and_dump(input_bucket_name: str, output_bucket_name: str, dwh
                      if (obj["Key"].endswith(".csv") and (obj["LastModified"].replace(tzinfo = None) >= cur_datetime ) )]) 
 
     print(f"Find {len(files)} files.")
+
+    # No file found
+    if not files:
+        print("Returning due to no files found")
+        return
+    
     # Read csv for each object
     print("Get input information from sample sheets")
     df = pd.DataFrame()
