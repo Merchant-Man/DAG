@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.models import Variable
 from utils.utils import fetch_and_dump, silver_transform_to_db
 from airflow.operators.python import PythonOperator
-from utils.phenovar_transform import transform_demography_data, transform_variable_data, transform_digital_consent_data
+from utils.phenovar_transform import transform_demography_data, transform_variable_data, transform_digital_consent_data, transform_data_sharing_data
 import os
 from typing import Dict, Any, Union
 
@@ -19,17 +19,20 @@ JWT_PAYLOAD = {
 DEMOGRAPHY_END_POINT = "api/v1/participants?perpage=50000"
 CATEGORY_END_POINT = "api/v1/category?page=1&perpage=50000"
 VARIABLE_END_POINT = "api/v1/variables?page=1&perpage=200000"
-DIGITAL_CONSENT_END_POINT = "api/v1/digital-consent" # Per page defined on the body
+DATA_SHARING_END_POINT = "api/v1/participants/data-sharings?perpage=50000"
+DIGITAL_CONSENT_END_POINT = "api/v1/digital-consent"  # Per page defined on the body
 
 DEMOGRAPHY_OBJECT_PATH = "phenovar/participants"
 CATEGORY_OBJECT_PATH = "phenovar/category"
 VARIABLE_OBJECT_PATH = "phenovar/variable"
+DATA_SHARING_OBJECT_PATH = "phenovar/data-sharing"
 DIGITAL_CONSENT_OBJECT_PATH = "phenovar/digital_consent"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 DEMOGRAPHY_LOADER_QEURY = "phenovar_particip_loader.sql"
 CATEGORY_LOADER_QEURY = "phenovar_category_loader.sql"
 VARIABLE_LOADER_QEURY = "phenovar_variable_loader.sql"
+DATA_SHARING_LOADER_QEURY = "phenovar_data_sharing_loader.sql"
 DIGITAL_CONSENT_LOADER_QEURY = "phenovar_digital_consent_loader.sql"
 
 
@@ -65,6 +68,7 @@ def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) ->
         }
     }
 
+
 def phenovar_api_paginate(resp: Dict[str, Any]) -> Union[str, None]:
     """
     Get page data from Phenovar response.
@@ -75,6 +79,7 @@ def phenovar_api_paginate(resp: Dict[str, Any]) -> Union[str, None]:
     if cur_page < max_page:
         return cur_page + 1
     return None
+
 
 with open(os.path.join("dags/repo/dags/include/loader", DEMOGRAPHY_LOADER_QEURY)) as f:
     demography_loader_query = f.read()
@@ -87,6 +92,9 @@ with open(os.path.join("dags/repo/dags/include/loader", VARIABLE_LOADER_QEURY)) 
 
 with open(os.path.join("dags/repo/dags/include/loader", DIGITAL_CONSENT_LOADER_QEURY)) as f:
     digital_consent_loader_query = f.read()
+
+with open(os.path.join("dags/repo/dags/include/loader", DATA_SHARING_LOADER_QEURY)) as f:
+    data_sharing_loader_query = f.read()
 
 bronze_fetch_jwt_and_dump_data_digital_consent_task = PythonOperator(
     task_id="bronze_fetch_jwt_and_dump_data_digital_consent",
@@ -242,7 +250,45 @@ silver_transform_variable_to_db_task = PythonOperator(
     provide_context=True
 )
 
+
+bronze_fetch_jwt_and_dump_data_data_sharing_task = PythonOperator(
+    task_id="bronze_fetch_jwt_and_dump_data_data_sharing",
+    python_callable=fetch_and_dump,
+    dag=dag,
+    op_kwargs={
+        "api_conn_id": PHENOVAR_CONN_ID,
+        "data_end_point": DATA_SHARING_END_POINT,
+        "jwt_end_point": JWT_END_POINT,
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": DATA_SHARING_OBJECT_PATH,
+        "jwt_payload": JWT_PAYLOAD,
+        "jwt_headers": {"Content-Type": "application/json"},
+        "get_token_function": get_token_function,
+        "response_key_data": "data",
+        "curr_ds": "{{ ds }}",
+        "prev_ds": "{{ prev_ds }}"
+    }
+)
+
+silver_transform_data_sharing_to_db_task = PythonOperator(
+    task_id="silver_transform_data_sharing_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": DATA_SHARING_OBJECT_PATH,
+        "db_secret_url": RDS_SECRET,
+        "transform_func": transform_data_sharing_data,
+        "curr_ds": "{{ ds }}"
+    },
+    templates_dict={"insert_query": data_sharing_loader_query},
+    provide_context=True
+)
+
 bronze_fetch_jwt_and_dump_data_demography_task >> silver_transform_demography_to_db_task  # type: ignore
 bronze_fetch_jwt_and_dump_data_category_task >> silver_transform_category_to_db_task  # type: ignore
 bronze_fetch_jwt_and_dump_data_variable_task >> silver_transform_variable_to_db_task  # type: ignore
 bronze_fetch_jwt_and_dump_data_digital_consent_task >> silver_transform_digital_consent_to_db_task  # type: ignore
+bronze_fetch_jwt_and_dump_data_data_sharing_task >> silver_transform_data_sharing_to_db_task  # type: ignore

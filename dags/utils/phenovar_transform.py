@@ -12,6 +12,28 @@ import re
 import ast
 
 
+def transform_data_sharing_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    df.rename(columns={'participant_id': 'id_subject'}, inplace=True)
+
+    df = df[["id", "ethical_clearance_id", "ethical_clearance_title", "id_subject", "institution_owner_id", "institution_owner_name",
+             "institution_share_ids", "gender", "dob", "province", "district", "hub_name", "use_nik_ibu", "access"]]
+
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+
+    print(df.head())
+    print(df.columns)
+
+    # Need to fillna so that the mysql connector can insert the data.
+    df = df.astype(str)
+    df = df.fillna('')
+    return df
+
+
 def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
@@ -56,9 +78,6 @@ def transform_demography_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df[["id_subject", "encrypt_full_name", "encrypt_nik", "encrypt_birth_date", "sex", "source",
              "province_code", "province", "district_code", "district", "subdistrict_code", "subdistrict", "village_code", "village", "use_nik_ibu", "created_by", "updated_by",  "hospital_name",  "created_at", "updated_at", "creation_date", "updation_date", "encrypt_ihs_number"]]
 
-    print(df.head())
-    print(df.columns)
-
     # Even we remove duplicates, API might contain duplicate records for an id_subject
     # So, we will keep the latest record
     df['updation_date'] = pd.to_datetime(df['updation_date'])
@@ -78,6 +97,7 @@ def transform_variable_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.drop_duplicates()
     df = df.astype(str)
     return df
+
 
 def transform_digital_consent_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
