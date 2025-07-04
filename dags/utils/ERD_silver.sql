@@ -146,6 +146,10 @@ CREATE INDEX kode_kedatangan_idx
 ON simbiox_biosamples (kode_kedatangan);
 CREATE INDEX kode_hub_penyimpan_idx
 ON simbiox_biosamples (kode_hub_penyimpan);
+CREATE INDEX biosample_specimen_idx
+ON simbiox_biosamples (biosample_specimen);
+CREATE INDEX type_case_idx
+ON simbiox_biosamples (type_case);
 
 
 CREATE TABLE ica_samples(
@@ -873,6 +877,8 @@ CREATE INDEX drug_name_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_name);
 CREATE INDEX drug_classification_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_classification);
+CREATE INDEX order_id_idx
+ON dwh_restricted.gold_pgx_detail_report(order_id);
 
 
 CREATE TABLE phenovar_digital_consent (
@@ -900,3 +906,28 @@ CREATE INDEX is_taking_blood_sample_idx
 ON phenovar_digital_consent(is_taking_blood_sample);
 CREATE INDEX is_access_record_to_medical_record_idx
 ON phenovar_digital_consent(is_access_record_to_medical_record);
+
+CREATE TABLE phenovar_data_sharing (
+  id VARCHAR(36) PRIMARY KEY,
+  ethical_clearance_id VARCHAR(36),
+  ethical_clearance_title TEXT,
+  id_subject VARCHAR(10),  
+  institution_owner_id VARCHAR(36),
+  institution_owner_name VARCHAR(255),
+  institution_share_ids TEXT,
+  gender VARCHAR(6),
+  dob DATE,
+  province VARCHAR(64),
+  district VARCHAR(255),
+  hub_name VARCHAR(255),
+  use_nik_ibu BOOLEAN,
+  access BOOLEAN,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation on DWH. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update on DWH. Using MySQL TZ.'
+);
+CREATE INDEX id_subject
+ON phenovar_data_sharing(id_subject);
+CREATE INDEX ethical_clearance_id_idx
+ON phenovar_data_sharing(ethical_clearance_id);
+CREATE INDEX institution_owner_name_idx
+ON phenovar_data_sharing(institution_owner_name);
