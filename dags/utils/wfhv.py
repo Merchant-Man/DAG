@@ -198,7 +198,6 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
     def _process_folders(runname: str):
         """Processes relevant subfolders and extracts barcode data."""
         prefix = f"{runname}/no_sample/"
-        # prefix = f"{runname}/no_sample/20250528_1041_4A_PBC82512_b5a204c8/"
         matching_data = []
         paginator = s3_client.get_paginator("list_objects_v2")
 
