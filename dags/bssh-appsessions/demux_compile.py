@@ -5,12 +5,20 @@ from airflow.models import Variable
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-
+from airflow.hooks.base import BaseHook
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")       
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 
+def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
+    conn = BaseHook.get_connection(conn_id)
+    return boto3.client(
+        service,
+        aws_access_key_id=conn.login,
+        aws_secret_access_key=conn.password,
+        region_name='us-east-1'  # change if needed
+    )
 s3 = boto3.client("s3")
 
 response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=PREFIX)
