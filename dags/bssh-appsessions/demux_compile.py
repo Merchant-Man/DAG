@@ -19,7 +19,7 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_secret_access_key=conn.password,
         region_name='us-east-1'  # change if needed
     )
-s3 = boto3.client("s3")
+s3 = get_boto3_client_from_connection()
 
 response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=PREFIX)
 matching_keys = [
