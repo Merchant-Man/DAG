@@ -60,12 +60,6 @@ def read_and_calculate_percentage_reads():
         '% Reads': 'sum'
     })
 
-    total_reads = grouped_df['# Reads'].sum()
-    total_percent_reads = grouped_df['% Reads'].sum()
-
-    print(f"\nTotal Reads across all samples: {total_reads}")
-    print(f"Total % Reads across all samples: {total_percent_reads}\n")
-
     print(grouped_df[['SampleID', '# Reads','%reads']])
     return grouped_df
 
