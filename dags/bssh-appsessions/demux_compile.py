@@ -12,11 +12,11 @@ BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
-    conn = connection.Connection.get_connection_from_secrets(aws)
+    conn = Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
         service,
         aws_access_key_id=conn.login,
-        aws_secret_access_key=conn.password,
+        aws_secret_access_key=conn.password
     )
 def process_demux_files():
     return read_and_calculate_percentage_reads()
