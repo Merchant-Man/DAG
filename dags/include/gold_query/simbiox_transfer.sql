@@ -189,23 +189,25 @@ WHERE
 	nomor_formulir = 'RSJPDHK/2024/01'
 	AND biobank_tujuan IS NULL;
 
-CREATE INDEX idx_gold_simbiox_transfer_new_nomor_formulir ON gold_simbiox_transfer_new (nomor_formulir);
+CREATE INDEX idx_gold_simbiox_transfer_nomor_formulir ON gold_simbiox_transfer_new (nomor_formulir);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_biobank_asal ON gold_simbiox_transfer_new (biobank_asal);
+CREATE INDEX idx_gold_simbiox_transfer_biosample_id ON gold_simbiox_transfer_new (biosample_id);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_biobank_tujuan ON gold_simbiox_transfer_new (biobank_tujuan);
+CREATE INDEX idx_gold_simbiox_transfer_biobank_asal ON gold_simbiox_transfer_new (biobank_asal);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_tanggal_pengiriman ON gold_simbiox_transfer_new (tanggal_pengiriman);
+CREATE INDEX idx_gold_simbiox_transfer_biobank_tujuan ON gold_simbiox_transfer_new (biobank_tujuan);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_tanggal_penerimaan ON gold_simbiox_transfer_new (tanggal_penerimaan);
+CREATE INDEX idx_gold_simbiox_transfer_tanggal_pengiriman ON gold_simbiox_transfer_new (tanggal_pengiriman);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_code_repository ON gold_simbiox_transfer_new (code_repository);
+CREATE INDEX idx_gold_simbiox_transfer_tanggal_penerimaan ON gold_simbiox_transfer_new (tanggal_penerimaan);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_id_subject ON gold_simbiox_transfer_new (id_subject);
+CREATE INDEX idx_gold_simbiox_transfer_code_repository ON gold_simbiox_transfer_new (code_repository);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_patient_categ ON gold_simbiox_transfer_new (patient_categ);
+CREATE INDEX idx_gold_simbiox_transfer_id_subject ON gold_simbiox_transfer_new (id_subject);
 
-CREATE INDEX idx_gold_simbiox_transfer_new_is_to_central_seq ON gold_simbiox_transfer_new (is_to_central_seq);
+CREATE INDEX idx_gold_simbiox_transfer_patient_categ ON gold_simbiox_transfer_new (patient_categ);
+
+CREATE INDEX idx_gold_simbiox_transfer_is_to_central_seq ON gold_simbiox_transfer_new (is_to_central_seq);
 
 CREATE INDEX idx_year_formulir ON gold_simbiox_transfer_new (year_formulir);
 

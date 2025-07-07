@@ -18,6 +18,7 @@ ILLUMINA_SEC = "staging_illumina_sec.sql"
 MGI_SEC = "staging_mgi_sec.sql"
 ONT_SEC = "staging_ont_sec.sql"
 SEQ = "staging_seq.sql"
+SIMBIOX_BIOSAMPLE_LATEST_TRANSFER = "staging_simbiox_biosamples_latest_transfer.sql"
 SIMBIOX = "staging_simbiox_biosamples_patients.sql"
 SIMBIOX_REPORT_FIX_PROGRESS = "staging_report_fix_simbiox.sql"
 SKI_FIX_ID_REPO = "staging_fix_ski_id_repo.sql"
@@ -57,6 +58,7 @@ pgx_report_query = load_query("gold_query", PGX_REPORT_QUERY)
 staging_illumina_sec_query = load_query("staging_query", ILLUMINA_SEC)
 staging_mgi_sec_query = load_query("staging_query", MGI_SEC)
 staging_ont_sec_query = load_query("staging_query", ONT_SEC)
+staging_biosample_latest_transfer_query = load_query("staging_query", SIMBIOX_BIOSAMPLE_LATEST_TRANSFER)
 staging_seq_query = load_query("staging_query", SEQ)
 staging_simbiox_query = load_query("staging_query", SIMBIOX)
 staging_ski_fix_id_repo_query = load_query("staging_query", SKI_FIX_ID_REPO)
@@ -122,6 +124,11 @@ with dag:
             task_id="staging_ski_fix_id_repo",
             conn_id=conn_id,
             sql=staging_ski_fix_id_repo_query
+        )
+        staging_biosample_latest_transfer_task = SQLExecuteQueryOperator(
+            task_id="staging_biosample_latest_transfer",
+            conn_id=conn_id,
+            sql=staging_biosample_latest_transfer_query
         )
         staging_illumina_sec_task = SQLExecuteQueryOperator(
             task_id="staging_illumina_sec",
@@ -199,5 +206,5 @@ with dag:
          ] >> gold_pgx_report_task  # type: ignore
         [gold_pgx_report_task, gold_qc_task] >> onq_lims_analysis_report_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
-
+        gold_simbiox_transfer_task >> staging_biosample_latest_transfer_task # type: ignore
     loader_sensors >> queries  # type: ignore

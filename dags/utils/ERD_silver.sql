@@ -146,6 +146,10 @@ CREATE INDEX kode_kedatangan_idx
 ON simbiox_biosamples (kode_kedatangan);
 CREATE INDEX kode_hub_penyimpan_idx
 ON simbiox_biosamples (kode_hub_penyimpan);
+CREATE INDEX biosample_specimen_idx
+ON simbiox_biosamples (biosample_specimen);
+CREATE INDEX type_case_idx
+ON simbiox_biosamples (type_case);
 
 
 CREATE TABLE ica_samples(
@@ -210,6 +214,45 @@ CREATE INDEX id_repository_idx
 ON illumina_qc(id_repository);
 CREATE INDEX run_name_idx
 ON illumina_qc(run_name);
+
+
+-- Already check for illumina_qc id_repository should be unique
+CREATE TABLE illumina_appsessions(
+  row_type VARCHAR(32) comment 'Type of the row, e.g. "session"',
+  session_id VARCHAR(64) PRIMARY KEY comment 'ID of the session',
+  session_name VARCHAR(255) comment 'Name of the session',
+  date_created DATETIME comment 'Date when the session is created',
+  date_modified DATETIME comment 'Date when the session is modified',
+  execution_status VARCHAR(32) comment 'Status of the session execution',
+  ica_link VARCHAR(255) comment 'Link to the ICA analysis',
+  ica_project_id VARCHAR(64) comment 'ID of the ICA project',
+  workflow_reference VARCHAR(255) comment 'Reference to the workflow',
+  run_id VARCHAR(64) comment 'ID of the run associated with the session',
+  run_name VARCHAR(255) comment 'Run name associated with the session',
+  percent_gt_q30 FLOAT UNSIGNED comment 'Percentage of bases with quality score greater than 30',
+  flowcell_barcode VARCHAR(64) comment 'Barcode of the flowcell',
+  reagent_barcode VARCHAR(64) comment 'Barcode of the reagent',
+  `status` VARCHAR(32) comment 'Status of the session',
+  experiment_name VARCHAR(255) comment 'Name of the experiment',
+  run_date_created DATETIME comment 'Date when the run is created',
+  biosaample_name VARCHAR(255) comment 'Name of the biosample associated with the session',
+  biosample_id VARCHAR(64) comment 'ID of the biosample associated with the session',
+  computed_yield_bp FLOAT UNSIGNED comment 'Computed yield in base pairs',
+  generated_sample_id VARCHAR(64) comment 'ID of the generated sample',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+);
+ALTER TABLE illumina_appsessions
+ADD CONSTRAINT PK_illumina_appsessions PRIMARY KEY (session_id, biosample_id);
+CREATE INDEX biosaample_name_idx
+ON illumina_appsessions(biosample_name);
+CREATE INDEX biosample_id_idx
+ON illumina_appsessions(biosample_id);
+CREATE INDEX run_name_idx
+ON illumina_appsessions(run_name);
+CREATE INDEX experiment_name_idx
+ON illumina_appsessions(experiment_name);
+
 
 -- for QS, combination of id_repository,lane,read_number,yield should be unique
 -- index should not be used since it is primer bases sequence index. 
@@ -873,6 +916,8 @@ CREATE INDEX drug_name_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_name);
 CREATE INDEX drug_classification_idx
 ON dwh_restricted.gold_pgx_detail_report(drug_classification);
+CREATE INDEX order_id_idx
+ON dwh_restricted.gold_pgx_detail_report(order_id);
 
 
 CREATE TABLE phenovar_digital_consent (
@@ -900,3 +945,28 @@ CREATE INDEX is_taking_blood_sample_idx
 ON phenovar_digital_consent(is_taking_blood_sample);
 CREATE INDEX is_access_record_to_medical_record_idx
 ON phenovar_digital_consent(is_access_record_to_medical_record);
+
+CREATE TABLE phenovar_data_sharing (
+  id VARCHAR(36) PRIMARY KEY,
+  ethical_clearance_id VARCHAR(36),
+  ethical_clearance_title TEXT,
+  id_subject VARCHAR(10),  
+  institution_owner_id VARCHAR(36),
+  institution_owner_name VARCHAR(255),
+  institution_share_ids TEXT,
+  gender VARCHAR(6),
+  dob DATE,
+  province VARCHAR(64),
+  district VARCHAR(255),
+  hub_name VARCHAR(255),
+  use_nik_ibu BOOLEAN,
+  access BOOLEAN,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation on DWH. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update on DWH. Using MySQL TZ.'
+);
+CREATE INDEX id_subject
+ON phenovar_data_sharing(id_subject);
+CREATE INDEX ethical_clearance_id_idx
+ON phenovar_data_sharing(ethical_clearance_id);
+CREATE INDEX institution_owner_name_idx
+ON phenovar_data_sharing(institution_owner_name);
