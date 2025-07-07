@@ -7,7 +7,7 @@ from airflow.operators.python import PythonOperator
 
 
 # ---- CONFIG ----
-BUCKET_NAME = "Variable.get("S3_DWH_BRONZE")"       
+BUCKET_NAME = Variable.get("S3_DWH_BRONZE")       
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 
