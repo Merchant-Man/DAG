@@ -222,7 +222,17 @@ CREATE TABLE illumina_appsessions(
   session_id VARCHAR(64) PRIMARY KEY comment 'ID of the session',
   session_name VARCHAR(255) comment 'Name of the session',
   date_created DATETIME comment 'Date when the session is created',
+  date_modified DATETIME comment 'Date when the session is modified',
+  execution_status VARCHAR(32) comment 'Status of the session execution',
+  ica_link VARCHAR(255) comment 'Link to the ICA analysis',
+  ica_project_id VARCHAR(64) comment 'ID of the ICA project',
+  workflow_reference VARCHAR(255) comment 'Reference to the workflow',
+  run_id VARCHAR(64) comment 'ID of the run associated with the session',
   run_name VARCHAR(255) comment 'Run name associated with the session',
+  percent_gt_q30 FLOAT UNSIGNED comment 'Percentage of bases with quality score greater than 30',
+  flowcell_barcode VARCHAR(64) comment 'Barcode of the flowcell',
+  reagent_barcode VARCHAR(64) comment 'Barcode of the reagent',
+  `status` VARCHAR(32) comment 'Status of the session',
   experiment_name VARCHAR(255) comment 'Name of the experiment',
   run_date_created DATETIME comment 'Date when the run is created',
   biosaample_name VARCHAR(255) comment 'Name of the biosample associated with the session',
@@ -230,14 +240,18 @@ CREATE TABLE illumina_appsessions(
   computed_yield_bp FLOAT UNSIGNED comment 'Computed yield in base pairs',
   generated_sample_id VARCHAR(64) comment 'ID of the generated sample',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
 );
 ALTER TABLE illumina_appsessions
 ADD CONSTRAINT PK_illumina_appsessions PRIMARY KEY (session_id, biosample_id);
 CREATE INDEX biosaample_name_idx
-ON illumina_appsessions(biosaample_name);
+ON illumina_appsessions(biosample_name);
+CREATE INDEX biosample_id_idx
+ON illumina_appsessions(biosample_id);
 CREATE INDEX run_name_idx
 ON illumina_appsessions(run_name);
+CREATE INDEX experiment_name_idx
+ON illumina_appsessions(experiment_name);
 
 
 -- for QS, combination of id_repository,lane,read_number,yield should be unique
