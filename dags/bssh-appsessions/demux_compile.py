@@ -12,12 +12,11 @@ BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
-    conn = connection.Connection.get_connection_from_secrets(conn_id)
+    conn = connection.Connection.get_connection_from_secrets(aws)
     return boto3.client(
         service,
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password,
-        region_name=conn.extra_dejson.get("region_name", "us-east-1")
     )
 
 def read_and_calculate_percentage_reads():
