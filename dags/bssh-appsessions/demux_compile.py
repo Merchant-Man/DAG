@@ -6,49 +6,72 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from airflow.hooks.base import BaseHook
+from airflow.models import Connection
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")       
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
-
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
-    conn = BaseHook.get_connection(conn_id)
+    conn = connection.Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
         service,
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password,
-        region_name='us-east-1'  # change if needed
+        region_name=conn.extra_dejson.get("region_name", "us-east-1")
     )
-s3 = get_boto3_client_from_connection()
 
-response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=PREFIX)
-matching_keys = [
-    obj['Key']
-    for obj in response.get('Contents', [])
-    if obj['Key'].endswith(FILENAME_SUFFIX)
-]
-all_dfs = []
+def read_and_calculate_percentage_reads():
+    s3 = get_boto3_client_from_connection()
+    bucket = Variable.get("S3_DWH_BRONZE")
+    prefix = "bssh/Demux/"
+    suffix = "Demultiplex_Stats.csv"
 
-for key in matching_keys:
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-    csv_content = obj['Body'].read().decode('utf-8')
-    df = pd.read_csv(StringIO(csv_content))
+    # Collect all matching files
+    paginator = s3.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
 
-    # Skip 'Undetermined' rows
-    df = df[df['SampleID'] != 'Undetermined']
+    matching_keys = []
+    for page in page_iterator:
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(suffix):
+                matching_keys.append(obj["Key"])
 
-    # Convert numeric columns
-    for col in df.columns:
-        if col.startswith('#') or col.startswith('%'):
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+    all_dfs = []
+    for key in matching_keys:
+        response = s3.get_object(Bucket=bucket, Key=key)
+        content = response["Body"].read().decode("utf-8")
+        df = pd.read_csv(StringIO(content))
+        df = df[df["SampleID"] != "Undetermined"]
+        for col in df.columns:
+            if col.startswith("#") or col.startswith("%"):
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        all_dfs.append(df)
 
-    all_dfs.append(df)
-combined_df = pd.concat(all_dfs, ignore_index=True)
+    if not all_dfs:
+        print("No data found.")
+        return
 
-grouped_df = df.groupby('SampleID', as_index=False).sum(numeric_only=True)
-index_map = df.groupby('SampleID')['Index'].first().reset_index()
-final_df = pd.merge(index_map, grouped_df, on='SampleID')
-print(final_df)
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+
+    # Group and sum
+    grouped_df = combined_df.groupby("SampleID", as_index=False).agg({
+        '# Reads': 'sum',
+        '# Perfect Index Reads': 'sum',
+        '# One Mismatch Index Reads': 'sum',
+        '# Two Mismatch Index Reads': 'sum'
+    })
+
+    # Total reads across all samples
+    total_reads = grouped_df['# Reads'].sum()
+
+    # Recalculate % Reads
+    grouped_df['% Reads'] = grouped_df['# Reads'] / total_reads * 100
+
+    # Optional: round for display
+    grouped_df['% Reads'] = grouped_df['% Reads'].round(4)
+
+    print(grouped_df[['SampleID', '# Reads', '% Reads']])
+    return grouped_df
 
 # ----------------------------
 # DAG Definition
