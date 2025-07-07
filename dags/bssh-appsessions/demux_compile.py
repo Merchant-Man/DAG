@@ -18,7 +18,8 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password,
     )
-
+def process_demux_files():
+    return read_and_calculate_percentage_reads()
 def read_and_calculate_percentage_reads():
     s3 = get_boto3_client_from_connection()
     bucket = Variable.get("S3_DWH_BRONZE")
