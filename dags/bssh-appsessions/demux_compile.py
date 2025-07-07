@@ -4,7 +4,7 @@ from io import StringIO
 from airflow.models import Variable
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-
+from datetime import datetime, timedelta
 
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")       
