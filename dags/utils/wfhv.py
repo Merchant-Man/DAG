@@ -7,7 +7,7 @@ from datetime import timezone, datetime
 import json
 import pandas as pd
 import math
-
+from concurrent.futures import ThreadPoolExecutor
 
 def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronze_bucket: str, bronze_object_path: str, **kwargs):
     """
@@ -124,8 +124,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
                 print(f"Error in fallback barcode parsing: {e}")
 
         started, acquisition_stopped, processing_stopped, instrument, position, flow_cell_id = _extract_summary_data(prefix)
-        folder_size, latest_upload_date = _extract_folder_size_and_date(wfhv_input_bucket, prefix)
-
+        
         rows = []
         for b in barcodes:
             try:
@@ -133,6 +132,10 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
                 passed_percent = b.get("passed_bases_percent")
                 total_passed = math.floor(total_bases * (passed_percent / 100)) if total_bases and passed_percent else None
                 barcode = b["barcode"]
+
+                barcode_prefix = f"{prefix}bam_pass/{barcode}/"
+                folder_size, latest_upload_date = _extract_folder_size_and_date(wfhv_input_bucket, barcode_prefix)
+
                 rows.append({
                     "id_library": prefix.split("/")[0],
                     "bam_folder": f"s3://{wfhv_input_bucket}/{prefix}bam_pass/{barcode}/",
@@ -154,27 +157,48 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
                 print(f"Error building row for barcode: {b} - {e}")
         return pd.DataFrame(rows)
 
-    def _list_run_folders():
-        paginator = s3_client.get_paginator("list_objects_v2")
-        recent_runs = set()
 
+    def _check_prefix_recent(prefix):
+        """
+        Checks if a given prefix has any objects modified after the cutoff.
+        Returns the prefix if recent, else None.
+        """
+        paginator = s3_client.get_paginator("list_objects_v2")
+        cutoff = datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+        for page in paginator.paginate(Bucket=wfhv_input_bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                if obj["LastModified"] >= cutoff:
+                    return prefix.rstrip("/")
+        return None
+        
+    def _list_run_folders():
+        """
+        Gets all run folder prefixes under the bucket root (using delimiter='/'),
+        then checks each prefix concurrently for recent objects.
+        Returns a list of folders with recent activity.
+        """
+        paginator = s3_client.get_paginator("list_objects_v2")
+        all_prefixes = []
+
+        # Step 1: Gather all folder prefixes at the root level
         for page in paginator.paginate(Bucket=wfhv_input_bucket, Delimiter="/"):
             for folder in page.get("CommonPrefixes", []):
-                prefix = folder["Prefix"].strip("/")
-                # prefix='ONT_SEQ_20240812_003'
-                # prefix='ONT_SEQ_20250217_047'
-                head_response = s3_client.list_objects_v2(Bucket=wfhv_input_bucket, Prefix=prefix, MaxKeys=1)
-                if "Contents" in head_response:
-                    last_modified = head_response["Contents"][0]["LastModified"].strftime("%Y-%m-%d")
-                    if last_modified >= ts:
-                        recent_runs.add(prefix)
+                prefix = folder["Prefix"]  # e.g., "ONT_SEQ_20250519_062/"
+                all_prefixes.append(prefix)
 
-        return list(recent_runs)
+        # Step 2: Scan all prefixes in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            results = executor.map(_check_prefix_recent, all_prefixes)
 
+        return [r for r in results if r]
+        # return [_check_prefix_recent("ONT_SEQ_20250416_056")]
+        
     # Extract barcode data and process folders (unchanged functions)
     def _process_folders(runname: str):
         """Processes relevant subfolders and extracts barcode data."""
         prefix = f"{runname}/no_sample/"
+        # prefix = f"{runname}/no_sample/20250528_1041_4A_PBC82512_b5a204c8/"
         matching_data = []
         paginator = s3_client.get_paginator("list_objects_v2")
 
@@ -197,7 +221,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
 
     for run in run_folders:
         try:
-            data = pd.DataFrame(_process_folders(run))
+            data = _process_folders(run)
             if not data.empty:
                 all_data = pd.concat([all_data, data], ignore_index=True)
             else:
@@ -215,8 +239,7 @@ def fetch_wfhv_samples_dump_data(aws_conn_id: str, wfhv_input_bucket: str, bronz
     file_name = f"{bronze_object_path}/{kwargs['curr_ds']}.csv"
 
     # Upload to S3
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3.load_string(
+    s3_hook.load_string(
         string_data=csv_buffer.getvalue(),
         key=file_name,
         bucket_name=bronze_bucket,
