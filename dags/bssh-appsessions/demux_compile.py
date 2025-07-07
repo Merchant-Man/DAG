@@ -20,6 +20,7 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
     )
 def process_demux_files():
     return read_and_calculate_percentage_reads()
+    
 def read_and_calculate_percentage_reads():
     s3 = get_boto3_client_from_connection()
     bucket = Variable.get("S3_DWH_BRONZE")
@@ -97,6 +98,6 @@ dag = DAG(
 
 process_task = PythonOperator(
     task_id='process_demux_csvs',
-    python_callable=process_demux_files,
+    python_callable=read_and_calculate_percentage_reads,  
     dag=dag
 )
