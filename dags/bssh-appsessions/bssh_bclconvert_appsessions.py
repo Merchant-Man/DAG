@@ -148,6 +148,9 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
     df = pd.DataFrame(all_rows)
     df = transform_func(df, curr_ds) if transform_func else df
 
+    df["created_at"] = curr_ds
+    df["updated_at"] = curr_ds
+
     logger.info(f"✔ Final DataFrame shape: {df.shape}")
 
     buffer = io.StringIO()

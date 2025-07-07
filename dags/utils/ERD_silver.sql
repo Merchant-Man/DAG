@@ -215,6 +215,31 @@ ON illumina_qc(id_repository);
 CREATE INDEX run_name_idx
 ON illumina_qc(run_name);
 
+
+-- Already check for illumina_qc id_repository should be unique
+CREATE TABLE illumina_appsessions(
+  row_type VARCHAR(32) comment 'Type of the row, e.g. "session"',
+  session_id VARCHAR(64) PRIMARY KEY comment 'ID of the session',
+  session_name VARCHAR(255) comment 'Name of the session',
+  date_created DATETIME comment 'Date when the session is created',
+  run_name VARCHAR(255) comment 'Run name associated with the session',
+  experiment_name VARCHAR(255) comment 'Name of the experiment',
+  run_date_created DATETIME comment 'Date when the run is created',
+  biosaample_name VARCHAR(255) comment 'Name of the biosample associated with the session',
+  biosample_id VARCHAR(64) comment 'ID of the biosample associated with the session',
+  computed_yield_bp FLOAT UNSIGNED comment 'Computed yield in base pairs',
+  generated_sample_id VARCHAR(64) comment 'ID of the generated sample',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
+);
+ALTER TABLE illumina_appsessions
+ADD CONSTRAINT PK_illumina_appsessions PRIMARY KEY (session_id, biosample_id);
+CREATE INDEX biosaample_name_idx
+ON illumina_appsessions(biosaample_name);
+CREATE INDEX run_name_idx
+ON illumina_appsessions(run_name);
+
+
 -- for QS, combination of id_repository,lane,read_number,yield should be unique
 -- index should not be used since it is primer bases sequence index. 
 CREATE TABLE illumina_qs(
