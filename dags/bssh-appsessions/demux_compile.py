@@ -1,45 +1,65 @@
 import boto3
 import pandas as pd
 from io import StringIO
+from airflow.models import Variable
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
 
 # ---- CONFIG ----
-BUCKET_NAME = "your-bucket-name"       # <-- change this
-PREFIX = "bssh/Demux/"                 # where all the files are
-FILENAME_SUFFIX = "Demultiplex_Stats.csv"  # match this ending
+BUCKET_NAME = "Variable.get("S3_DWH_BRONZE")"       
+PREFIX = "bssh/Demux/"                 
+FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 
-# ---- INIT S3 CLIENT ----
 s3 = boto3.client("s3")
 
-# ---- LIST OBJECTS ----
-paginator = s3.get_paginator("list_objects_v2")
-pages = paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX)
+response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=PREFIX)
+matching_keys = [
+    obj['Key']
+    for obj in response.get('Contents', [])
+    if obj['Key'].endswith(FILENAME_SUFFIX)
+]
+all_dfs = []
 
-csv_keys = []
+for key in matching_keys:
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+    csv_content = obj['Body'].read().decode('utf-8')
+    df = pd.read_csv(StringIO(csv_content))
 
-for page in pages:
-    for obj in page.get("Contents", []):
-        key = obj["Key"]
-        if key.endswith(FILENAME_SUFFIX):
-            csv_keys.append(key)
+    # Skip 'Undetermined' rows
+    df = df[df['SampleID'] != 'Undetermined']
 
-print(f"Found {len(csv_keys)} matching CSV files.")
+    # Convert numeric columns
+    for col in df.columns:
+        if col.startswith('#') or col.startswith('%'):
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# ---- READ & COMBINE ----
-dfs = []
+    all_dfs.append(df)
+combined_df = pd.concat(all_dfs, ignore_index=True)
 
-for key in csv_keys:
-    print(f"Reading: {key}")
-    response = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-    content = response["Body"].read().decode("utf-8")
+grouped_df = df.groupby('SampleID', as_index=False).sum(numeric_only=True)
+index_map = df.groupby('SampleID')['Index'].first().reset_index()
+final_df = pd.merge(index_map, grouped_df, on='SampleID')
+print(final_df)
 
-    df = pd.read_csv(StringIO(content))
-    df["SourceFile"] = key  # Optional: track origin
-    dfs.append(df)
+# ----------------------------
+# DAG Definition
+# ----------------------------
 
-# ---- COMBINE INTO SINGLE DATAFRAME ----
-if dfs:
-    combined_df = pd.concat(dfs, ignore_index=True)
-    print(f"✅ Combined DataFrame shape: {combined_df.shape}")
-    print(combined_df.head())
-else:
-    print("❌ No files were read.")
+default_args = {
+    'owner': 'bgsi-data',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 6, 3),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=1)
+}
+
+dag = DAG(
+    'bssh_Demux_Compile',
+    default_args=default_args,
+    description='Fetch Demux_Compile QC load to S3 + RDS',
+    schedule_interval=timedelta(days=1),
+    catchup=False
+)
