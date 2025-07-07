@@ -1,14 +1,13 @@
 import boto3
 import pandas as pd
 from io import StringIO
-from airflow.models import Variable
+from airflow.models import Variable, Connection
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from airflow.hooks.base import BaseHook
-from airflow.models import Connection
 # ---- CONFIG ----
-BUCKET_NAME = Variable.get("S3_DWH_BRONZE")       
+BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
+AWS_CONN_ID = "aws"
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
@@ -22,32 +21,30 @@ def process_demux_files():
     return read_and_calculate_percentage_reads()
     
 def read_and_calculate_percentage_reads():
-    s3 = get_boto3_client_from_connection()
-    bucket = Variable.get("S3_DWH_BRONZE")
-    prefix = "bssh/Demux/"
-    suffix = "Demultiplex_Stats.csv"
-
-    # Collect all matching files
+    s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     paginator = s3.get_paginator("list_objects_v2")
-    page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX)
 
     matching_keys = []
     for page in page_iterator:
         for obj in page.get("Contents", []):
-            if obj["Key"].endswith(suffix):
+            if obj["Key"].endswith(FILENAME_SUFFIX):
                 matching_keys.append(obj["Key"])
+
+    if not matching_keys:
+        print("No matching Demultiplex_Stats.csv files found.")
+        return
 
     all_dfs = []
     for key in matching_keys:
-        response = s3.get_object(Bucket=bucket, Key=key)
-        content = response["Body"].read().decode("utf-8")
-        df = pd.read_csv(StringIO(content))
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        csv_content = obj['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(csv_content))
         df = df[df["SampleID"] != "Undetermined"]
         for col in df.columns:
             if col.startswith("#") or col.startswith("%"):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
         all_dfs.append(df)
-
     if not all_dfs:
         print("No data found.")
         return
@@ -59,19 +56,17 @@ def read_and_calculate_percentage_reads():
         '# Reads': 'sum',
         '# Perfect Index Reads': 'sum',
         '# One Mismatch Index Reads': 'sum',
-        '# Two Mismatch Index Reads': 'sum'
+        '# Two Mismatch Index Reads': 'sum',
+        '% Reads': 'sum'
     })
 
-    # Total reads across all samples
     total_reads = grouped_df['# Reads'].sum()
+    total_percent_reads = grouped_df['% Reads'].sum()
 
-    # Recalculate % Reads
-    grouped_df['% Reads'] = grouped_df['# Reads'] / total_reads * 100
+    print(f"\nTotal Reads across all samples: {total_reads}")
+    print(f"Total % Reads across all samples: {total_percent_reads}\n")
 
-    # Optional: round for display
-    grouped_df['% Reads'] = grouped_df['% Reads'].round(4)
-
-    print(grouped_df[['SampleID', '# Reads', '% Reads']])
+    print(grouped_df[['SampleID', '# Reads','%reads']])
     return grouped_df
 
 # ----------------------------
