@@ -63,3 +63,9 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+
+process_task = PythonOperator(
+    task_id='process_demux_csvs',
+    python_callable=process_demux_files,
+    dag=dag
+)
