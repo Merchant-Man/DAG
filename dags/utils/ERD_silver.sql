@@ -945,7 +945,7 @@ CREATE INDEX is_taking_blood_sample_idx
 ON phenovar_digital_consent(is_taking_blood_sample);
 CREATE INDEX is_access_record_to_medical_record_idx
 ON phenovar_digital_consent(is_access_record_to_medical_record);
-
+ 
 CREATE TABLE phenovar_data_sharing (
   id VARCHAR(36) PRIMARY KEY,
   ethical_clearance_id VARCHAR(36),
@@ -969,4 +969,39 @@ ON phenovar_data_sharing(id_subject);
 CREATE INDEX ethical_clearance_id_idx
 ON phenovar_data_sharing(ethical_clearance_id);
 CREATE INDEX institution_owner_name_idx
+
+
 ON phenovar_data_sharing(institution_owner_name);
+
+CREATE TABLE bclconvert_appsessions (
+    row_type                VARCHAR(20),
+    session_id              BIGINT,             -- Numeric id only
+    session_name            VARCHAR(255),
+    date_created            DATETIME,
+    date_modified           DATETIME,
+    execution_status        VARCHAR(50),
+    ica_link                TEXT,
+    ica_project_id          VARCHAR(100),
+    workflow_reference      VARCHAR(100),
+    run_id                  BIGINT,
+    run_name                VARCHAR(100),
+    percent_gt_q30          DECIMAL(10,4),
+    flowcell_barcode        VARCHAR(50),
+    reagent_barcode         VARCHAR(50),
+    status                  VARCHAR(50),
+    experiment_name         VARCHAR(100),
+    run_date_created        DATETIME,
+    bio_sample_name         VARCHAR(100),
+    bio_sample_id           BIGINT,
+    computed_yield_bps      BIGINT,
+    generated_sample_id     BIGINT,
+    total_actual_yield      DECIMAL(20,1),
+    demux_reads             BIGINT,             --# Reads
+    demux_percent_reads     DECIMAL(6,4)        --% Reads
+);
+CREATE INDEX idx_bclconvert_session_id
+ON bclconvert_appsessions (session_id);
+CREATE INDEX idx_bclconvert_experiment_name
+ON bclconvert_appsessions (experiment_name);
+CREATE INDEX idx_bclconvert_date_modified
+ON bclconvert_appsessions (date_modified);
