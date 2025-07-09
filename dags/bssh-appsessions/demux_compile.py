@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 AWS_CONN_ID = "aws"
 PREFIX = "bssh/Demux/"                 
-FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
+FILENAME_SUFFIX = "Demultiplex_Stats.csv"
+YIELD_BUCKET = "bgsi-data-dwh-bronze"
+YIELD_PREFIX = "illumina/qs/"
+YIELD_FILENAME_SUFFIX = "Quality_Metrics.csv"
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
     conn = Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
@@ -92,6 +95,40 @@ def read_and_calculate_percentage_reads():
         how="left"
     )
 
+    yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
+    yield_paginator = yield_s3.get_paginator("list_objects_v2")
+    yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
+    latest_yield_obj = None
+    for page in yield_pages:for obj in page.get("Contents", []): 
+    if obj["Key"].endswith(YIELD_FILENAME_SUFFIX): if latest_yield_obj is None or obj["LastModified"] > latest_yield_obj["LastModified"]:latest_yield_obj = obj    
+    if not latest_yield_obj:
+        logger.warning("No Yield CSV found.")
+        return
+    yield_key = latest_yield_obj["Key"]
+    logger.info(f"Using Yield file: {yield_key}")
+    obj = yield_s3.get_object(Bucket=YIELD_BUCKET, Key=yield_key)
+    yield_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
+ 
+    if "BioSampleName" not in yield_df.columns:
+        logger.warning("Yield file missing 'BioSampleName' column.")
+        return
+    
+    if "Yield" not in yield_df.columns:
+        logger.warning("Yield file missing 'Yield' column.")
+        return
+    
+    # Clean Yield column
+    yield_df["Yield"] = pd.to_numeric(yield_df["Yield"], errors="coerce")
+    
+    # Merge with merged_df
+    merged_df = pd.merge(
+        merged_df,
+        yield_df[["BioSampleName", "Yield"]],
+        on="BioSampleName",
+        how="left"
+    )
+    
+    logger.info("Merged Yield column into final DataFrame.")
     print(" Merged DataFrame:")
     print(merged_df.head())
     pd.set_option('display.max_rows', None)       # Show all rows
