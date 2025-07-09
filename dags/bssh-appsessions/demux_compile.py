@@ -94,6 +94,12 @@ def read_and_calculate_percentage_reads():
 
     print(" Merged DataFrame:")
     print(merged_df.head())
+    pd.set_option('display.max_rows', None)       # Show all rows
+    pd.set_option('display.max_columns', None)    # Show all columns
+    pd.set_option('display.width', None)          # Don't wrap lines
+    pd.set_option('display.max_colwidth', None)   # Show full column contents
+
+    print(merged_df)
 
 # ----------------------------
 # DAG Definition
