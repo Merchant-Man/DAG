@@ -5,6 +5,9 @@ from airflow.models import Variable, Connection
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 AWS_CONN_ID = "aws"
