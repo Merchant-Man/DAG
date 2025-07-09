@@ -62,7 +62,38 @@ def read_and_calculate_percentage_reads():
 
     print(grouped_df[['SampleID', '# Reads', '% Reads']])
     print(grouped_df.columns.tolist())
-    return grouped_df
+
+    # Append
+    appsession_prefix = "bssh/appsessions/"
+    paginator = s3.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=appsession_prefix)
+
+    latest_obj = None
+    for page in page_iterator:
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".csv") and "bclconvert_appsessions" in obj["Key"]:
+                if latest_obj is None or obj["LastModified"] > latest_obj["LastModified"]:
+                    latest_obj = obj
+
+    if not latest_obj:
+        print("No BCLConvert AppSession CSV found.")
+        return
+
+    bcl_key = latest_obj["Key"]
+    print(f" Using latest AppSession file: {bcl_key}")
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=bcl_key)
+    bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
+
+    # Merge on BioSampleName
+    merged_df = pd.merge(
+        bcl_df,
+        grouped_df.rename(columns={"SampleID": "BioSampleName"}),
+        on="BioSampleName",
+        how="left"
+    )
+
+    print(" Merged DataFrame:")
+    print(merged_df.head())
 
 # ----------------------------
 # DAG Definition
