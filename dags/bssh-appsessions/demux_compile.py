@@ -104,7 +104,12 @@ def read_and_calculate_percentage_reads():
     latest_yield_obj = None
     for page in yield_pages:
         for obj in page.get("Contents", []):
-            if obj["Key"].endswith(YIELD_FILENAME_SUFFIX):
+            print(obj["Key"])
+            if key.endswith(YIELD_FILENAME_SUFFIX) and "/fil." in key:
+            quality_keys.append(key)
+    if not quality_keys:
+        logger.warning("No Quality_Metrics.csv files found under illumina/qs/fil.*/")
+        return
                 if latest_yield_obj is None or obj["LastModified"] > latest_yield_obj["LastModified"]:
                     latest_yield_obj = obj
         logger.warning("No Yield CSV found.")
