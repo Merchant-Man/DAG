@@ -97,9 +97,9 @@ def read_and_calculate_percentage_reads():
 
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
-    yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
+    yieldpages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
     latest_yield_obj = None
-    for page in yield_pages:for obj in page.get("Contents", []): 
+    for page in yieldpages:for obj in page.get("Contents", []): 
     if obj["Key"].endswith(YIELD_FILENAME_SUFFIX): if latest_yield_obj is None or obj["LastModified"] > latest_yield_obj["LastModified"]:latest_yield_obj = obj    
     if not latest_yield_obj:
         logger.warning("No Yield CSV found.")
