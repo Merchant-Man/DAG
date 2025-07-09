@@ -16,8 +16,8 @@ import urllib.parse
 from utils.utils import fetch_and_dump, silver_transform_to_db
 
 # --- Configuration ---
-API_KEY = "04LlMKg4K0asFGREmIXhucZ3IV2Hinx"
-PROJECT_ID = "7feb6619-714b-48f7-a7fd-75ad264f9c55"
+API_KEY = Variable.get("API_KEY_ICA")
+PROJECT_ID = Variable.get("ICA_Project_id")
 BASE_URL = "https://ica.illumina.com/ica/rest/api"
 AWS_CONN_ID = "aws"
 BSSH_CONN_ID = "bssh"
@@ -29,6 +29,9 @@ OBJECT_PATH = "bssh/Demux"
 
 def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
                                    transform_func=None, curr_ds=None, **kwargs):
+    analyses = []
+    page_size = 100
+    page_offset = 0
     s3 = S3Hook(aws_conn_id=AWS_CONN_ID)
     logger = LoggingMixin().log
     curr_ds = kwargs["ds"]
@@ -42,87 +45,104 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
 
     logger.info(f"Fetching sessions for: {curr_ds}")
 
-    resp = requests.get(f"{BASE_URL}/projects/{PROJECT_ID}/analyses", headers=HEADERS)
-    resp.raise_for_status()
-    analyses = resp.json().get("items", [])
 
-    if not analyses:
-        logger.info("No analyses found.")
-        return
-
-    # Sort by timeCreated (latest first)
-    latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
-
-    def extract_lp_reference(reference_str):
-        match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
-        return match.group(1) if match else None
-
-    for analysis in latest_analyses:
-        try:
-            reference = analysis.get("reference")
-            logger.info(f"Checking analysis reference: {reference}")
-            if not reference:
-                continue
-
-            lp_ref = extract_lp_reference(reference)
-            if not lp_ref:
-                logger.warning(f"Could not extract LP reference from: {reference}")
-                continue
-
-            file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
-            encoded_path = urllib.parse.quote(file_path)
-
-            file_query_url = (
-                f"{BASE_URL}/projects/{PROJECT_ID}/data"
-                f"?filePath={encoded_path}"
-                f"&filenameMatchMode=EXACT"
-                f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-                f"&status=AVAILABLE&type=FILE"
-            )
-
-            file_response = requests.get(file_query_url, headers=HEADERS)
-            file_response.raise_for_status()
-            file_items = file_response.json().get("items", [])
-
-            if not file_items:
-                logger.info(f"Demultiplex_Stats.csv not found for {reference}")
-                continue
-
-            file_id = file_items[0]["data"]["id"]
-            logger.info(f"Found file with ID: {file_id}")
-
-            def create_download_url(api_key: str, project_id: str, file_id: str) -> str:
-                url = f"{BASE_URL}/projects/{project_id}/data/{file_id}:createDownloadUrl"
-                headers = {
-                    "accept": "application/vnd.illumina.v3+json",
-                    "X-API-Key": api_key
-                }
-                response = requests.post(url, headers=headers, data='')
+    while True:
+        url = (
+            f"{BASE_URL}/projects/{PROJECT_ID}/analyses"
+            f"?pageSize={page_size}&pageOffset={page_offset}&sort=reference%20desc"
+        )
+        logger.info(f"Requesting URL: {url}")
+        resp = requests.get(url, headers=HEADERS)
+        resp.raise_for_status()
+        data = resp.json()
+    
+        items = data.get("items", [])
+        analyses.extend(items)
+    
+        logger.info(f"Fetched {len(items)} analyses (offset {page_offset})")
+    
+        # If fewer than page_size, it's the last page
+        if len(items) < page_size:
+            break
+    
+        page_offset += page_size
+        if not analyses:
+            logger.info("No analyses found.")
+            return
+    
+        # Sort by timeCreated (latest first)
+        latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
+    
+        def extract_lp_reference(reference_str):
+            match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
+            return match.group(1) if match else None
+    
+        for analysis in latest_analyses:
+            try:
+                reference = analysis.get("reference")
+                logger.info(f"Checking analysis reference: {reference}")
+                if not reference:
+                    continue
+    
+                lp_ref = extract_lp_reference(reference)
+                if not lp_ref:
+                    logger.warning(f"Could not extract LP reference from: {reference}")
+                    continue
+    
+                file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
+                encoded_path = urllib.parse.quote(file_path)
+    
+                file_query_url = (
+                    f"{BASE_URL}/projects/{PROJECT_ID}/data"
+                    f"?filePath={encoded_path}"
+                    f"&filenameMatchMode=EXACT"
+                    f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
+                    f"&status=AVAILABLE&type=FILE"
+                )
+    
+                file_response = requests.get(file_query_url, headers=HEADERS)
+                file_response.raise_for_status()
+                file_items = file_response.json().get("items", [])
+    
+                if not file_items:
+                    logger.info(f"Demultiplex_Stats.csv not found for {reference}")
+                    continue
+    
+                file_id = file_items[0]["data"]["id"]
+                logger.info(f"Found file with ID: {file_id}")
+    
+                def create_download_url(api_key: str, project_id: str, file_id: str) -> str:
+                    url = f"{BASE_URL}/projects/{project_id}/data/{file_id}:createDownloadUrl"
+                    headers = {
+                        "accept": "application/vnd.illumina.v3+json",
+                        "X-API-Key": api_key
+                    }
+                    response = requests.post(url, headers=headers, data='')
+                    response.raise_for_status()
+                    result = response.json()
+                    return result.get("url")
+    
+                download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
+                logger.info(f"Download URL: {download_url}")
+    
+                response = requests.get(download_url)
                 response.raise_for_status()
-                result = response.json()
-                return result.get("url")
-
-            download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
-            logger.info(f"Download URL: {download_url}")
-
-            response = requests.get(download_url)
-            response.raise_for_status()
-
-            s3_key = f"{object_path_prefix}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
-            csv_buffer = io.BytesIO(response.content)
-
-            s3.load_bytes(
-                bytes_data=csv_buffer.getvalue(),
-                key=s3_key,
-                bucket_name=bucket_name,
-                replace=True
-            )
-
-            logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
-
-        except Exception as e:
-            logger.error(f"Error processing analysis {reference}: {str(e)}", exc_info=True)
-            continue
+    
+                s3_key = f"{object_path_prefix}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
+                csv_buffer = io.BytesIO(response.content)
+    
+                s3.load_bytes(
+                    bytes_data=csv_buffer.getvalue(),
+                    key=s3_key,
+                    bucket_name=bucket_name,
+                    replace=True
+                )
+    
+                logger.info(f"Uploaded to S3: s3://{bucket_name}/{s3_key}")
+    
+            except Exception as e:
+                logger.error(f"Error processing analysis {reference}: {str(e)}", exc_info=True)
+                continue
 
 # ----------------------------
 # DAG Definition
