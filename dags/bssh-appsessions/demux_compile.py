@@ -105,6 +105,7 @@ def read_and_calculate_percentage_reads():
     quality_keys = []
     for page in yield_pages:
         for obj in page.get("Contents", []):
+            key = obj["Key"]
             print(obj["Key"])
             if key.endswith(YIELD_FILENAME_SUFFIX) and "/fil." in key:
                 quality_keys.append(key)
