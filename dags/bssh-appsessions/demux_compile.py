@@ -1,7 +1,9 @@
 import boto3
 import pandas as pd
 from io import StringIO
+import io
 from airflow.models import Variable, Connection
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
@@ -23,6 +25,9 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password
     )
+def transform_data(df, curr_ds):
+    logger.info("No transformation applied.")
+    return df
 def process_demux_files():
     return read_and_calculate_percentage_reads()
     
@@ -151,8 +156,27 @@ def read_and_calculate_percentage_reads():
     pd.set_option('display.max_columns', None)    # Show all columns
     pd.set_option('display.width', None)          # Don't wrap lines
     pd.set_option('display.max_colwidth', None)   # Show full column contents
-
+    
+    
     print(merged_df)
+    return merged_df
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **context):
+    curr_ds = datetime.today().strftime('%Y-%m-%d')
+    merged_df = read_and_calculate_percentage_reads()
+    df = merged_df.copy()
+    df = transform_func(merged_df, curr_ds) if transform_func else merged_df.copy()
+    #timestamps
+    df["created_at"] = curr_ds
+    df["updated_at"] = curr_ds
+    # Convert DataFrame to CSV
+    buffer = io.StringIO()
+    df.to_csv(buffer, index=False)
+    buffer.seek(0)
+    # Upload to S3
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
+    s3.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
+    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
 
 # ----------------------------
 # DAG Definition
@@ -181,3 +205,17 @@ process_task = PythonOperator(
     python_callable=read_and_calculate_percentage_reads,  
     dag=dag
 )
+
+fetch_and_dump_task = PythonOperator(
+    task_id="bronze_fetch_bssh_bclconvertandQC",
+    python_callable=fetch_bclconvert_and_dump,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": "bssh/final_output",
+        "transform_func": transform_data  
+    },
+    provide_context=True
+)
+process_task >> fetch_and_dump_task
