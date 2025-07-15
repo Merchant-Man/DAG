@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
-S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 AWS_CONN_ID = "aws"
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"
@@ -213,7 +212,7 @@ fetch_and_dump_task = PythonOperator(
     dag=dag,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
+        "bucket_name": BUCKET_NAME,
         "object_path": "bssh/final_output",
         "transform_func": transform_data  
     },
