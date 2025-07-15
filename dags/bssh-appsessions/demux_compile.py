@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
-S3_DWH_BRONZE Variable.get("S3_DWH_BRONZE")
+S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 AWS_CONN_ID = "aws"
 PREFIX = "bssh/Demux/"                 
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"
