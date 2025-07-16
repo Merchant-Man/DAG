@@ -18,6 +18,8 @@ FILENAME_SUFFIX = "Demultiplex_Stats.csv"
 YIELD_BUCKET = "bgsi-data-dwh-bronze"
 YIELD_PREFIX = "illumina/qs/"
 YIELD_FILENAME_SUFFIX = "Quality_Metrics.csv"
+API_BASE_URL = "https://api.aps4.sh.basespace.illumina.com/v2"
+API_TOKEN = "Variable.get("BSSH_APIKEY1")"
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
     conn = Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
@@ -25,6 +27,8 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password
     )
+def bcl_appsession_runID_checkseqstatstoYield(
+
 def transform_data(df, curr_ds):
     logger.info("No transformation applied.")
     return df
@@ -102,6 +106,44 @@ def read_and_calculate_percentage_reads():
         on="BioSampleName",
         how="left"
     )
+    # Initialize column
+    merged_df["TotalFlowcellYield"] = None
+    
+    # Filter only rows of type 'Run'
+    run_rows = bcl_df[bcl_df["Type"] == "Run"]
+    
+    for _, row in run_rows.iterrows():
+        run_id = row.get("RunId")
+        biosample_name = row.get("BioSampleName")
+    
+        if not run_id or not biosample_name:
+            logger.warning("Missing RunId or BioSampleName in row, skipping.")
+            continue
+    
+        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
+        headers = {
+            "x-access-token": API_TOKEN,
+            "Accept": "application/json"
+        }
+    
+        try:
+            response = requests.get(api_url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+    
+            total_yield = data.get("TotalYield")
+    
+            if total_yield is not None:
+                # Update merged_df where BioSampleName matches and Type is Run
+                mask = (merged_df["BioSampleName"] == biosample_name) & (bcl_df["Type"] == "Run")
+                merged_df.loc[mask, "TotalFlowcellYield"] = total_yield
+                logger.info(f"Set TotalFlowcellYield={total_yield } for RunId={run_id}")
+            else:
+                logger.warning(f"No TotalYield found for RunId={run_id}")
+    
+        except Exception as e:
+            logger.error(f"Failed to fetch TotalYield for RunId={run_id}: {e}")
+
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
     yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
@@ -160,6 +202,7 @@ def read_and_calculate_percentage_reads():
     
     print(merged_df)
     return merged_df
+
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **context):
     curr_ds = datetime.today().strftime('%Y-%m-%d')
     merged_df = read_and_calculate_percentage_reads()
