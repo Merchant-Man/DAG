@@ -130,7 +130,7 @@ def read_and_calculate_percentage_reads():
             response.raise_for_status()
             data = response.json()
     
-            total_yield = data.get("TotalYield")
+            total_yield = data.get("YieldTotal")
     
             if total_yield is not None:
                 # Update merged_df where BioSampleName matches and Type is Run
