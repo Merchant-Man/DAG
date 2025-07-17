@@ -80,9 +80,7 @@ def load_yield_csv():
         return pd.DataFrame(columns=["BioSampleName", "Yield"])
 def process_demux_files():
     return read_and_calculate_percentage_reads()
-def transform_data(df, curr_ds):
-    logger.info("ℹ️ No transformation applied in transform_data().")
-    return df
+
 def read_and_calculate_percentage_reads():
     # Demux
     s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
@@ -204,6 +202,11 @@ def read_and_calculate_percentage_reads():
     print("\n🔍 Preview of merged DataFrame (first 200 rows):")
     print(merged_df.head(200))
     return merged_df
+    
+def transform_data(df, curr_ds):
+    logger.info("ℹ️ No transformation applied in transform_data().")
+    return df
+    
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = datetime.today().strftime('%Y-%m-%d')
     merged_df = read_and_calculate_percentage_reads()
