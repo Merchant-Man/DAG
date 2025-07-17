@@ -104,6 +104,7 @@ def read_and_calculate_percentage_reads():
     bcl_df["BioSampleName"] = bcl_df["BioSampleName"].astype(str).str.strip().str.upper()
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    agg_yield_df = yield_df.groupby("SampleID", as_index=False)["Yield"].sum()
     agg_yield_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     agg_yield_df["BioSampleName"] = agg_yield_df["BioSampleName"].astype(str).str.strip().str.upper()
     metrics_df = pd.merge(grouped_df, agg_yield_df, on="BioSampleName", how="outer")
