@@ -27,7 +27,6 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password
     )
-def bcl_appsession_runID_checkseqstatstoYield(
 
 def transform_data(df, curr_ds):
     logger.info("No transformation applied.")
