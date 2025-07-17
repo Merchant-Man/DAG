@@ -180,24 +180,26 @@ def read_and_calculate_percentage_reads():
 
     return merged_df
 
-    
-    def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **context):
-        curr_ds = datetime.today().strftime('%Y-%m-%d')
-        merged_df = read_and_calculate_percentage_reads()
-        df = merged_df.copy()
-        df = transform_func(merged_df, curr_ds) if transform_func else merged_df.copy()
-        #timestamps
-        df["created_at"] = curr_ds
-        df["updated_at"] = curr_ds
-        # Convert DataFrame to CSV
-        buffer = io.StringIO()
-        df.to_csv(buffer, index=False)
-        buffer.seek(0)
-        # Upload to S3
-        s3 = S3Hook(aws_conn_id=aws_conn_id)
-        s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
-        s3.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
-        logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
+    curr_ds = datetime.today().strftime('%Y-%m-%d')
+    merged_df = read_and_calculate_percentage_reads()
+    if merged_df is None:
+        logger.warning("Merged DataFrame is empty. Skipping upload.")
+        return
+
+    df = transform_func(merged_df, curr_ds) if transform_func else merged_df.copy()
+    df["created_at"] = curr_ds
+    df["updated_at"] = curr_ds
+
+    buffer = io.StringIO()
+    df.to_csv(buffer, index=False)
+    buffer.seek(0)
+
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
+    s3.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
+    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
+
 
 # ----------------------------
 # DAG Definition
