@@ -80,7 +80,9 @@ def load_yield_csv():
         return pd.DataFrame(columns=["BioSampleName", "Yield"])
 def process_demux_files():
     return read_and_calculate_percentage_reads()
-    
+def transform_data(df, curr_ds):
+    logger.info("ℹ️ No transformation applied in transform_data().")
+    return df
 def read_and_calculate_percentage_reads():
     # Demux
     s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
