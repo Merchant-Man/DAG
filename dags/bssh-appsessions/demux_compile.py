@@ -108,11 +108,9 @@ def read_and_calculate_percentage_reads():
     # Initialize column
     if "TotalFlowcellYield" not in merged_df.columns:
         merged_df["TotalFlowcellYield"] = None
-    merged_df["RunId"] = merged_df["RunId"].astype(str).str.strip().str.split(".").str[0]
     
-    # Filter only rows of type 'Run'
     run_rows = merged_df[merged_df["RowType"] == "Run"]
-
+    
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
         if not run_id or run_id.lower() == "nan":
@@ -137,7 +135,7 @@ def read_and_calculate_percentage_reads():
             else:
                 logger.warning(f"No yield found for RunId={run_id}")
         except Exception as e:
-            logger.error(f"API call failed for RunId={run_id}: {e}")                
+            logger.error(f"API call failed for RunId={run_id}: {e}")
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
     yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
