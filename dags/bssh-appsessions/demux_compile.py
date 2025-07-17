@@ -106,43 +106,42 @@ def read_and_calculate_percentage_reads():
         how="left"
     )
     # Initialize column
-    merged_df["TotalFlowcellYield"] = None
+    merged_df["RunId"] = merged_df["RunId"].astype(str).str.strip().str.split(".").str[0]
     
     # Filter only rows of type 'Run'
-    run_rows = bcl_df[bcl_df["RowType"] == "Run"]
-    API_TOKEN = Variable.get("BSSH_APIKEY1")
+    run_rows = merged_df[merged_df["RowType"] == "Run"]
+
     for _, row in run_rows.iterrows():
-        run_id = row.get("RunId")
-        biosample_name = row.get("BioSampleName")
+        run_id_raw = row.get("RunId")
         try:
-            if isinstance(run_id, float):
-                run_id = int(run_id)
-            if run_id:
-                run_id = str(run_id).strip().split(".")[0]
+            run_id = str(int(float(run_id_raw))).strip()
+        except Exception as e:
+            logger.warning(f"Invalid RunId: {run_id_raw}, error: {e}")
+            continue
     
-            api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
-            headers = {
-                "x-access-token": API_TOKEN,
-                "Accept": "application/json"
-            }
+        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
+        headers = {
+            "x-access-token": API_TOKEN,
+            "Accept": "application/json"
+        }
+    
+        try:
             response = requests.get(api_url, headers=headers)
             response.raise_for_status()
             data = response.json()
-    
             total_yield = data.get("YieldTotal")
     
             if total_yield is not None:
                 mask = (
-                    (merged_df["BioSampleName"] == biosample_name) &
-                    (merged_df["RunId"].astype(str).str.strip().str.split(".").str[0] == run_id)
+                    (merged_df["RowType"] == "Run") &
+                    (merged_df["RunId"] == run_id)
                 )
                 merged_df.loc[mask, "TotalFlowcellYield"] = total_yield
-                logger.info(f"Set TotalFlowcellYield={total_yield} for RunId={run_id}")
+                logger.info(f"✅ Set TotalFlowcellYield={total_yield} for RunId={run_id}")
             else:
                 logger.warning(f"No YieldTotal found for RunId={run_id}")
         except Exception as e:
-            logger.error(f"Failed to fetch TotalYield for RunId={run_id}: {e}")
-
+            logger.error(f"API request failed for RunId={run_id}: {e}")
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
     yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
