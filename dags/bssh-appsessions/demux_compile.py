@@ -112,11 +112,8 @@ def read_and_calculate_percentage_reads():
     run_rows = merged_df[merged_df["RowType"] == "Run"]
 
     for _, row in run_rows.iterrows():
-        run_id_raw = row.get("RunId")
-        try:
-            run_id = str(int(float(run_id_raw))).strip()
-        except Exception as e:
-            logger.warning(f"Invalid RunId: {run_id_raw}, error: {e}")
+        run_id = row.get("RunId")
+        if not run_id or run_id.lower() == "nan":
             continue
     
         api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
@@ -132,16 +129,13 @@ def read_and_calculate_percentage_reads():
             total_yield = data.get("YieldTotal")
     
             if total_yield is not None:
-                mask = (
-                    (merged_df["RowType"] == "Run") &
-                    (merged_df["RunId"] == run_id)
-                )
+                mask = (merged_df["RowType"] == "Run") & (merged_df["RunId"] == run_id)
                 merged_df.loc[mask, "TotalFlowcellYield"] = total_yield
-                logger.info(f"✅ Set TotalFlowcellYield={total_yield} for RunId={run_id}")
+                logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
             else:
-                logger.warning(f"No YieldTotal found for RunId={run_id}")
+                logger.warning(f"No yield found for RunId={run_id}")
         except Exception as e:
-            logger.error(f"API request failed for RunId={run_id}: {e}")
+            logger.error(f"API call failed for RunId={run_id}: {e}")                
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
     yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
