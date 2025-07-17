@@ -110,7 +110,7 @@ def read_and_calculate_percentage_reads():
     
     # Filter only rows of type 'Run'
     run_rows = bcl_df[bcl_df["RowType"] == "Run"]
-    
+    API_TOKEN = Variable.get("BSSH_APIKEY1")
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
         biosample_name = row.get("BioSampleName")
@@ -120,13 +120,11 @@ def read_and_calculate_percentage_reads():
             if run_id:
                 run_id = str(run_id).strip().split(".")[0]
     
-        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
-        headers = {
-            "x-access-token": API_TOKEN,
-            "Accept": "application/json"
-        }
-    
-        try:
+            api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
+            headers = {
+                "x-access-token": API_TOKEN,
+                "Accept": "application/json"
+            }
             response = requests.get(api_url, headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -134,13 +132,11 @@ def read_and_calculate_percentage_reads():
             total_yield = data.get("YieldTotal")
     
             if total_yield is not None:
-                # Update merged_df where BioSampleName matches and Type is Run
-                mask = (merged_df["BioSampleName"] == biosample_name) & (bcl_df["RowType"] == "Run")
+                mask = (merged_df["BioSampleName"] == biosample_name) & (merged_df["RowType"] == "Run")
                 merged_df.loc[mask, "TotalFlowcellYield"] = total_yield
-                logger.info(f"Set TotalFlowcellYield={total_yield } for RunId={run_id}")
+                logger.info(f"Set TotalFlowcellYield={total_yield} for RunId={run_id}")
             else:
-                logger.warning(f"No TotalYield found for RunId={run_id}")
-    
+                logger.warning(f"No YieldTotal found for RunId={run_id}")
         except Exception as e:
             logger.error(f"Failed to fetch TotalYield for RunId={run_id}: {e}")
 
