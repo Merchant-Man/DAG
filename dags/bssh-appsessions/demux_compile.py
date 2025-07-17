@@ -106,6 +106,8 @@ def read_and_calculate_percentage_reads():
         how="left"
     )
     # Initialize column
+    if "TotalFlowcellYield" not in merged_df.columns:
+        merged_df["TotalFlowcellYield"] = None
     merged_df["RunId"] = merged_df["RunId"].astype(str).str.strip().str.split(".").str[0]
     
     # Filter only rows of type 'Run'
