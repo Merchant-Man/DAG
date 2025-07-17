@@ -99,6 +99,7 @@ def read_and_calculate_percentage_reads():
     bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
 
     # Merge on BioSampleName
+    bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
     merged_df = pd.merge(
         bcl_df,
         grouped_df.rename(columns={"SampleID": "BioSampleName"}),
