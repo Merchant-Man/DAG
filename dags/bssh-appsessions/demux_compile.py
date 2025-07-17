@@ -35,42 +35,49 @@ def load_yield_csv():
         pages = paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
 
         yield_dfs = []
+        file_count = 0
 
         for page in pages:
             for obj in page.get("Contents", []):
                 key = obj["Key"]
                 if key.endswith(YIELD_FILENAME_SUFFIX):
-                    logger.info(f"📄 Found Quality Metrics File: {key}")
-                    body = s3.get_object(Bucket=YIELD_BUCKET, Key=key)["Body"]
-                    df = pd.read_csv(StringIO(body.read().decode("utf-8")))
+                    logger.info(f"📄 Loading Yield file: {key}")
+                    file_count += 1
+                    try:
+                        body = s3.get_object(Bucket=YIELD_BUCKET, Key=key)["Body"]
+                        df = pd.read_csv(StringIO(body.read().decode("utf-8")))
 
-                    if "SampleID" not in df.columns or "Yield" not in df.columns:
-                        logger.warning(f"⚠️ Missing SampleID or Yield in {key}. Skipping.")
-                        continue
+                        if "SampleID" not in df.columns or "Yield" not in df.columns:
+                            logger.warning(f"⚠️ Skipping file (missing columns): {key}")
+                            continue
 
-                    df = df[df["SampleID"] != "Undetermined"]
-                    df["Yield"] = pd.to_numeric(df["Yield"], errors="coerce")
-                    df = df[["SampleID", "Yield"]]
-                    yield_dfs.append(df)
-
+                        df = df[df["SampleID"] != "Undetermined"]
+                        df["Yield"] = pd.to_numeric(df["Yield"], errors="coerce")
+                        df = df[["SampleID", "Yield"]]
+                        yield_dfs.append(df)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to parse Yield CSV {key}: {e}")
+        
         if not yield_dfs:
-            logger.warning("⚠️ No valid Quality_Metrics.csv files found.")
-            return None
+            logger.warning("🚫 No valid Yield files loaded.")
+            return pd.DataFrame(columns=["BioSampleName", "Yield"])
 
+        logger.info(f"✅ Parsed {file_count} Quality_Metrics.csv files.")
+
+        # Combine and aggregate
         all_yield_df = pd.concat(yield_dfs, ignore_index=True)
         agg_df = all_yield_df.groupby("SampleID", as_index=False)["Yield"].sum()
         agg_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
         agg_df["BioSampleName"] = agg_df["BioSampleName"].astype(str).str.strip().str.upper()
 
-        logger.info(f"✅ Aggregated Yield DataFrame shape: {agg_df.shape}")
+        logger.info("📊 Yield aggregation complete. Sample:")
+        logger.info(agg_df.head(10).to_string(index=False))
+
         return agg_df
 
     except Exception as e:
         logger.error(f"❌ Failed to load Yield CSVs: {e}")
-        return None
-def transform_data(df, curr_ds):
-    logger.info("No transformation applied.")
-    return df
+        return pd.DataFrame(columns=["BioSampleName", "Yield"])
 def process_demux_files():
     return read_and_calculate_percentage_reads()
     
