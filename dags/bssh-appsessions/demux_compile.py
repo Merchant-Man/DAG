@@ -109,7 +109,7 @@ def read_and_calculate_percentage_reads():
     merged_df["TotalFlowcellYield"] = None
     
     # Filter only rows of type 'Run'
-    run_rows = bcl_df[bcl_df["Type"] == "Run"]
+    run_rows = bcl_df[bcl_df["RowType"] == "Run"]
     
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
