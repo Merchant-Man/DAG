@@ -101,18 +101,23 @@ def read_and_calculate_percentage_reads():
 
     # Merge on BioSampleName
     bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
+    bcl_df["BioSampleName"] = bcl_df["BioSampleName"].astype(str).str.strip().str.upper()
+    grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
+    grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    agg_yield_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
+    agg_yield_df["BioSampleName"] = agg_yield_df["BioSampleName"].astype(str).str.strip().str.upper()
+    metrics_df = pd.merge(grouped_df, agg_yield_df, on="BioSampleName", how="outer")
+
     merged_df = pd.merge(
         bcl_df,
-        grouped_df.rename(columns={"SampleID": "BioSampleName"}),
+        metrics_df,
         on="BioSampleName",
         how="left"
     )
-    # Initialize column
+    run_rows = merged_df[merged_df["RowType"] == "Run"]
+# Initialize
     if "TotalFlowcellYield" not in merged_df.columns:
         merged_df["TotalFlowcellYield"] = None
-    
-    run_rows = merged_df[merged_df["RowType"] == "Run"]
-    
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
         if not run_id or run_id.lower() == "nan":
@@ -140,6 +145,7 @@ def read_and_calculate_percentage_reads():
                 logger.warning(f"No yield found for RunId={run_id}")
         except Exception as e:
             logger.error(f"API call failed for RunId={run_id}: {e}")
+    
     yield_s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     yield_paginator = yield_s3.get_paginator("list_objects_v2")
     yield_pages = yield_paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
@@ -154,33 +160,36 @@ def read_and_calculate_percentage_reads():
                 quality_keys.append(key)
                 if latest_yield_obj is None or obj["LastModified"] > latest_yield_obj["LastModified"]:
                     latest_yield_obj = obj
+    
     if not quality_keys:
         logger.warning("No Quality_Metrics.csv files found under illumina/qs/fil.*/")
         return
-    if latest_yield_obj is None or obj["LastModified"] > latest_yield_obj["LastModified"]:
-        latest_yield_obj = obj
+    if latest_yield_obj is None:
         logger.warning("No Yield CSV found.")
         return
+    
     yield_key = latest_yield_obj["Key"]
     logger.info(f"Using Yield file: {yield_key}")
     obj = yield_s3.get_object(Bucket=YIELD_BUCKET, Key=yield_key)
     yield_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
-    if "SampleID" not in yield_df.columns:
-        logger.warning("Yield file missing 'BioSampleName' column.")
+    
+    if "SampleID" not in yield_df.columns or "Yield" not in yield_df.columns:
+        logger.warning("Yield file missing required columns.")
         return
-    if "Yield" not in yield_df.columns:
-        logger.warning("Yield file missing 'Yield' column.")
-        return
-    # Clean Yield column(Numerical)
     
     yield_df = yield_df[yield_df["SampleID"] != "Undetermined"]
     yield_df["Yield"] = pd.to_numeric(yield_df["Yield"], errors="coerce")
-    
-    # Aggregate Yield per SampleID, # Merge with main
     agg_yield_df = yield_df.groupby("SampleID", as_index=False)["Yield"].sum()
     agg_yield_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
-    
+    agg_yield_df["BioSampleName"] = agg_yield_df["BioSampleName"].astype(str).str.strip().str.upper()
+
     # Merge into maindf
+    grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
+    grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    metrics_df = pd.merge(grouped_df, agg_yield_df, on="BioSampleName", how="outer")
+    bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
+    bcl_df["BioSampleName"] = bcl_df["BioSampleName"].astype(str).str.strip().str.upper()
+
     merged_df = pd.merge(
         merged_df,
         agg_yield_df,
