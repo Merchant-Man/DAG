@@ -178,8 +178,19 @@ def read_and_calculate_percentage_reads():
         except Exception as e:
             logger.error(f"API error for RunId={run_id}: {e}")
 
-    return merged_df
+    
+    # Final DataFrame stats and preview
+    total_rows, total_columns = merged_df.shape
+    logger.info(f"📊 Final DataFrame shape: {total_rows} rows × {total_columns} columns")
 
+    pd.set_option('display.max_rows', 200)        # Show up to 200 rows
+    pd.set_option('display.max_columns', None)    # Show all columns
+    pd.set_option('display.width', None)          # Prevent line wrapping
+    pd.set_option('display.max_colwidth', None)   # Show full content in each cell
+
+    print("\n🔍 Preview of merged DataFrame (first 200 rows):")
+    print(merged_df.head(200))
+    return merged_df
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = datetime.today().strftime('%Y-%m-%d')
     merged_df = read_and_calculate_percentage_reads()
