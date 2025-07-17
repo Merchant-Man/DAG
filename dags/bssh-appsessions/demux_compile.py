@@ -19,7 +19,7 @@ YIELD_BUCKET = "bgsi-data-dwh-bronze"
 YIELD_PREFIX = "illumina/qs/"
 YIELD_FILENAME_SUFFIX = "Quality_Metrics.csv"
 API_BASE_URL = "https://api.aps4.sh.basespace.illumina.com/v2"
-API_TOKEN = "Variable.get("BSSH_APIKEY1")"
+API_TOKEN = Variable.get("BSSH_APIKEY1")
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
     conn = Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
