@@ -113,6 +113,10 @@ def read_and_calculate_percentage_reads():
     
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
+        if isinstance(run_id, float):
+            run_id = int(run_id)
+        if run_id:
+            run_id = str(run_id).strip().split(".")[0]
         biosample_name = row.get("BioSampleName")
     
         if not run_id or not biosample_name:
