@@ -134,7 +134,7 @@ def read_and_calculate_percentage_reads():
     
             if total_yield is not None:
                 # Update merged_df where BioSampleName matches and Type is Run
-                mask = (merged_df["BioSampleName"] == biosample_name) & (bcl_df["Type"] == "Run")
+                mask = (merged_df["BioSampleName"] == biosample_name) & (bcl_df["RowType"] == "Run")
                 merged_df.loc[mask, "TotalFlowcellYield"] = total_yield
                 logger.info(f"Set TotalFlowcellYield={total_yield } for RunId={run_id}")
             else:
