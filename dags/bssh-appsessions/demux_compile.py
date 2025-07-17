@@ -1,4 +1,5 @@
 import boto3
+import requests
 import pandas as pd
 from io import StringIO
 import io
