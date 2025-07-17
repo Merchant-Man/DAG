@@ -153,8 +153,11 @@ def read_and_calculate_percentage_reads():
     bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
     bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
     bcl_df["BioSampleName"] = bcl_df["BioSampleName"].astype(str).str.strip().str.upper()
+    
     # Merge to Yield  # Merge on BioSampleName
     yield_df = load_yield_csv()
+    for df in [grouped_df, yield_df, bcl_df]:
+        df["BioSampleName"] = df["BioSampleName"].astype(str).str.strip().str.upper()
     if yield_df is None:
         logger.warning("Yield data missing, continuing without it.")
         metrics_df = grouped_df
