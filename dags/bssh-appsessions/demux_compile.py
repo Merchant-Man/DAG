@@ -120,7 +120,7 @@ def read_and_calculate_percentage_reads():
             if run_id:
                 run_id = str(run_id).strip().split(".")[0]
     
-        api_url = f"{API_BASE_URL}/{run_id}/SequencingStats"
+        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
         headers = {
             "x-access-token": API_TOKEN,
             "Accept": "application/json"
