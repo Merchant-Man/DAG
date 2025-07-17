@@ -124,7 +124,9 @@ def read_and_calculate_percentage_reads():
         }
     
         try:
+            logger.info(f"📡 Requesting TotalFlowcellYield for RunId={run_id} via {api_url}")
             response = requests.get(api_url, headers=headers)
+            logger.info(f"🌐 Response status for RunId={run_id}: {response.status_code}")
             response.raise_for_status()
             data = response.json()
             total_yield = data.get("YieldTotal")
