@@ -118,9 +118,9 @@ def read_and_calculate_percentage_reads():
             if pd.isna(run_id_raw) or not biosample_name:
                 raise ValueError("Missing RunId or BioSampleName")
             run_id = str(int(float(run_id_raw))).strip()
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping row due to bad RunId or BioSampleName: RunId='{run_id_raw}', Error={e}")
-                continue
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Skipping row due to bad RunId or BioSampleName: RunId='{run_id_raw}', Error={e}")
+            continue
     
         api_url = f"{API_BASE_URL}/{run_id}/SequencingStats"
         headers = {
