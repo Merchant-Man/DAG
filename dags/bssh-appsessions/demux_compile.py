@@ -113,17 +113,16 @@ def read_and_calculate_percentage_reads():
     
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
-        if isinstance(run_id, float):
-            run_id = int(run_id)
-        if run_id:
-            run_id = str(run_id).strip().split(".")[0]
         biosample_name = row.get("BioSampleName")
+        try:
+            if pd.isna(run_id_raw) or not biosample_name:
+                raise ValueError("Missing RunId or BioSampleName")
+            run_id = str(int(float(run_id_raw))).strip()
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Skipping row due to bad RunId or BioSampleName: RunId='{run_id_raw}', Error={e}")
+                continue
     
-        if not run_id or not biosample_name:
-            logger.warning("Missing RunId or BioSampleName in row, skipping.")
-            continue
-    
-        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
+        api_url = f"{API_BASE_URL}/{run_id}/SequencingStats"
         headers = {
             "x-access-token": API_TOKEN,
             "Accept": "application/json"
