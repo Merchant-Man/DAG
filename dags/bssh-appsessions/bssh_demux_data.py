@@ -26,7 +26,6 @@ S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
 # Updated OBJECT_PATH to match what silver_transform_to_db expects
 OBJECT_PATH = "bssh/Demux"
-OBJECT_PATH2 = "
 
 def create_download_url(api_key: str, project_id: str, file_id: str) -> str:
     url = f"{BASE_URL}/projects/{project_id}/data/{file_id}:createDownloadUrl"
