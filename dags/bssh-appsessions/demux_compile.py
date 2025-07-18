@@ -28,7 +28,18 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password
     )
-def load_yield_csv():
+def clean_biosample_column(df, column="BioSampleName"):
+    """Standardize biosample column for consistent merging."""
+    df[column] = (
+        df[column]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(r"\s+", "", regex=True)
+    )
+    return df
+
+def load_yield_csv(bcl_df):
     try:
         s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
         paginator = s3.get_paginator("list_objects_v2")
@@ -51,7 +62,7 @@ def load_yield_csv():
                             logger.warning(f"⚠️ Skipping file (missing columns): {key}")
                             continue
 
-                        df = df[df["SampleID"] != "Undetermined"]
+                        df = df[df["SampleID"].astype(str).str.upper() != "UNDETERMINED"]
                         df["Yield"] = pd.to_numeric(df["Yield"], errors="coerce")
                         df = df[["SampleID", "Yield"]]
                         yield_dfs.append(df)
@@ -60,24 +71,36 @@ def load_yield_csv():
         
         if not yield_dfs:
             logger.warning("🚫 No valid Yield files loaded.")
-            return pd.DataFrame(columns=["BioSampleName", "Yield"])
+            return bcl_df
 
         logger.info(f"✅ Parsed {file_count} Quality_Metrics.csv files.")
 
         # Combine and aggregate
         all_yield_df = pd.concat(yield_dfs, ignore_index=True)
+        all_yield_df["SampleID"] = all_yield_df["SampleID"].astype(str)
         agg_df = all_yield_df.groupby("SampleID", as_index=False)["Yield"].sum()
         agg_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
-        agg_df["BioSampleName"] = agg_df["BioSampleName"].astype(str).str.strip().str.upper()
+
+        # CleanDataFrames
+        agg_df = clean_biosample_column(agg_df, "BioSampleName")
+        bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
 
         logger.info("📊 Yield aggregation complete. Sample:")
         logger.info(agg_df.head(10).to_string(index=False))
 
-        return agg_df
+        # Merge 
+        merged = pd.merge(bcl_df, agg_df, on="BioSampleName", how="left")
+
+        unmatched = merged[(merged["RowType"] == "BioSample") & (merged["Yield"].isna())]
+        if not unmatched.empty:
+            logger.warning(f"⚠️ {len(unmatched)} BioSample rows did not match any Yield entry.")
+            logger.info(f"🕵️ Example unmatched BioSampleNames:\n{unmatched['BioSampleName'].drop_duplicates().head(10).to_list()}")
+
+        return merged
 
     except Exception as e:
-        logger.error(f"❌ Failed to load Yield CSVs: {e}")
-        return pd.DataFrame(columns=["BioSampleName", "Yield"])
+        logger.error(f"❌ Failed to load or merge Yield CSVs: {e}")
+        return bcl_df
 def process_demux_files():
     return read_and_calculate_percentage_reads()
     
@@ -131,10 +154,14 @@ def read_and_calculate_percentage_reads():
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
 
-    # Append
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
+    curr_ds = datetime.today().strftime('%Y-%m-%d')
+
+    #  Load latest BCL AppSession
+    s3 = get_boto3_client_from_connection(conn_id=aws_conn_id)
     appsession_prefix = "bssh/appsessions/"
     paginator = s3.get_paginator("list_objects_v2")
-    page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=appsession_prefix)
+    page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=appsession_prefix)
 
     latest_obj = None
     for page in page_iterator:
@@ -144,32 +171,36 @@ def read_and_calculate_percentage_reads():
                     latest_obj = obj
 
     if not latest_obj:
-        print("No BCLConvert AppSession CSV found.")
+        logger.warning(" No BCLConvert AppSession file found.")
         return
 
     bcl_key = latest_obj["Key"]
-    print(f" Using latest AppSession file: {bcl_key}")
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=bcl_key)
+    logger.info(f" Using BCLConvert AppSession file: {bcl_key}")
+    obj = s3.get_object(Bucket=bucket_name, Key=bcl_key)
     bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
+
     bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
-    bcl_df["BioSampleName"] = bcl_df["BioSampleName"].astype(str).str.strip().str.upper()
-    
-    # Merge to Yield  # Merge on BioSampleName
-    yield_df = load_yield_csv()
-    for df in [grouped_df, yield_df, bcl_df]:
-        df["BioSampleName"] = df["BioSampleName"].astype(str).str.strip().str.upper()
-    if yield_df is None:
-        logger.warning("Yield data missing, continuing without it.")
-        metrics_df = grouped_df
+    bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
+
+    # Add demux metrics
+    logger.info(" Appending Demultiplex metrics...")
+    demux_df = read_and_calculate_percentage_reads()
+    if demux_df is not None:
+        demux_df = clean_biosample_column(demux_df, "BioSampleName")
+        bcl_df = pd.merge(bcl_df, demux_df, on="BioSampleName", how="left")
     else:
-        metrics_df = pd.merge(grouped_df, yield_df, on="BioSampleName", how="left")
+        logger.warning("⚠️ No Demultiplex metrics found.")
 
-    merged_df = pd.merge(bcl_df, metrics_df, on="BioSampleName", how="left")
+    # Append Yield
+    logger.info("🔗 Appending Yield data...")
+    bcl_df = load_yield_csv(bcl_df)
+    bcl_df.loc[bcl_df["RowType"] != "BioSample", "Yield"] = None
 
-    if "TotalFlowcellYield" not in merged_df.columns:
-        merged_df["TotalFlowcellYield"] = None
+    # Fetch Total Flowcell Yield from API
+    logger.info("🔗 Fetching Flowcell-level Yield totals...")
+    bcl_df["TotalFlowcellYield"] = None
+    run_rows = bcl_df[bcl_df["RowType"] == "Run"]
 
-    run_rows = merged_df[merged_df["RowType"] == "Run"]
     for _, row in run_rows.iterrows():
         run_id = row.get("RunId")
         if not run_id or run_id.lower() == "nan":
@@ -189,46 +220,39 @@ def read_and_calculate_percentage_reads():
             total_yield = data.get("YieldTotal")
 
             if total_yield is not None:
-                merged_df.loc[(merged_df["RowType"] == "Run") & (merged_df["RunId"] == run_id), "TotalFlowcellYield"] = total_yield
+                bcl_df.loc[
+                    (bcl_df["RowType"] == "Run") & (bcl_df["RunId"] == run_id),
+                    "TotalFlowcellYield"
+                ] = total_yield
                 logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
             else:
-                logger.warning(f"No YieldTotal found for RunId={run_id}")
+                logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
         except Exception as e:
-            logger.error(f"API error for RunId={run_id}: {e}")
+            logger.error(f"❌ API error for RunId={run_id}: {e}")
 
-    
-    # Final DataFrame stats and preview
-    total_rows, total_columns = merged_df.shape
-    logger.info(f"📊 Final DataFrame shape: {total_rows} rows × {total_columns} columns")
-
-    pd.set_option('display.max_rows', 200)        # Show up to 200 rows
-    pd.set_option('display.max_columns', None)    # Show all columns
-    pd.set_option('display.width', None)          # Prevent line wrapping
-    pd.set_option('display.max_colwidth', None)   # Show full content in each cell
-
-    print("\n🔍 Preview of merged DataFrame (first 200 rows):")
-    print(merged_df.head(200))
-    return merged_df
-
-    
-def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
-    curr_ds = datetime.today().strftime('%Y-%m-%d')
-    merged_df = read_and_calculate_percentage_reads()
-    if merged_df is None:
-        logger.warning("Merged DataFrame is empty. Skipping upload.")
-        return
-
-    df = transform_func(merged_df, curr_ds) if transform_func else merged_df.copy()
+    # Transform + audit + save
+    df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df.copy()
     df["created_at"] = curr_ds
     df["updated_at"] = curr_ds
 
+    logger.info(f"📊 Final DataFrame shape: {df.shape[0]} rows × {df.shape[1]} columns")
+
+    pd.set_option('display.max_rows', 200)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+
+    print("\n🔍 Preview of merged DataFrame (first 200 rows):")
+    print(df.head(200))
+
+    # Save to S3
     buffer = io.StringIO()
     df.to_csv(buffer, index=False)
     buffer.seek(0)
 
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
     s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
-    s3.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
+    s3_hook.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
     logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
 
 
