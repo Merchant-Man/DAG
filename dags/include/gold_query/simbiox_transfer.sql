@@ -14,6 +14,39 @@ DROP TABLE IF EXISTS gold_simbiox_transfer_new;
 
 CREATE TABLE gold_simbiox_transfer_new (
 	WITH
+
+	all_demog AS (
+		SELECT
+			*,
+			CASE
+				WHEN FLOOR(DATEDIFF(creation_date, birth_date) / 365.25) < 0 THEN 0
+				ELSE FLOOR(DATEDIFF(creation_date, birth_date) / 365.25)
+			END age_at_recruitment
+		FROM
+			(
+				SELECT
+					id_subject,
+					birthdate birth_date,
+					CASE
+						WHEN gender = 'Perempuan' THEN 'FEMALE'
+						WHEN gender = 'Laki-laki' THEN 'MALE'
+					END sex,
+					creationDate creation_date
+				FROM
+					dwh_restricted.decrypt_regina
+				UNION ALL
+				SELECT
+					id_subject,
+					CASE
+						WHEN birth_date = "0976-05-19" THEN DATE("1976-05-19")
+						ELSE birth_date
+					END birth_date,
+					UPPER(sex) sex,
+					created_at
+				FROM
+					dwh_restricted.decrypted_phenovar_participants
+			) t
+	),
 		log_visit AS (
 			SELECT
 				px_id,
@@ -46,7 +79,8 @@ CREATE TABLE gold_simbiox_transfer_new (
 				t3.id_subject,
 				t4.biobank_nama patient_biobank,
 				t5.patient_categ,
-				COALESCE(rd.sex, pp.sex) registry_sex,
+				demog.sex registry_sex,
+				demog.age_at_recruitment,
 				YEAR(tanggal_formulir) AS year_formulir,
 				YEAR(tanggal_pengiriman) AS year_pengiriman,
 				YEAR(tanggal_penerimaan) AS year_penerimaan,
@@ -59,8 +93,7 @@ CREATE TABLE gold_simbiox_transfer_new (
 				LEFT JOIN simbiox_patients t3 ON t2.id_patient = t3.id_patient
 				LEFT JOIN master_biobank t4 ON t3.id_biobank = t4.id_biobank
 				LEFT JOIN log_visit t5 ON t3.id_patient = t5.px_id
-				LEFT JOIN regina_demography rd ON t3.id_subject = rd.id_subject
-				LEFT JOIN phenovar_participants pp ON t3.id_subject = pp.id_subject
+				LEFT JOIN all_demog demog ON t3.id_subject = demog.id_subject
 			WHERE
 				t1.biobank_asal != 'Biobank Pusat'
 		),
@@ -120,6 +153,7 @@ CREATE TABLE gold_simbiox_transfer_new (
 		t3.biobank_nama patient_biobank,
 		"Control" patient_categ,
 		t4.sex registry_sex,
+		t4.age_at_recruitment,
 		"2025" year_formulir,
 		"2025" year_pengiriman,
 		"2025" year_penerimaan,
@@ -131,7 +165,7 @@ CREATE TABLE gold_simbiox_transfer_new (
 		simbiox_biosamples t1
 		LEFT JOIN simbiox_patients t2 ON t1.id_patient = t2.id_patient
 		LEFT JOIN master_biobank t3 ON t2.id_biobank = t3.id_biobank
-		LEFT JOIN phenovar_participants t4 ON t2.id_subject = t4.id_subject
+		LEFT JOIN all_demog t4 ON t2.id_subject = t4.id_subject
 	WHERE
 		t1.origin_code_repository LIKE "SKI%"
 		OR t1.code_repository LIKE "SKI%"
