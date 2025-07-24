@@ -1,15 +1,26 @@
 import boto3
+import requests
 import pandas as pd
 from io import StringIO
+import io
 from airflow.models import Variable, Connection
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 AWS_CONN_ID = "aws"
 PREFIX = "bssh/Demux/"                 
-FILENAME_SUFFIX = "Demultiplex_Stats.csv"  
+FILENAME_SUFFIX = "Demultiplex_Stats.csv"
+YIELD_BUCKET = "bgsi-data-dwh-bronze"
+YIELD_PREFIX = "illumina/qs/"
+YIELD_FILENAME_SUFFIX = "Quality_Metrics.csv"
+API_BASE_URL = "https://api.aps4.sh.basespace.illumina.com/v2/runs"
+API_TOKEN = Variable.get("BSSH_APIKEY2")
 def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
     conn = Connection.get_connection_from_secrets(conn_id)
     return boto3.client(
@@ -17,10 +28,88 @@ def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
         aws_access_key_id=conn.login,
         aws_secret_access_key=conn.password
     )
+def clean_biosample_column(df, column="BioSampleName"):
+    """Standardize biosample column for consistent merging."""
+    df[column] = (
+        df[column]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(r"\s+", "", regex=True)
+    )
+    return df
+
+def load_yield_csv(bcl_df):
+    try:
+        s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
+        paginator = s3.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=YIELD_BUCKET, Prefix=YIELD_PREFIX)
+
+        yield_dfs = []
+        file_count = 0
+
+        for page in pages:
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(YIELD_FILENAME_SUFFIX):
+                    logger.info(f"📄 Loading Yield file: {key}")
+                    file_count += 1
+                    try:
+                        body = s3.get_object(Bucket=YIELD_BUCKET, Key=key)["Body"]
+                        df = pd.read_csv(StringIO(body.read().decode("utf-8")))
+
+                        if "SampleID" not in df.columns or "Yield" not in df.columns:
+                            logger.warning(f"⚠️ Skipping file (missing columns): {key}")
+                            continue
+
+                        df = df[df["SampleID"].astype(str).str.upper() != "UNDETERMINED"]
+                        df["Yield"] = pd.to_numeric(df["Yield"], errors="coerce")
+                        df = df[["SampleID", "Yield"]]
+                        yield_dfs.append(df)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to parse Yield CSV {key}: {e}")
+        
+        if not yield_dfs:
+            logger.warning("🚫 No valid Yield files loaded.")
+            return bcl_df
+
+        logger.info(f"✅ Parsed {file_count} Quality_Metrics.csv files.")
+
+        # Combine and aggregate
+        all_yield_df = pd.concat(yield_dfs, ignore_index=True)
+        all_yield_df["SampleID"] = all_yield_df["SampleID"].astype(str)
+        agg_df = all_yield_df.groupby("SampleID", as_index=False)["Yield"].sum()
+        agg_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
+
+        # CleanDataFrames
+        agg_df = clean_biosample_column(agg_df, "BioSampleName")
+        bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
+
+        logger.info("📊 Yield aggregation complete. Sample:")
+        logger.info(agg_df.head(10).to_string(index=False))
+
+        # Merge 
+        merged = pd.merge(bcl_df, agg_df, on="BioSampleName", how="left")
+
+        unmatched = merged[(merged["RowType"] == "BioSample") & (merged["Yield"].isna())]
+        if not unmatched.empty:
+            logger.warning(f"⚠️ {len(unmatched)} BioSample rows did not match any Yield entry.")
+            logger.info(f"🕵️ Example unmatched BioSampleNames:\n{unmatched['BioSampleName'].drop_duplicates().head(10).to_list()}")
+
+        return merged
+
+    except Exception as e:
+        logger.error(f"❌ Failed to load or merge Yield CSVs: {e}")
+        return bcl_df
 def process_demux_files():
     return read_and_calculate_percentage_reads()
     
+def transform_data(df, curr_ds):
+    logger.info("ℹ️ No transformation applied in transform_data().")
+    return df
+    
 def read_and_calculate_percentage_reads():
+    # Demux
     s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     paginator = s3.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX)
@@ -62,7 +151,110 @@ def read_and_calculate_percentage_reads():
 
     print(grouped_df[['SampleID', '# Reads', '% Reads']])
     print(grouped_df.columns.tolist())
-    return grouped_df
+    grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
+    grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+
+def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
+    curr_ds = datetime.today().strftime('%Y-%m-%d')
+
+    #  Load latest BCL AppSession
+    s3 = get_boto3_client_from_connection(conn_id=aws_conn_id)
+    appsession_prefix = "bssh/appsessions/"
+    paginator = s3.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=appsession_prefix)
+
+    latest_obj = None
+    for page in page_iterator:
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".csv") and "bclconvert_appsessions" in obj["Key"]:
+                if latest_obj is None or obj["LastModified"] > latest_obj["LastModified"]:
+                    latest_obj = obj
+
+    if not latest_obj:
+        logger.warning(" No BCLConvert AppSession file found.")
+        return
+
+    bcl_key = latest_obj["Key"]
+    logger.info(f" Using BCLConvert AppSession file: {bcl_key}")
+    obj = s3.get_object(Bucket=bucket_name, Key=bcl_key)
+    bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
+
+    bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
+    bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
+
+    # Add demux metrics
+    logger.info(" Appending Demultiplex metrics...")
+    demux_df = read_and_calculate_percentage_reads()
+    if demux_df is not None:
+        demux_df = clean_biosample_column(demux_df, "BioSampleName")
+        bcl_df = pd.merge(bcl_df, demux_df, on="BioSampleName", how="left")
+    else:
+        logger.warning("⚠️ No Demultiplex metrics found.")
+
+    # Append Yield
+    logger.info("🔗 Appending Yield data...")
+    bcl_df = load_yield_csv(bcl_df)
+    bcl_df.loc[bcl_df["RowType"] != "BioSample", "Yield"] = None
+
+    # Fetch Total Flowcell Yield from API
+    logger.info("🔗 Fetching Flowcell-level Yield totals...")
+    bcl_df["TotalFlowcellYield"] = None
+    run_rows = bcl_df[bcl_df["RowType"] == "Run"]
+
+    for _, row in run_rows.iterrows():
+        run_id = row.get("RunId")
+        if not run_id or run_id.lower() == "nan":
+            continue
+
+        api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
+        headers = {
+            "x-access-token": API_TOKEN,
+            "Accept": "application/json"
+        }
+
+        try:
+            logger.info(f"📡 Requesting TotalFlowcellYield for RunId={run_id}")
+            response = requests.get(api_url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            total_yield = data.get("YieldTotal")
+
+            if total_yield is not None:
+                bcl_df.loc[
+                    (bcl_df["RowType"] == "Run") & (bcl_df["RunId"] == run_id),
+                    "TotalFlowcellYield"
+                ] = total_yield
+                logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
+            else:
+                logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
+        except Exception as e:
+            logger.error(f"❌ API error for RunId={run_id}: {e}")
+
+    # Transform + audit + save
+    df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df.copy()
+    df["created_at"] = curr_ds
+    df["updated_at"] = curr_ds
+
+    logger.info(f"📊 Final DataFrame shape: {df.shape[0]} rows × {df.shape[1]} columns")
+
+    pd.set_option('display.max_rows', 200)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+
+    print("\n🔍 Preview of merged DataFrame (first 200 rows):")
+    print(df.head(200))
+
+    # Save to S3
+    buffer = io.StringIO()
+    df.to_csv(buffer, index=False)
+    buffer.seek(0)
+
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
+    s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
+    s3_hook.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
+    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
+
 
 # ----------------------------
 # DAG Definition
@@ -91,3 +283,17 @@ process_task = PythonOperator(
     python_callable=read_and_calculate_percentage_reads,  
     dag=dag
 )
+
+fetch_and_dump_task = PythonOperator(
+    task_id="bronze_fetch_bssh_bclconvertandQC",
+    python_callable=fetch_bclconvert_and_dump,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": BUCKET_NAME,
+        "object_path": "bssh/final_output",
+        "transform_func": transform_data  
+    },
+    provide_context=True
+)
+process_task >> fetch_and_dump_task

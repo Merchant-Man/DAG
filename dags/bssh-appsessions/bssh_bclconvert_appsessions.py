@@ -12,7 +12,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
 from datetime import timezone
 # Silver task
-from utils.utils import fetch_and_dump, silver_transform_to_db
+#from utils.utils import fetch_and_dump, silver_transform_to_db
 
 # ----------------------------
 # Constants and Config
@@ -189,10 +189,8 @@ with open(os.path.join("dags/repo/dags/include/loader", LOADER_QUERY_PATH)) as f
     loader_query = f.read()
 
 def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
-
     # Remove duplicates from the main DataFrame
     df = df.drop_duplicates()
-
     df = df.astype(str)
     return df
 
@@ -210,22 +208,23 @@ fetch_and_dump_task = PythonOperator(
     provide_context=True
 )
 
-silver_transform_to_db_task = PythonOperator(
-    task_id="silver_transform_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}",
-        "transform_func": transform_data,
-        "db_secret_url": RDS_SECRET,
-        "curr_ds": "{{ ds }}",
-        "multi_files": True  # Enable multi-files mode to find files with date in name
-    },
-    templates_dict={"insert_query": loader_query},
-    provide_context=True
-)
+#silver_transform_to_db_task = PythonOperator(
+#    task_id="silver_transform_to_db",
+#    python_callable=silver_transform_to_db,
+#    dag=dag,
+#    op_kwargs={
+#        "aws_conn_id": AWS_CONN_ID,
+#        "bucket_name": S3_DWH_BRONZE,
+#        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}",
+#        "transform_func": transform_data,
+#        "db_secret_url": RDS_SECRET,
+#        "curr_ds": "{{ ds }}",
+#        "multi_files": True  # Enable multi-files mode to find files with date in name
+#    },
+#    templates_dict={"insert_query": loader_query},
+#    provide_context=True
+#)
 
 # DAG flow
-fetch_and_dump_task >> silver_transform_to_db_task
+#fetch_and_dump_task >> silver_transform_to_db_task
+fetch_and_dump_task

@@ -10,7 +10,7 @@
 				- 13-06-2025: Abdullah Faqih - Adding indexes for performance improvement.
 				- 30-06-2025: Renata Triwijaya - Updated QC threshold to lenient;
 												 Adding QC category for tiered coverage classification.
-				- 18-07-2025: Renata Triwijaya - Add column patient_categ.
+        - 18-07-2025: Renata Triwijaya - Add column patient_categ.
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
@@ -49,7 +49,7 @@ WITH
 					sbp.id_mpi,
 					sbp.id_subject,
 					sbp.biobank_nama origin_biobank,
-					-- # null sex means we can't find the simbiox data on both registries.
+          -- # null sex means we can't find the simbiox data on both registries.
 					sbp.registry_sex sex,
 					sbp.patient_categ,
 					seq.date_primary,
