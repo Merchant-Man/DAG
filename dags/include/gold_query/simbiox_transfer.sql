@@ -204,6 +204,7 @@ INSERT INTO
 			patient_biobank,
 			patient_categ,
 			registry_sex,
+			age_at_recruitment,
 			year_formulir,
 			year_pengiriman,
 			'2024' year_penerimaan,
