@@ -1034,3 +1034,34 @@ CREATE INDEX institution_id_idx
 ON phenovar_ethical_clearance(institution_id);
 CREATE INDEX hub_id_idx
 ON phenovar_ethical_clearance(hub_id);
+
+
+CREATE TABLE phenovar_form (
+  id VARCHAR(36) PRIMARY KEY,
+  diseases_id VARCHAR(36),
+  name VARCHAR(255),
+  version DATETIME,
+  status VARCHAR(16),
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation from PhenoVar',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update from PhenoVar'
+);
+
+CREATE INDEX diseases_id_idx
+ON phenovar_form(diseases_id);
+
+
+CREATE TABLE phenovar_section (
+  id VARCHAR(36) PRIMARY KEY,
+  name VARCHAR(255),
+  group_id VARCHAR(36),
+  group_name VARCHAR(255),
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation from PhenoVar',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update from PhenoVar'
+);
+
+CREATE INDEX group_id_idx
+ON phenovar_section(group_id);
