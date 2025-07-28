@@ -230,30 +230,6 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         except Exception as e:
             logger.error(f"❌ API error for RunId={run_id}: {e}")
 
-    # Transform + audit + save
-    df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df.copy()
-    df["created_at"] = curr_ds
-    df["updated_at"] = curr_ds
-
-    logger.info(f"📊 Final DataFrame shape: {df.shape[0]} rows × {df.shape[1]} columns")
-
-    pd.set_option('display.max_rows', 200)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', None)
-    pd.set_option('display.max_colwidth', None)
-
-    print("\n🔍 Preview of merged DataFrame (first 200 rows):")
-    print(df.head(200))
-
-    # Save to S3
-    buffer = io.StringIO()
-    df.to_csv(buffer, index=False)
-    buffer.seek(0)
-
-    s3_hook = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"{object_path}/{curr_ds}/bclconvertandQC-{curr_ds}.csv"
-    s3_hook.load_string(buffer.getvalue(), key=s3_path, bucket_name=bucket_name, replace=True)
-    logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
 
 
 # ----------------------------
