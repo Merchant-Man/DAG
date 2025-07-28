@@ -1005,3 +1005,32 @@ CREATE INDEX idx_bclconvert_experiment_name
 ON bclconvert_appsessions (experiment_name);
 CREATE INDEX idx_bclconvert_date_modified
 ON bclconvert_appsessions (date_modified);
+
+
+CREATE TABLE phenovar_ethical_clearance (
+  id VARCHAR(36) PRIMARY KEY,
+  project_id VARCHAR(36),
+  institution_id VARCHAR(36),
+  institution_name TEXT,
+  hub_id VARCHAR(36),
+  hub_name TEXT,
+  ec_number VARCHAR(255),
+  effective_date DATETIME,
+  `expiry_date` DATETIME,
+  research_title TEXT,
+  pic VARCHAR(255),
+  `description` TEXT,
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  creation_date DATETIME NOT NULL comment 'Timestamp of record creation from PhenoVar',
+  updation_date DATETIME NOT NULL comment 'Timestamp of last update from PhenoVar',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation on DWH. Using MySQL TZ.',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update on DWH. Using MySQL TZ.'
+);
+
+CREATE INDEX project_id_idx
+ON phenovar_ethical_clearance(project_id);
+CREATE INDEX institution_id_idx
+ON phenovar_ethical_clearance(institution_id);
+CREATE INDEX hub_id_idx
+ON phenovar_ethical_clearance(hub_id);

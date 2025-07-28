@@ -1,11 +1,19 @@
+import os
 from datetime import datetime, timedelta
+from typing import Dict, Any, Union, Optional
+
 from airflow import DAG
 from airflow.models import Variable
-from utils.utils import fetch_and_dump, silver_transform_to_db
 from airflow.operators.python import PythonOperator
-from utils.phenovar_transform import transform_demography_data, transform_variable_data, transform_digital_consent_data, transform_data_sharing_data
-import os
-from typing import Dict, Any, Union
+
+from utils.utils import fetch_and_dump, silver_transform_to_db
+from utils.phenovar_transform import (
+    transform_demography_data,
+    transform_variable_data,
+    transform_digital_consent_data,
+    transform_data_sharing_data,
+    transform_ethical_clearance_data
+)
 
 AWS_CONN_ID = "aws"
 PHENOVAR_CONN_ID = "phenovar-prod"
@@ -14,27 +22,44 @@ JWT_PAYLOAD = {
     "email": Variable.get("PHENOVAR_EMAIL"),
     "password": Variable.get("PHENOVAR_PASSWORD")
 }
+LOADER_PATH = "dags/repo/dags/include/loader"
 
-# current limit of our programs is 20k
-DEMOGRAPHY_END_POINT = "api/v1/participants?perpage=50000"
-CATEGORY_END_POINT = "api/v1/category?page=1&perpage=50000"
-VARIABLE_END_POINT = "api/v1/variables?page=1&perpage=200000"
-DATA_SHARING_END_POINT = "api/v1/participants/data-sharings?perpage=50000"
-DIGITAL_CONSENT_END_POINT = "api/v1/digital-consent"  # Per page defined on the body
+# Endpoints and object paths
+ENDPOINTS = {
+    "demography": {
+        "data_end_point": "api/v1/participants?perpage=50000",
+        "object_path": "phenovar/participants",
+        "query_file": "phenovar_particip_loader.sql"
+    },
+    "category": {
+        "data_end_point": "api/v1/category?page=1&perpage=50000",
+        "object_path": "phenovar/category",
+        "query_file": "phenovar_category_loader.sql"
+    },
+    "variable": {
+        "data_end_point": "api/v1/variables?page=1&perpage=200000",
+        "object_path": "phenovar/variable",
+        "query_file": "phenovar_variable_loader.sql"
+    },
+    "data_sharing": {
+        "data_end_point": "api/v1/participants/data-sharings?perpage=50000",
+        "object_path": "phenovar/data-sharing",
+        "query_file": "phenovar_data_sharing_loader.sql"
+    },
+    "digital_consent": {
+        "data_end_point": "api/v1/digital-consent",
+        "object_path": "phenovar/digital_consent",
+        "query_file": "phenovar_digital_consent_loader.sql"
+    },
+    "ethical_clearance": {
+        "data_end_point": "api/v1/ethical?perpage=100000",
+        "object_path": "phenovar/ethical_clearance",  # inferred object path
+        "query_file": "phenovar_ethical_clearance_loader.sql"
+    }
+}
 
-DEMOGRAPHY_OBJECT_PATH = "phenovar/participants"
-CATEGORY_OBJECT_PATH = "phenovar/category"
-VARIABLE_OBJECT_PATH = "phenovar/variable"
-DATA_SHARING_OBJECT_PATH = "phenovar/data-sharing"
-DIGITAL_CONSENT_OBJECT_PATH = "phenovar/digital_consent"
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET")
-DEMOGRAPHY_LOADER_QEURY = "phenovar_particip_loader.sql"
-CATEGORY_LOADER_QEURY = "phenovar_category_loader.sql"
-VARIABLE_LOADER_QEURY = "phenovar_variable_loader.sql"
-DATA_SHARING_LOADER_QEURY = "phenovar_data_sharing_loader.sql"
-DIGITAL_CONSENT_LOADER_QEURY = "phenovar_digital_consent_loader.sql"
-
 
 default_args = {
     "owner": "bgsi_data",
@@ -51,16 +76,18 @@ dag = DAG(
     default_args=default_args,
     description="ETL pipeline for Phenovar participants data using Phenovar API",
     schedule_interval=timedelta(days=1),
-    max_active_runs=1,  # Only allowing one DAG run at a time
-    concurrency=3,  # Reduce the load on the phenovar server
+    max_active_runs=1,
+    concurrency=3,
     catchup=False
 )
 
 
+def read_query(filename: str) -> str:
+    with open(os.path.join(LOADER_PATH, filename)) as f:
+        return f.read()
+
+
 def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Get token data from RegINA response.
-    """
     return {
         "headers": {
             "Authorization": f"Bearer {resp['data']['access_token']}",
@@ -69,226 +96,134 @@ def get_token_function(resp: Dict[str, Any], response_header: Dict[str, Any]) ->
     }
 
 
-def phenovar_api_paginate(resp: Dict[str, Any]) -> Union[str, None]:
-    """
-    Get page data from Phenovar response.
-    """
+def phenovar_api_paginate(resp: Dict[str, Any]) -> Optional[int]:
     cur_page = resp["meta_data"]["page"]
     max_page = resp["meta_data"]["total_page"]
     print(f"Current page: {cur_page}, Max page: {max_page}")
-    if cur_page < max_page:
-        return cur_page + 1
-    return None
+    return cur_page + 1 if cur_page < max_page else None
 
 
-with open(os.path.join("dags/repo/dags/include/loader", DEMOGRAPHY_LOADER_QEURY)) as f:
-    demography_loader_query = f.read()
+# Preload the SQL queries
+queries = {key: read_query(val["query_file"])
+           for key, val in ENDPOINTS.items()}
 
-with open(os.path.join("dags/repo/dags/include/loader", CATEGORY_LOADER_QEURY)) as f:
-    category_loader_query = f.read()
+# Common operator kwargs for fetch_and_dump
+common_fetch_kwargs = {
+    "jwt_end_point": JWT_END_POINT,
+    "aws_conn_id": AWS_CONN_ID,
+    "jwt_payload": JWT_PAYLOAD,
+    "jwt_headers": {"Content-Type": "application/json"},
+    "get_token_function": get_token_function,
+    "response_key_data": "data",
+    "curr_ds": "{{ ds }}",
+    "prev_ds": "{{ prev_ds }}"
+}
 
-with open(os.path.join("dags/repo/dags/include/loader", VARIABLE_LOADER_QEURY)) as f:
-    variable_loader_query = f.read()
-
-with open(os.path.join("dags/repo/dags/include/loader", DIGITAL_CONSENT_LOADER_QEURY)) as f:
-    digital_consent_loader_query = f.read()
-
-with open(os.path.join("dags/repo/dags/include/loader", DATA_SHARING_LOADER_QEURY)) as f:
-    data_sharing_loader_query = f.read()
-
-bronze_fetch_jwt_and_dump_data_digital_consent_task = PythonOperator(
-    task_id="bronze_fetch_jwt_and_dump_data_digital_consent",
-    python_callable=fetch_and_dump,
-    dag=dag,
-    op_kwargs={
-        "api_conn_id": PHENOVAR_CONN_ID,
-        "data_end_point": DIGITAL_CONSENT_END_POINT,
-        "jwt_end_point": JWT_END_POINT,
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": DIGITAL_CONSENT_OBJECT_PATH,
-        "jwt_payload": JWT_PAYLOAD,
-        "data_payload": {
-            "date": "{{ ds }}",
-            "per_page": 50,
-            "page": 1
-        },
-        "pagination_function": phenovar_api_paginate,
-        "cursor_token_param": "page",
+# Configurations for each task.
+# For digital_consent, we need to include paging parameters.
+fetch_and_dump_configs = {
+    "demography": {
+        "method_request": "GET",  # Use default GET since not specified
+        "extra_kwargs": {}
+    },
+    "category": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "variable": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "data_sharing": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "digital_consent": {
         "method_request": "POST",
-        "jwt_headers": {"Content-Type": "application/json"},
-        "headers": {"Content-Type": "application/json"},
-        "get_token_function": get_token_function,
-        "response_key_data": "data",
-        "curr_ds": "{{ ds }}",
-        "prev_ds": "{{ prev_ds }}"
-    }
-)
-
-silver_transform_digital_consent_to_db_task = PythonOperator(
-    task_id="silver_transform_digital_consent_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": DIGITAL_CONSENT_OBJECT_PATH,
-        "transform_func": transform_digital_consent_data,
-        "db_secret_url": RDS_SECRET,
-        "curr_ds": "{{ ds }}"
+        "extra_kwargs": {
+            "data_payload": {"date": "{{ ds }}", "per_page": 50, "page": 1},
+            "pagination_function": phenovar_api_paginate,
+            "cursor_token_param": "page",
+            "headers": {"Content-Type": "application/json"}
+        }
     },
-    templates_dict={"insert_query": digital_consent_loader_query},
-    provide_context=True
-)
+    "ethical_clearance": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    }
+}
 
-bronze_fetch_jwt_and_dump_data_demography_task = PythonOperator(
-    task_id="bronze_fetch_jwt_and_dump_data_demography",
-    python_callable=fetch_and_dump,
-    dag=dag,
-    op_kwargs={
+
+def create_fetch_dump_task(key: str) -> PythonOperator:
+    cfg = ENDPOINTS[key]
+    task_id = f"bronze_fetch_jwt_and_dump_data_{key}"
+    op_kwargs = {
         "api_conn_id": PHENOVAR_CONN_ID,
-        "data_end_point": DEMOGRAPHY_END_POINT,
-        "jwt_end_point": JWT_END_POINT,
-        "aws_conn_id": AWS_CONN_ID,
+        "data_end_point": cfg["data_end_point"],
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": DEMOGRAPHY_OBJECT_PATH,
-        "jwt_payload": JWT_PAYLOAD,
-        "jwt_headers": {"Content-Type": "application/json"},
-        "get_token_function": get_token_function,
-        "response_key_data": "data",
-        "curr_ds": "{{ ds }}",
-        "prev_ds": "{{ prev_ds }}"
+        "object_path": cfg["object_path"],
     }
-)
+    # Merge common kwargs and any extra kwargs (digital_consent has extra paging params)
+    op_kwargs.update(common_fetch_kwargs)
+    op_kwargs.update(fetch_and_dump_configs.get(
+        key, {}).get("extra_kwargs", {}))
+    if "method_request"  in fetch_and_dump_configs[key]:
+        op_kwargs["method_request"] = fetch_and_dump_configs[key]["method_request"]
 
-silver_transform_demography_to_db_task = PythonOperator(
-    task_id="silver_transform_demography_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": DEMOGRAPHY_OBJECT_PATH,
-        "transform_func": transform_demography_data,
-        "db_secret_url": RDS_SECRET,
-        "curr_ds": "{{ ds }}"
-    },
-    templates_dict={"insert_query": demography_loader_query},
-    provide_context=True
-)
-
-bronze_fetch_jwt_and_dump_data_category_task = PythonOperator(
-    task_id="bronze_fetch_jwt_and_dump_data_category",
-    python_callable=fetch_and_dump,
-    dag=dag,
-    op_kwargs={
-        "api_conn_id": PHENOVAR_CONN_ID,
-        "data_end_point": CATEGORY_END_POINT,
-        "jwt_end_point": JWT_END_POINT,
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": CATEGORY_OBJECT_PATH,
-        "jwt_payload": JWT_PAYLOAD,
-        "jwt_headers": {"Content-Type": "application/json"},
-        "get_token_function": get_token_function,
-        "response_key_data": "data",
-        "curr_ds": "{{ ds }}",
-        "prev_ds": "{{ prev_ds }}"
-    }
-)
-
-silver_transform_category_to_db_task = PythonOperator(
-    task_id="silver_transform_category_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": CATEGORY_OBJECT_PATH,
-        "db_secret_url": RDS_SECRET,
-        "transform_func": None,
-        "curr_ds": "{{ ds }}"
-    },
-    templates_dict={"insert_query": category_loader_query},
-    provide_context=True
-)
+    return PythonOperator(
+        task_id=task_id,
+        python_callable=fetch_and_dump,
+        dag=dag,
+        op_kwargs=op_kwargs
+    )
 
 
-bronze_fetch_jwt_and_dump_data_variable_task = PythonOperator(
-    task_id="bronze_fetch_jwt_and_dump_data_variable",
-    python_callable=fetch_and_dump,
-    dag=dag,
-    op_kwargs={
-        "api_conn_id": PHENOVAR_CONN_ID,
-        "data_end_point": VARIABLE_END_POINT,
-        "jwt_end_point": JWT_END_POINT,
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": VARIABLE_OBJECT_PATH,
-        "jwt_payload": JWT_PAYLOAD,
-        "jwt_headers": {"Content-Type": "application/json"},
-        "get_token_function": get_token_function,
-        "response_key_data": "data",
-        "curr_ds": "{{ ds }}",
-        "prev_ds": "{{ prev_ds }}"
-    }
-)
-
-silver_transform_variable_to_db_task = PythonOperator(
-    task_id="silver_transform_variable_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": VARIABLE_OBJECT_PATH,
-        "db_secret_url": RDS_SECRET,
-        "transform_func": transform_variable_data,
-        "curr_ds": "{{ ds }}"
-    },
-    templates_dict={"insert_query": variable_loader_query},
-    provide_context=True
-)
+def create_silver_transform_task(key: str, transform_func: Any) -> PythonOperator:
+    cfg = ENDPOINTS[key]
+    task_id = f"silver_transform_{key}_to_db"
+    return PythonOperator(
+        task_id=task_id,
+        python_callable=silver_transform_to_db,
+        dag=dag,
+        op_kwargs={
+            "aws_conn_id": AWS_CONN_ID,
+            "bucket_name": S3_DWH_BRONZE,
+            "object_path": cfg["object_path"],
+            "db_secret_url": RDS_SECRET,
+            "transform_func": transform_func,
+            "curr_ds": "{{ ds }}"
+        },
+        templates_dict={"insert_query": queries[key]},
+        provide_context=True
+    )
 
 
-bronze_fetch_jwt_and_dump_data_data_sharing_task = PythonOperator(
-    task_id="bronze_fetch_jwt_and_dump_data_data_sharing",
-    python_callable=fetch_and_dump,
-    dag=dag,
-    op_kwargs={
-        "api_conn_id": PHENOVAR_CONN_ID,
-        "data_end_point": DATA_SHARING_END_POINT,
-        "jwt_end_point": JWT_END_POINT,
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": DATA_SHARING_OBJECT_PATH,
-        "jwt_payload": JWT_PAYLOAD,
-        "jwt_headers": {"Content-Type": "application/json"},
-        "get_token_function": get_token_function,
-        "response_key_data": "data",
-        "curr_ds": "{{ ds }}",
-        "prev_ds": "{{ prev_ds }}"
-    }
-)
+# Create fetch_and_dump tasks and the respective silver_transform tasks.
+fetch_task_keys = ["demography", "category", "variable",
+                   "digital_consent", "data_sharing", "ethical_clearance"]
 
-silver_transform_data_sharing_to_db_task = PythonOperator(
-    task_id="silver_transform_data_sharing_to_db",
-    python_callable=silver_transform_to_db,
-    dag=dag,
-    op_kwargs={
-        "aws_conn_id": AWS_CONN_ID,
-        "bucket_name": S3_DWH_BRONZE,
-        "object_path": DATA_SHARING_OBJECT_PATH,
-        "db_secret_url": RDS_SECRET,
-        "transform_func": transform_data_sharing_data,
-        "curr_ds": "{{ ds }}"
-    },
-    templates_dict={"insert_query": data_sharing_loader_query},
-    provide_context=True
-)
+tasks_fetch = {}
+tasks_silver = {}
 
-bronze_fetch_jwt_and_dump_data_demography_task >> silver_transform_demography_to_db_task  # type: ignore
-bronze_fetch_jwt_and_dump_data_category_task >> silver_transform_category_to_db_task  # type: ignore
-bronze_fetch_jwt_and_dump_data_variable_task >> silver_transform_variable_to_db_task  # type: ignore
-bronze_fetch_jwt_and_dump_data_digital_consent_task >> silver_transform_digital_consent_to_db_task  # type: ignore
-bronze_fetch_jwt_and_dump_data_data_sharing_task >> silver_transform_data_sharing_to_db_task  # type: ignore
+# Map transform functions (None if not needed)
+transform_funcs = {
+    "demography": transform_demography_data,
+    "category": None,
+    "variable": transform_variable_data,
+    "digital_consent": transform_digital_consent_data,
+    "data_sharing": transform_data_sharing_data,
+    "ethical_clearance": transform_ethical_clearance_data,
+}
+
+for key in fetch_task_keys:
+    tasks_fetch[key] = create_fetch_dump_task(key)
+    tasks_silver[key] = create_silver_transform_task(key, transform_funcs[key])
+
+
+# Define task dependencies
+tasks_fetch["demography"] >> tasks_silver["demography"]  # type: ignore
+tasks_fetch["category"] >> tasks_silver["category"]  # type: ignore
+tasks_fetch["variable"] >> tasks_silver["variable"]  # type: ignore
+tasks_fetch["digital_consent"] >> tasks_silver["digital_consent"] # type: ignore
+tasks_fetch["data_sharing"] >> tasks_silver["data_sharing"]  # type: ignore
+tasks_fetch["ethical_clearance"] >> tasks_silver["ethical_clearance"] # type: ignore
