@@ -155,7 +155,7 @@ def read_and_calculate_percentage_reads():
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
 
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
-    curr_ds = kwargs['ds'
+    curr_ds = kwargs['ds']
 
     #  Load latest BCL AppSession
     s3 = get_boto3_client_from_connection(conn_id=aws_conn_id)
