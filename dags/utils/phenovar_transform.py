@@ -96,6 +96,22 @@ def transform_variable_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
     df = df.astype(str)
+    df = df.fillna('')
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+    return df
+
+
+def transform_ethical_clearance_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    df = df.astype(str)
+    df = df.fillna('')
+    df.rename(columns={"created_at": "creation_date","updated_at": "updation_date"}, inplace=True)
+    df["created_at"] = ts
+    df["updated_at"] = ts
     return df
 
 
