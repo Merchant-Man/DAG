@@ -4,6 +4,7 @@
 -- Author   :   Abdullah Faqih
 -- Created  :   24-06-2025
 -- Changes  :   30-06-2025 Adding pattern to prevent unlucky read access
+                28-07-2025 Changing qc column due to upstream changes
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -20,11 +21,7 @@ CREATE TABLE gold_lims_report_new (
             WHEN t1.date_secondary IS NOT NULL THEN TRUE
             ELSE FALSE
         END is_secondary_analysed,
-        CASE
-            WHEN t1.date_secondary IS NULL THEN NULL
-            WHEN t1.qc_category != 'Pass' THEN 'Failed'
-            ELSE 'Pass'
-        END qc_category,
+        qc_strict_diagnosis qc_category,
         CASE
             WHEN t2.eng_report_creation_date IS NOT NULL OR t2.ind_report_creation_date IS NOT NULL THEN TRUE ELSE FALSE END is_tertiary_pgx_analysed
     FROM

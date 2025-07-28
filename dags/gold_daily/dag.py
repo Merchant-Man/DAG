@@ -14,6 +14,7 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 QC_QUERY = "qc.sql"
 ONQ_LIMS_QUERY = "lims_report.sql"
 PGX_REPORT_QUERY = "pgx_report.sql"
+STAG_DEMOG = "staging_demography.sql"
 ILLUMINA_SEC = "staging_illumina_sec.sql"
 MGI_SEC = "staging_mgi_sec.sql"
 ONT_SEC = "staging_ont_sec.sql"
@@ -55,6 +56,7 @@ def load_query(folder, filename):
 onq_lims_query = load_query("gold_query", QC_QUERY)
 qc_query = load_query("gold_query", QC_QUERY)
 pgx_report_query = load_query("gold_query", PGX_REPORT_QUERY)
+staging_demography_query = load_query("staging_query", STAG_DEMOG)
 staging_illumina_sec_query = load_query("staging_query", ILLUMINA_SEC)
 staging_mgi_sec_query = load_query("staging_query", MGI_SEC)
 staging_ont_sec_query = load_query("staging_query", ONT_SEC)
@@ -129,6 +131,11 @@ with dag:
             task_id="staging_biosample_latest_transfer",
             conn_id=conn_id,
             sql=staging_biosample_latest_transfer_query
+        )
+        staging_demography_task = SQLExecuteQueryOperator(
+            task_id="staging_demography",
+            conn_id=conn_id,
+            sql=staging_demography_query
         )
         staging_illumina_sec_task = SQLExecuteQueryOperator(
             task_id="staging_illumina_sec",
