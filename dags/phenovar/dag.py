@@ -12,7 +12,8 @@ from utils.phenovar_transform import (
     transform_variable_data,
     transform_digital_consent_data,
     transform_data_sharing_data,
-    transform_ethical_clearance_data
+    transform_ethical_clearance_data,
+    transform_form_data
 )
 
 AWS_CONN_ID = "aws"
@@ -31,6 +32,11 @@ ENDPOINTS = {
         "object_path": "phenovar/participants",
         "query_file": "phenovar_particip_loader.sql"
     },
+    "section": {
+        "data_end_point": "api/v1/section?page=1&perpage=50000",
+        "object_path": "phenovar/section",
+        "query_file": "phenovar_section_loader.sql"
+    },
     "category": {
         "data_end_point": "api/v1/category?page=1&perpage=50000",
         "object_path": "phenovar/category",
@@ -40,6 +46,11 @@ ENDPOINTS = {
         "data_end_point": "api/v1/variables?page=1&perpage=200000",
         "object_path": "phenovar/variable",
         "query_file": "phenovar_variable_loader.sql"
+    },
+    "form": {
+        "data_end_point": "api/v1/form?page=1&perpage=200",
+        "object_path": "phenovar/form",
+        "query_file": "phenovar_form_loader.sql"
     },
     "data_sharing": {
         "data_end_point": "api/v1/participants/data-sharings?perpage=50000",
@@ -126,11 +137,19 @@ fetch_and_dump_configs = {
         "method_request": "GET",  # Use default GET since not specified
         "extra_kwargs": {}
     },
+    "section": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
     "category": {
         "method_request": "GET",
         "extra_kwargs": {}
     },
     "variable": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "form": {
         "method_request": "GET",
         "extra_kwargs": {}
     },
@@ -200,7 +219,7 @@ def create_silver_transform_task(key: str, transform_func: Any) -> PythonOperato
 
 # Create fetch_and_dump tasks and the respective silver_transform tasks.
 fetch_task_keys = ["demography", "category", "variable",
-                   "digital_consent", "data_sharing", "ethical_clearance"]
+                   "digital_consent", "data_sharing", "ethical_clearance", "section", "form"]
 
 tasks_fetch = {}
 tasks_silver = {}
@@ -213,6 +232,8 @@ transform_funcs = {
     "digital_consent": transform_digital_consent_data,
     "data_sharing": transform_data_sharing_data,
     "ethical_clearance": transform_ethical_clearance_data,
+    "section": None,
+    "form": transform_form_data
 }
 
 for key in fetch_task_keys:
@@ -227,3 +248,5 @@ tasks_fetch["variable"] >> tasks_silver["variable"]  # type: ignore
 tasks_fetch["digital_consent"] >> tasks_silver["digital_consent"] # type: ignore
 tasks_fetch["data_sharing"] >> tasks_silver["data_sharing"]  # type: ignore
 tasks_fetch["ethical_clearance"] >> tasks_silver["ethical_clearance"] # type: ignore
+tasks_fetch["section"] >> tasks_silver["section"]  # type: ignore
+tasks_fetch["form"] >> tasks_silver["form"]  # type: ignore 

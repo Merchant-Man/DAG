@@ -115,6 +115,14 @@ def transform_ethical_clearance_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     return df
 
 
+def transform_form_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    df = df.astype(str)
+    df = df.fillna('')
+    return df
+
+
 def transform_digital_consent_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
