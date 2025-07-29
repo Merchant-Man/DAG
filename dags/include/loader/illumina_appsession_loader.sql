@@ -46,8 +46,8 @@ VALUES (
     %(bio_sample_id)s,
     %(computed_yield_bps)s,
     %(generated_sample_id)s,
-    %(created_at)s,
-    %(updated_at)s
+    NOW(),
+    NOW()
 )
 ON DUPLICATE KEY UPDATE
 row_type = VALUES(row_type),
@@ -71,5 +71,5 @@ bio_sample_name = VALUES(bio_sample_name),
 bio_sample_id = VALUES(bio_sample_id),
 computed_yield_bps = VALUES(computed_yield_bps),
 generated_sample_id = VALUES(generated_sample_id),
-created_at = VALUES(created_at),
-updated_at = VALUES(updated_at);
+updated_at = NOW();
+
