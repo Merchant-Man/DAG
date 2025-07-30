@@ -63,7 +63,7 @@ silver_fix_samples_transform_to_db_task = PythonOperator(
         "multi_files": True,
         "curr_ds": "{{ ds }}"
     },
-    templates_dict={"insert_query": LOADER_QUERY},
+    templates_dict={"insert_query": loader_query},
     provide_context=True
 )
 
