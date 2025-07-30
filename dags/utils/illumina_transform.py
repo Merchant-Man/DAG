@@ -32,6 +32,7 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df[new_cols]
 
     return df
+
 def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()

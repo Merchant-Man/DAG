@@ -15,13 +15,13 @@ DELETE FROM staging_illumina_sec;
 INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
-	COALESCE(sfki.code_repository, COALESCE(db_ic_sec.new_repository,ica_sec.clean_id_repository)) id_repository,
+	COALESCE(sfki.code_repository, COALESCE(db_ic_sec.new_repository,db_ic_sec2.new_repository,ica_sec.clean_id_repository)) id_repository,
 	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
-	ica_sec.cram,
+	COALESCE(db_ic_sec2.new_cram, ica_sec.cram) cram,
 	ica_sec.cram_size,
-	ica_sec.vcf,
+	COALESCE(db_ic_sec2.new_vcf, ica_sec.vcf) vcf,
 	ica_sec.vcf_size,
 	ica_sec.tag_user_tags,
 	illumina_qc_2.percent_dups,
@@ -121,11 +121,58 @@ FROM
 			id_repository,
 			new_repository
 		FROM
-			dynamodb_fix_id_repository_latest
+			dynamodb_fix_samples 
 		WHERE
 			sequencer = "Illumina"
+			-- AND fix_type = "id_repository"
+			AND new_repository IS NOT NULL
 	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
+	LEFT JOIN (
+		SELECT DISTINCT
+			run_name,
+			id_repository,
+			new_repository,
+			cram,
+			new_cram,
+			vcf,
+			new_vcf
+		FROM (
+			SELECT DISTINCT
+				run_name,
+				id_repository,
+				new_repository
+			FROM
+				dynamodb_fix_analysis
+			WHERE
+				sequencer = "Illumina"
+				-- AND fix_type= "id_repository"
+				AND new_repository IS NOT NULL
+		) dbfa1
+		LEFT JOIN (
+			SELECT DISTINCT
+				run_name,
+				cram,
+				new_cram
+			FROM
+				dynamodb_fix_analysis
+			WHERE
+				sequencer = "Illumina"
+				-- AND fix_type= "cram"
+				AND new_cram IS NOT NULL
+		) dbfa2 ON dbfa1.run_name = dbfa2.run_name
+		LEFT JOIN (
+			SELECT DISTINCT
+				run_name,
+				vcf,
+				new_vcf
+			FROM
+				dynamodb_fix_analysis
+			WHERE
+				sequencer = "Illumina"
+				-- AND fix_type= "vcf"
+				AND new_vcf IS NOT NULL
+		) dbfa3 ON dbfa1.run_name = dbfa3.run_name
+	) db_ica_sec2 ON ica_sec.run_name = db_ica_sec2.run_name
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
-WHERE
 	ica_sec.rn = 1);
 COMMIT;

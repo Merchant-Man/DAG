@@ -50,7 +50,7 @@ INSERT INTO staging_seq
 								seq_zlims.date_create DESC
 						) rn,
 						COALESCE(db_mgi.new_repository, seq_zlims.id_repository) id_repository,
-						id_flowcell id_library,
+						COALESCE(db_mgi.new_library, seq_zlims.id_flowcell) id_library,
 						'MGI' sequencer,
 						date_create date_primary,
 						NULL sum_of_total_passed_bases,
@@ -59,7 +59,7 @@ INSERT INTO staging_seq
 					FROM
 						zlims_samples seq_zlims
 						LEFT JOIN (
-							# This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.
+							-- This zlims is separated since the dynamodb contains redundant rows for MGI data where a code repo could have two rows where one contain index and one not.
 							SELECT
 								dbt1.id_repository,
 								dbt1.new_repository,
@@ -69,27 +69,53 @@ INSERT INTO staging_seq
 								(
 									SELECT DISTINCT
 										id_repository,
+										id_library,
 										new_repository
 									FROM
-										dynamodb_fix_id_repository_latest dbt1
+										dynamodb_fix_samples dbt1
 									WHERE
-										sequencer = "MGI"
+										sequencer = "MGI" 
+										-- AND fix_type="id_repository"
+										AND new_repository IS NOT NULL
 								) dbt1
 								LEFT JOIN (
 									SELECT DISTINCT
 										id_repository,
+										id_library,
 										id_zlims_index,
 										new_index
 									FROM
-										dynamodb_fix_id_repository_latest
+										dynamodb_fix_samples
 									WHERE
-										sequencer = "MGI"
+										sequencer = "MGI" 
+										-- AND fix_type='id_zlims_index'
 										AND (
 											id_zlims_index IS NOT NULL
 											AND new_index IS NOT NULL
 										)
-								) dbt2 ON dbt1.id_repository = dbt2.id_repository
-						) db_mgi ON seq_zlims.id_repository = db_mgi.id_repository
+								) dbt2 
+									ON dbt1.id_repository = dbt2.id_repository
+									AND dbt1.id_library = dbt2.id_library
+								LEFT JOIN (
+									SELECT DISTINCT
+										id_repository,
+										id_library,
+										new_library
+									FROM
+										dynamodb_fix_samples
+									WHERE
+										sequencer = "MGI" 
+										-- AND fix_type='id_library'
+										AND (
+											id_library IS NOT NULL
+											AND new_library IS NOT NULL
+										)
+								) dbt3 
+									ON dbt1.id_repository = dbt3.id_repository
+									ON dbt1.id_library = dbt3.id_library
+						) db_mgi 
+							ON seq_zlims.id_repository = db_mgi.id_repository
+							AND seq_zlims.id_flowcell = db_mgi.id_library
 					WHERE
 						seq_zlims.date_create >= "2023-11-01" -- removing test data
 				) temp_zlims
@@ -160,6 +186,7 @@ INSERT INTO staging_seq
 						seq_ica.time_modified DESC
 				) rn,
 				COALESCE(db_ica.new_repository, seq_ica.clean_id_repository) id_repository,
+				COALESCE(db_ica.new_library, seq_ica.id_library) id_library,
 				id_library,
 				'Illumina' sequencer,
 				time_modified date_primary
@@ -187,13 +214,37 @@ INSERT INTO staging_seq
 				) seq_ica
 				LEFT JOIN (
 					SELECT DISTINCT
-						id_repository,
-						new_repository
-					FROM
-						dynamodb_fix_id_repository_latest
-					WHERE
-						sequencer = "Illumina"
-				) db_ica ON seq_ica.clean_id_repository = db_ica.id_repository
+						dbt1.id_repository,
+						dbt1.new_repository,
+						dbt2.id_library,
+						dbt2.new_library
+					FROM (
+						SELECT DISTINCT
+							id_repository,
+							id_library,
+							new_repository
+						FROM
+							dynamodb_fix_samples
+						WHERE
+							sequencer = "Illumina" 
+							-- AND fix_type = "id_repository"
+					) dbt1
+					LEFT JOIN (
+						SELECT DISTINCT
+							id_repository,
+							id_library,
+							new_library
+						FROM  
+							dynamodb_fix_samples
+						WHERE
+							sequencer = "Illumina"
+							-- AND fix_type = "id_library"
+					) dbt2 
+						ON dbt1.id_repository = dbt2.id_repository
+						AND dbt1.id_library = dbt2.id_library
+				) db_ica 
+					ON seq_ica.clean_id_repository = db_ica.id_repository 
+					AND seq_ica.id_library = db_ica.id_library
 		) t
 	LEFT JOIN staging_fix_ski_id_repo sfki ON t.id_repository = sfki.new_origin_code_repository
 	WHERE
@@ -211,15 +262,6 @@ INSERT INTO staging_seq
 		NULL id_index
 	FROM
 		wfhv_samples seq_wfhv
-		LEFT JOIN (
-			SELECT DISTINCT
-				id_repository,
-				new_repository
-			FROM
-				dynamodb_fix_id_repository_latest
-			WHERE
-				sequencer = "ONT"
-		) db_wfhv ON seq_wfhv.id_repository = db_wfhv.id_repository	
 	WHERE
 		NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
 );
