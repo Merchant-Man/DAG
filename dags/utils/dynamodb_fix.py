@@ -11,8 +11,8 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
         # Fetch data from DynamoDB
         table = DynamoDBHook(aws_conn_id=aws_conn_id, resource_type='dynamodb').get_conn().Table(dynamodb_table)
 
-        # ds = kwargs.get("ds", "2025-03-02")
-        ds="2025-01-01"
+        ds = kwargs.get("ds", "2025-03-02")
+        # ds="2025-01-01"
 
         ds_datetime = datetime.strptime(ds, "%Y-%m-%d")
         ts = ds_datetime.strftime('%Y:%m:%d %H:%M:%S') 
@@ -88,7 +88,6 @@ def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
             ,"updated_at"
             ,"time_requested"
             ,"fix_type"
-            ,"id_repository"
             ,"new_repository"
             ,"new_library"
             ,"id_zlims_index"

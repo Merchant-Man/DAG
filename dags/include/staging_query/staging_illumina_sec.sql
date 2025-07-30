@@ -15,7 +15,8 @@ DELETE FROM staging_illumina_sec;
 INSERT INTO staging_illumina_sec(
 SELECT
 	date_start,
-	COALESCE(sfki.code_repository, COALESCE(db_ic_sec.new_repository,db_ic_sec2.new_repository,ica_sec.clean_id_repository)) id_repository,
+	COALESCE(sfki.code_repository,
+	COALESCE(db_ic_sec.new_repository,db_ic_sec2.new_repository,ica_sec.clean_id_repository)) id_repository,
 	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
@@ -115,7 +116,7 @@ FROM
 		GROUP BY
 			id_repository
 	) illumina_qs_2 ON ica_sec.id_repository = illumina_qs_2.id_repository
-	# So TYPE TURNED OUT TO BE FOUND WITHIN TWO PLACES: SAMPLES AND THE ANALYSIS.
+	-- 	 So TYPE TURNED OUT TO BE FOUND WITHIN TWO PLACES: SAMPLES AND THE ANALYSIS.
 	LEFT JOIN (
 		SELECT DISTINCT
 			id_repository,
@@ -129,13 +130,13 @@ FROM
 	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
 	LEFT JOIN (
 		SELECT DISTINCT
-			run_name,
-			id_repository,
-			new_repository,
-			cram,
-			new_cram,
-			vcf,
-			new_vcf
+			dbfa1.run_name,
+			dbfa1.id_repository,
+			dbfa1.new_repository,
+			dbfa2.cram,
+			dbfa2.new_cram,
+			dbfa3.vcf,
+			dbfa3.new_vcf
 		FROM (
 			SELECT DISTINCT
 				run_name,
@@ -172,7 +173,8 @@ FROM
 				-- AND fix_type= "vcf"
 				AND new_vcf IS NOT NULL
 		) dbfa3 ON dbfa1.run_name = dbfa3.run_name
-	) db_ica_sec2 ON ica_sec.run_name = db_ica_sec2.run_name
+	) db_ic_sec2 ON ica_sec.run_name = db_ic_sec2.run_name
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
+WHERE
 	ica_sec.rn = 1);
 COMMIT;
