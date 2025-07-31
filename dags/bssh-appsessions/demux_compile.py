@@ -153,6 +153,7 @@ def read_and_calculate_percentage_reads():
     print(grouped_df.columns.tolist())
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    return grouped_df
 
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = kwargs['ds']
@@ -231,9 +232,9 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         except Exception as e:
             logger.error(f"❌ API error for RunId={run_id}: {e}")
     
-    # ✅ After all runs have been processed, extract latest 200
+    # After all runs have been processed, extract latest 200
     try:
-        logger.info("🔍 Filtering for the latest 200 runs...")
+        logger.info("Filtering for the latest 200 runs...")
         
         bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
     
@@ -243,7 +244,11 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
             .head(200)
         )
     
-        logger.info(f"📋 Latest 200 runs:\n{latest_runs[['RunId', 'RunName', 'DateCreated']].to_string(index=False)}")
+        logger.info("📋 Final latest 200 runs (full preview):")
+        logger.info("\n" + latest_runs.to_string(index=False))
+        # Push to XCom if needed
+        # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
+        # logger.info(" Pushed latest 200 runs to XCom.")
     
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract latest 200 runs: {e}")
