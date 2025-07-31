@@ -243,6 +243,14 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
             .head(200)
         )
         logger.info("📋 Final latest 200 runs (full preview):")
+        # Show all rows and columns
+        pd.set_option("display.max_rows", None)
+        pd.set_option("display.max_columns", None)
+        pd.set_option("display.width", 0)
+        pd.set_option("display.max_colwidth", None)
+        
+        logger.info("📋 Final latest 200 runs (full preview):")
+        
         chunk_size = 25
         for i in range(0, len(latest_runs), chunk_size):
             chunk = latest_runs.iloc[i:i+chunk_size]
