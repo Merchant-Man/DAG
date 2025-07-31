@@ -153,6 +153,7 @@ def read_and_calculate_percentage_reads():
     print(grouped_df.columns.tolist())
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    return grouped_df
 
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = kwargs['ds']
@@ -205,20 +206,20 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         run_id = row.get("RunId")
         if not run_id or run_id.lower() == "nan":
             continue
-
+    
         api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
         headers = {
             "x-access-token": API_TOKEN,
             "Accept": "application/json"
         }
-
+    
         try:
             logger.info(f"📡 Requesting TotalFlowcellYield for RunId={run_id}")
             response = requests.get(api_url, headers=headers)
             response.raise_for_status()
             data = response.json()
             total_yield = data.get("YieldTotal")
-
+    
             if total_yield is not None:
                 bcl_df.loc[
                     (bcl_df["RowType"] == "Run") & (bcl_df["RunId"] == run_id),
@@ -227,11 +228,40 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
                 logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
             else:
                 logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
+    
         except Exception as e:
             logger.error(f"❌ API error for RunId={run_id}: {e}")
+    
+    # After all runs have been processed, extract latest 200
+    try:
+        logger.info("Filtering for the latest 200 runs...")
+        
+        bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
+        latest_runs = (
+            bcl_df[bcl_df["RowType"] == "Run"]
+            .sort_values("DateCreated", ascending=False)
+            .head(200)
+        )
+        logger.info("📋 Final latest 200 runs (full preview):")
+        # Show all rows and columns
+        pd.set_option("display.max_rows", None)
+        pd.set_option("display.max_columns", None)
+        pd.set_option("display.width", 0)
+        pd.set_option("display.max_colwidth", None)
+        
+        logger.info("📋 Final latest 200 runs (full preview):")
+        
+        chunk_size = 25
+        for i in range(0, len(latest_runs), chunk_size):
+            chunk = latest_runs.iloc[i:i+chunk_size]
+            logger.info(f"\n🧾 Rows {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
 
+        # Optional: push to XCom
+        # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
+        # logger.info("📤 Pushed latest 200 runs to XCom.")
 
-
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to extract or print latest 200 runs: {e}")
 # ----------------------------
 # DAG Definition
 # ----------------------------
