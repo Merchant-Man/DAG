@@ -245,7 +245,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         pd.set_option("display.width", 0)
         pd.set_option("display.max_colwidth", None)
 
-        chunk_size = 25
+        chunk_size = 24
 
         # ✅ Log latest 200 Run rows
         latest_runs = (
