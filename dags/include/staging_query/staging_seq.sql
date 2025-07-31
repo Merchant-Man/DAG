@@ -112,7 +112,7 @@ INSERT INTO staging_seq
 										)
 								) dbt3 
 									ON dbt1.id_repository = dbt3.id_repository
-									ON dbt1.id_library = dbt3.id_library
+									AND dbt1.id_library = dbt3.id_library
 						) db_mgi 
 							ON seq_zlims.id_repository = db_mgi.id_repository
 							AND seq_zlims.id_flowcell = db_mgi.id_library
