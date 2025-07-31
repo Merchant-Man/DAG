@@ -237,15 +237,19 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         logger.info("Filtering for the latest 200 runs...")
         
         bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
-    
         latest_runs = (
             bcl_df[bcl_df["RowType"] == "Run"]
             .sort_values("DateCreated", ascending=False)
             .head(200)
         )
-    
         logger.info("📋 Final latest 200 runs (full preview):")
-        logger.info("\n" + latest_runs.to_string(index=False))
+        chunk_size = 25
+        for i in range(0, len(latest_runs), chunk_size):
+            chunk = latest_runs.iloc[i:i+chunk_size]
+            logger.info(f"\n🧾 Rows {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
+    
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to extract or print latest 200 runs: {e}")
         # Push to XCom if needed
         # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
         # logger.info(" Pushed latest 200 runs to XCom.")
