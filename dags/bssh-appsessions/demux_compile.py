@@ -145,8 +145,7 @@ def read_and_calculate_percentage_reads():
         '# Reads': 'sum',
         '# Perfect Index Reads': 'sum',
         '# One Mismatch Index Reads': 'sum',
-        '# Two Mismatch Index Reads': 'sum',
-        '% Reads': 'sum'
+        '# Two Mismatch Index Reads': 'sum'
     })
 
     print(grouped_df[['SampleID', '# Reads', '% Reads']])
