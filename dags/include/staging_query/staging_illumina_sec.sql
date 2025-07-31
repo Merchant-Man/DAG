@@ -125,7 +125,7 @@ FROM
 			dynamodb_fix_samples 
 		WHERE
 			sequencer = "Illumina"
-			-- AND fix_type = "id_repository"
+			AND fix_type = "id_repository"
 			AND new_repository IS NOT NULL
 	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
 	LEFT JOIN (
@@ -146,7 +146,7 @@ FROM
 				dynamodb_fix_analysis
 			WHERE
 				sequencer = "Illumina"
-				-- AND fix_type= "id_repository"
+				AND fix_type= "id_repository"
 				AND new_repository IS NOT NULL
 		) dbfa1
 		LEFT JOIN (
@@ -158,7 +158,7 @@ FROM
 				dynamodb_fix_analysis
 			WHERE
 				sequencer = "Illumina"
-				-- AND fix_type= "cram"
+				AND fix_type= "cram"
 				AND new_cram IS NOT NULL
 		) dbfa2 ON dbfa1.run_name = dbfa2.run_name
 		LEFT JOIN (
@@ -170,7 +170,7 @@ FROM
 				dynamodb_fix_analysis
 			WHERE
 				sequencer = "Illumina"
-				-- AND fix_type= "vcf"
+				AND fix_type= "vcf"
 				AND new_vcf IS NOT NULL
 		) dbfa3 ON dbfa1.run_name = dbfa3.run_name
 	) db_ic_sec2 ON ica_sec.run_name = db_ic_sec2.run_name

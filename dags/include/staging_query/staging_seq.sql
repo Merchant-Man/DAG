@@ -75,7 +75,7 @@ INSERT INTO staging_seq
 										dynamodb_fix_samples dbt1
 									WHERE
 										sequencer = "MGI" 
-										-- AND fix_type="id_repository"
+										AND fix_type="id_repository"
 										AND new_repository IS NOT NULL
 								) dbt1
 								LEFT JOIN (
@@ -88,7 +88,7 @@ INSERT INTO staging_seq
 										dynamodb_fix_samples
 									WHERE
 										sequencer = "MGI" 
-										-- AND fix_type='id_zlims_index'
+										AND fix_type='id_zlims_index'
 										AND (
 											id_zlims_index IS NOT NULL
 											AND new_index IS NOT NULL
@@ -105,7 +105,7 @@ INSERT INTO staging_seq
 										dynamodb_fix_samples
 									WHERE
 										sequencer = "MGI" 
-										-- AND fix_type='id_library'
+										AND fix_type='id_library'
 										AND (
 											id_library IS NOT NULL
 											AND new_library IS NOT NULL
@@ -227,7 +227,7 @@ INSERT INTO staging_seq
 							dynamodb_fix_samples
 						WHERE
 							sequencer = "Illumina" 
-							-- AND fix_type = "id_repository"
+							AND fix_type = "id_repository"
 					) dbt1
 					LEFT JOIN (
 						SELECT DISTINCT
@@ -238,7 +238,7 @@ INSERT INTO staging_seq
 							dynamodb_fix_samples
 						WHERE
 							sequencer = "Illumina"
-							-- AND fix_type = "id_library"
+							AND fix_type = "id_library"
 					) dbt2 
 						ON dbt1.id_repository = dbt2.id_repository
 						AND dbt1.id_library = dbt2.id_library
