@@ -225,6 +225,16 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
                     "TotalFlowcellYield"
                 ] = total_yield
                 logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
+                # extract newest runs (set limit = 100) 
+                try:
+                    logger.info("display newest 100 runs...")
+                    run_df = bcl_df[bcl_df["RowType"] == "Run"]
+                    run_df["DateCreated"] = pd.to_datetime(run_df["DateCreated"], errors="coerce")
+                    latest_runs = run_df.sort_values("DateCreated", ascending=False).head(100)
+                    logger.info(f"Newest 100 runs:\n{latest_runs[['RunId', 'RunName', 'DateCreated']].to_string(index=False)}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to extract newest runs: {e}")
+            
             else:
                 logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
         except Exception as e:
