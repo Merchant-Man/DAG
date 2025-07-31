@@ -189,7 +189,6 @@ INSERT INTO staging_seq
 				) rn,
 				COALESCE(db_ica.new_repository, seq_ica.clean_id_repository) id_repository,
 				COALESCE(db_ica.new_library, seq_ica.id_library) id_library,
-				id_library,
 				'Illumina' sequencer,
 				time_modified date_primary
 			FROM
