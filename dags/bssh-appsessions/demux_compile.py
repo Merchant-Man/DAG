@@ -247,15 +247,13 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         for i in range(0, len(latest_runs), chunk_size):
             chunk = latest_runs.iloc[i:i+chunk_size]
             logger.info(f"\n🧾 Rows {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
-    
+
+        # Optional: push to XCom
+        # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
+        # logger.info("📤 Pushed latest 200 runs to XCom.")
+
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract or print latest 200 runs: {e}")
-        # Push to XCom if needed
-        # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
-        # logger.info(" Pushed latest 200 runs to XCom.")
-    
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to extract latest 200 runs: {e}")
 # ----------------------------
 # DAG Definition
 # ----------------------------
