@@ -64,7 +64,9 @@ INSERT INTO staging_seq
 								dbt1.id_repository,
 								dbt1.new_repository,
 								dbt2.id_zlims_index,
-								dbt2.new_index
+								dbt2.new_index,
+								dbt3.id_library,
+								dbt3.new_library
 							FROM
 								(
 									SELECT DISTINCT
