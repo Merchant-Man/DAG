@@ -234,34 +234,43 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
     
     # After all runs have been processed, extract latest 200
     try:
-        logger.info("Filtering for the latest 200 runs...")
+        logger.info("📦 Filtering for the latest 200 Runs and BioSamples...")
         
+        # Ensure DateCreated is datetime
         bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
+
+        # Show all rows/columns in logs
+        pd.set_option("display.max_rows", None)
+        pd.set_option("display.max_columns", None)
+        pd.set_option("display.width", 0)
+        pd.set_option("display.max_colwidth", None)
+
+        chunk_size = 25
+
+        # ✅ Log latest 200 Run rows
         latest_runs = (
             bcl_df[bcl_df["RowType"] == "Run"]
             .sort_values("DateCreated", ascending=False)
             .head(200)
         )
-        logger.info("📋 Final latest 200 runs (full preview):")
-        # Show all rows and columns
-        pd.set_option("display.max_rows", None)
-        pd.set_option("display.max_columns", None)
-        pd.set_option("display.width", 0)
-        pd.set_option("display.max_colwidth", None)
-        
-        logger.info("📋 Final latest 200 runs (full preview):")
-        
-        chunk_size = 25
+        logger.info("📋 Final latest 200 Run rows (full preview):")
         for i in range(0, len(latest_runs), chunk_size):
             chunk = latest_runs.iloc[i:i+chunk_size]
-            logger.info(f"\n🧾 Rows {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
+            logger.info(f"\n🧾 Runs {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
 
-        # Optional: push to XCom
-        # kwargs['ti'].xcom_push(key='latest_runs', value=latest_runs.to_dict())
-        # logger.info("📤 Pushed latest 200 runs to XCom.")
+        # ✅ Log latest 200 BioSample rows
+        latest_samples = (
+            bcl_df[bcl_df["RowType"] == "BioSample"]
+            .sort_values("DateCreated", ascending=False)
+            .head(200)
+        )
+        logger.info("📋 Final latest 200 BioSample rows (full preview):")
+        for i in range(0, len(latest_samples), chunk_size):
+            chunk = latest_samples.iloc[i:i+chunk_size]
+            logger.info(f"\n🔬 BioSamples {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
 
     except Exception as e:
-        logger.warning(f"⚠️ Failed to extract or print latest 200 runs: {e}")
+        logger.warning(f"⚠️ Failed to extract or print latest Run and BioSample rows: {e}")
 # ----------------------------
 # DAG Definition
 # ----------------------------
