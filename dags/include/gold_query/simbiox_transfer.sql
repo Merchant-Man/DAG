@@ -7,6 +7,7 @@
 16-06-2025 Adding backdoor for RSJPDHK/2024/01 form
 25-06-2025 Excluding the Biobank Pusat from the transfer report
 30-06-2025 Adding pattern to prevent unlucky read access
+01-08-2025 Removing backdoor for RSJPDHK/2024/01 form since it is already fixed from the application backend
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
@@ -170,59 +171,6 @@ CREATE TABLE gold_simbiox_transfer_new (
 		t1.origin_code_repository LIKE "SKI%"
 		OR t1.code_repository LIKE "SKI%"
 );
-
-# From here We will hard-coded this specific formulir until bakcend fix it! 
-INSERT INTO
-	gold_simbiox_transfer_new (
-		SELECT
-			biosample_id,
-			id,
-			nomor_formulir,
-			tanggal_formulir,
-			biobank_asal,
-			'Biobank Sentral (BB Binomika)' biobank_tujuan,
-			tanggal_pengiriman,
-			waktu_pengiriman,
-			suhu_pengiriman,
-			keterangan_pengiriman,
-			status_pengiriman,
-			petugas_pengirim,
-			DATE('2024-05-08') tanggal_penerimaan, # hard-coded
-			waktu_penerimaan,
-			suhu_penerimaan,
-			keterangan_penerimaan,
-			"OK" status_penerimaan,
-			petugas_penerima,
-			status_transfer_name,
-			1 tujuan_is_biobank,
-			non_biobank_nama,
-			triple_packaging,
-			is_to_central_seq,
-			code_repository,
-			origin_code_repository,
-			id_subject,
-			patient_biobank,
-			patient_categ,
-			registry_sex,
-			age_at_recruitment,
-			year_formulir,
-			year_pengiriman,
-			'2024' year_penerimaan,
-			month_formulir,
-			month_pengiriman,
-			'May' month_penerimaan,
-			origin_code_repository_non_dup
-		FROM
-			gold_simbiox_transfer_new
-		WHERE
-			nomor_formulir = 'RSJPDHK/2024/01'
-	);
-
-# Delete the wrong records
-DELETE FROM gold_simbiox_transfer_new
-WHERE
-	nomor_formulir = 'RSJPDHK/2024/01'
-	AND biobank_tujuan IS NULL;
 
 CREATE INDEX idx_gold_simbiox_transfer_nomor_formulir ON gold_simbiox_transfer_new (nomor_formulir);
 
