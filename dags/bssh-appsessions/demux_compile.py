@@ -147,6 +147,8 @@ def read_and_calculate_percentage_reads(**kwargs):
         '# One Mismatch Index Reads': 'sum',
         '# Two Mismatch Index Reads': 'sum'
     })
+    total_reads = grouped_df['# Reads'].sum()
+    grouped_df['% Reads'] = (grouped_df['# Reads'] / total_reads * 100).round(2)
 
     # ✅ Print and log debug info
     print(grouped_df[['SampleID', '# Reads']].head())
