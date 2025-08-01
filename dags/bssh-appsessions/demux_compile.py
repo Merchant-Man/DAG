@@ -101,15 +101,15 @@ def load_yield_csv(bcl_df):
     except Exception as e:
         logger.error(f"❌ Failed to load or merge Yield CSVs: {e}")
         return bcl_df
-def process_demux_files():
-    return read_and_calculate_percentage_reads()
     
 def transform_data(df, curr_ds):
     logger.info("ℹ️ No transformation applied in transform_data().")
     return df
-    
-def read_and_calculate_percentage_reads():
-    # Demux
+
+def read_and_calculate_percentage_reads(**kwargs):
+    ti = kwargs["ti"]
+
+    # Connect to S3
     s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     paginator = s3.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX)
@@ -121,7 +121,7 @@ def read_and_calculate_percentage_reads():
                 matching_keys.append(obj["Key"])
 
     if not matching_keys:
-        print("No matching Demultiplex_Stats.csv files found.")
+        logger.warning("🚫 No matching Demultiplex_Stats.csv files found.")
         return
 
     all_dfs = []
@@ -134,25 +134,36 @@ def read_and_calculate_percentage_reads():
             if col.startswith("#") or col.startswith("%"):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
         all_dfs.append(df)
+
     if not all_dfs:
-        print("No data found.")
+        logger.warning("🚫 No usable demux data.")
         return
 
     combined_df = pd.concat(all_dfs, ignore_index=True)
 
-    # Group and sum
     grouped_df = combined_df.groupby("SampleID", as_index=False).agg({
         '# Reads': 'sum',
         '# Perfect Index Reads': 'sum',
         '# One Mismatch Index Reads': 'sum',
-        '# Two Mismatch Index Reads': 'sum',
-        '% Reads': 'sum'
+        '# Two Mismatch Index Reads': 'sum'
     })
+    total_reads = grouped_df['# Reads'].sum()
+    grouped_df['% Reads'] = (grouped_df['# Reads'] / total_reads * 100).round(2)
 
-    print(grouped_df[['SampleID', '# Reads', '% Reads']])
-    print(grouped_df.columns.tolist())
+    # ✅ Print and log debug info
+    print(grouped_df[['SampleID', '# Reads']].head())
+    print("Grouped columns:", grouped_df.columns.tolist())
+
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+
+    logger.info("📊 Demux aggregation complete. Sample:")
+    logger.info(grouped_df.head(10).to_string(index=False))
+
+    # Push to XCom
+    ti.xcom_push(key='demux_metrics', value=grouped_df.to_dict(orient='records'))
+    logger.info("✅ Demux metrics pushed to XCom.")
+    return True
 
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = kwargs['ds']
@@ -183,13 +194,17 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
     bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
 
     # Add demux metrics
-    logger.info(" Appending Demultiplex metrics...")
-    demux_df = read_and_calculate_percentage_reads()
-    if demux_df is not None:
+    logger.info("📦 Pulling Demultiplex metrics from XCom...")
+    ti = kwargs.get("ti")
+    demux_data = ti.xcom_pull(task_ids='process_demux_csvs', key='demux_metrics')
+    
+    if demux_data:
+        demux_df = pd.DataFrame(demux_data)
         demux_df = clean_biosample_column(demux_df, "BioSampleName")
         bcl_df = pd.merge(bcl_df, demux_df, on="BioSampleName", how="left")
+        logger.info("✅ Demultiplex metrics merged.")
     else:
-        logger.warning("⚠️ No Demultiplex metrics found.")
+        logger.warning("⚠️ No Demultiplex metrics found in XCom.")
 
     # Append Yield
     logger.info("🔗 Appending Yield data...")
@@ -205,20 +220,20 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
         run_id = row.get("RunId")
         if not run_id or run_id.lower() == "nan":
             continue
-
+    
         api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
         headers = {
             "x-access-token": API_TOKEN,
             "Accept": "application/json"
         }
-
+    
         try:
             logger.info(f"📡 Requesting TotalFlowcellYield for RunId={run_id}")
             response = requests.get(api_url, headers=headers)
             response.raise_for_status()
             data = response.json()
             total_yield = data.get("YieldTotal")
-
+    
             if total_yield is not None:
                 bcl_df.loc[
                     (bcl_df["RowType"] == "Run") & (bcl_df["RunId"] == run_id),
@@ -227,11 +242,50 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
                 logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
             else:
                 logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
+    
         except Exception as e:
             logger.error(f"❌ API error for RunId={run_id}: {e}")
+    
+    # After all runs have been processed, extract latest 200
+    try:
+        logger.info("📦 Filtering for the latest 200 Runs and BioSamples...")
+        
+        # Ensure DateCreated is datetime
+        bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
 
+        # Show all rows/columns in logs
+        pd.set_option("display.max_rows", None)
+        pd.set_option("display.max_columns", None)
+        pd.set_option("display.width", 0)
+        pd.set_option("display.max_colwidth", None)
 
+        chunk_size = 24
 
+        # ✅ Log latest 200 Run rows
+        latest_runs = (
+            bcl_df[bcl_df["RowType"] == "Run"]
+            .sort_values("DateCreated", ascending=False)
+            .head(200)
+        )
+        logger.info("📋 Final latest 200 Run rows (full preview):")
+        for i in range(0, len(latest_runs), chunk_size):
+            chunk = latest_runs.iloc[i:i+chunk_size]
+            logger.info(f"\n🧾 Runs {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
+
+        # ✅ Log latest 200 BioSample rows
+        latest_samples = (
+            bcl_df[bcl_df["RowType"] == "BioSample"]
+            .sort_values("DateCreated", ascending=False)
+            .head(200)
+        )
+        logger.info("📋 Final latest 200 BioSample rows (full preview):")
+        for i in range(0, len(latest_samples), chunk_size):
+            chunk = latest_samples.iloc[i:i+chunk_size]
+            logger.info(f"\n🔬 BioSamples {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
+
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to extract or print latest Run and BioSample rows: {e}")
+    return bcl_df.to_dict(orient='records')
 # ----------------------------
 # DAG Definition
 # ----------------------------
@@ -256,8 +310,9 @@ dag = DAG(
 
 process_task = PythonOperator(
     task_id='process_demux_csvs',
-    python_callable=read_and_calculate_percentage_reads,  
-    dag=dag
+    python_callable=read_and_calculate_percentage_reads,
+    dag=dag,
+    provide_context=True
 )
 
 fetch_and_dump_task = PythonOperator(
