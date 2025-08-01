@@ -43,7 +43,12 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
             df["created_at"] = ts
         if "updated_at" not in df.columns:
             df["updated_at"] = ts
-            
+
+        # Reorder columns
+        priority_cols = ['id_repository', 'id_library', 'time_requested']
+        other_cols = [col for col in df.columns if col not in priority_cols]
+        df = df[priority_cols + other_cols]
+
         # Split by 'fix_type' and upload to S3
         fix_types = ['id_repository'
                      , 'id_library'
