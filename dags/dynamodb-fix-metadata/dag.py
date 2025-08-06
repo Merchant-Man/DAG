@@ -19,7 +19,7 @@ ANALYSIS_FIX_OBJECT_PATH = "dynamodb/fix/analysis"
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
-    'start_date': datetime(2025, 8, 5),
+    'start_date': datetime(2025, 8, 4),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -55,7 +55,7 @@ samples_fix_fetch_transform_and_load_task = PythonOperator(
 )
 
 samples_fix_fetch_transform_to_db_task = PythonOperator(
-    task_id="samples_fix_fetch_transform_to_db_task",
+    task_id="samples_fix_fetch_transform_to_db",
     python_callable=silver_transform_to_db,
     dag=dag,
     op_kwargs={
@@ -86,7 +86,7 @@ analysis_fix_fetch_transform_and_load_task = PythonOperator(
 )
 
 analysis_fix_transform_to_db_task = PythonOperator(
-    task_id="analysis_fix_transform_to_db",
+    task_id="analysis_fix_fetch_transform_to_db",
     python_callable=silver_transform_to_db,
     dag=dag,
     op_kwargs={

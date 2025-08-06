@@ -1,5 +1,5 @@
 INSERT INTO dynamodb_fix_analysis(id,id_repository,sequencer,run_name,id_requestor,created_at,updated_at,time_requested,fix_type,new_repository,cram,new_cram,vcf,new_vcf,cram_size,new_cram_size,vcf_size,new_vcf_size)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON DUPLICATE KEY UPDATE 
 id = VALUES(id)
 , id_repository = VALUES(id_repository)
