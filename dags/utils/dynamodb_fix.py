@@ -45,7 +45,7 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
             df["updated_at"] = ts
 
         # Reorder columns
-        priority_cols = ['id_repository', 'id_library', 'time_requested']
+        priority_cols = ['id','id_repository','time_requested']
         other_cols = [col for col in df.columns if col not in priority_cols]
         df = df[priority_cols + other_cols]
 
