@@ -10,7 +10,8 @@
 				- 13-06-2025: Abdullah Faqih - Adding indexes for performance improvement.
 				- 30-06-2025: Renata Triwijaya - Updated QC threshold to lenient;
 												 Adding QC category for tiered coverage classification.
-				- 18-07-2025: Renata Triwijaya - Add patient_categ column.
+				- 18-07-2025: Renata Triwijaya - Adding patient_categ column.
+				- 06-08-2025: Renata Triwijaya - Changing MGI coverage value from median_coverage to depth.
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
