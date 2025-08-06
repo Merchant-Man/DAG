@@ -160,7 +160,7 @@ INSERT INTO
 
 	-- Final deduplication: one row per run_name
 	SELECT
-		, date_start
+		date_start
 		, id_repository
 		, id_batch
 		, pipeline_name
