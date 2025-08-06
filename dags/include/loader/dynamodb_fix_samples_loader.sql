@@ -1,5 +1,5 @@
 INSERT INTO dynamodb_fix_samples(id,id_repository,id_library,sequencer,id_requestor,created_at,updated_at,time_requested,fix_type,new_repository,new_library,id_zlims_index,new_index)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON DUPLICATE KEY UPDATE 
 id = VALUES(id)
 , id_repository = VALUES(id_repository)
