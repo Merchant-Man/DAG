@@ -88,7 +88,9 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
         raise  
 
 def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
-    insert_columns=["id_repository"
+    insert_columns=[
+            "id"
+            ,"id_repository"
             ,"id_library"
             ,"sequencer"
             ,"id_requestor"
@@ -101,7 +103,7 @@ def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
             ,"id_zlims_index"
             ,"new_index"]
     # Remove duplicates
-    df = df.drop_duplicates(subset=['id_repository','id_library'])
+    df = df.drop_duplicates(subset=['id'])
     # Ensure all columns exist
     for col in insert_columns:
         if col not in df.columns:
@@ -114,12 +116,27 @@ def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
 def transform_fix_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     insert_columns = [
-        "id_repository", "sequencer", "run_name", "id_requestor",
-        "created_at", "updated_at", "time_requested", "fix_type",
-        "new_repository", "cram", "new_cram", "vcf", "new_vcf"
+        "id"
+        , "id_repository"
+        , "sequencer"
+        , "run_name"
+        , "id_requestor"
+        , "created_at"
+        , "updated_at"
+        , "time_requested"
+        , "fix_type"
+        , "new_repository"
+        , "cram"
+        , "new_cram"
+        , "vcf"
+        , "new_vcf"
+        , "cram_size"
+        , "new_cram_size"
+        , "vcf_size"
+        , "new_vcf_size"
     ]
 
-    df = df.drop_duplicates(subset=["run_name"])
+    df = df.drop_duplicates(subset=["id"])
     for col in insert_columns:
         if col not in df.columns:
             df[col] = ""
