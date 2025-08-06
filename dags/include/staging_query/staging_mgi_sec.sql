@@ -13,7 +13,6 @@
 START TRANSACTION;
 DELETE FROM staging_mgi_sec;
 INSERT INTO staging_mgi_sec 
-(
 	WITH
 		-- Latest sample-level fix for MGI (id_repository fix)
 		dbfa_mgi_1 AS (
