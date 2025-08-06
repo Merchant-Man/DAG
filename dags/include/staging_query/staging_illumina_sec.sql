@@ -3,27 +3,27 @@
  -- Purpose  :   This query is intended to be used as the staging results of illumina secondary analysis data.
  -- Author   :   Abdullah Faqih
  -- Created  :   14-02-2025
- -- Changes	 :	 01-03-2025 Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
-				 15-03-2025 Adding filter to remove test, demo, benchmark, and dev id repositories.
-				 30-06-2025 Adding transcation lock to the query
+ -- Changes	 :	 01-03-2025 Abdullah Faqih - Enforce the SKI code repo into the new id repo. SKI should be the origin_code_repo not the id_repo itself. 
+				 15-03-2025 Abdullah Faqih - Adding filter to remove test, demo, benchmark, and dev id repositories.
+				 30-06-2025 Abdullah Faqih - Adding transcation lock to the query
+				 04-08-2025 Renata Triwijaya - Adding dynamodb-fix on Illumina analysis table
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
 
 START TRANSACTION;
 DELETE FROM staging_illumina_sec;
-INSERT INTO staging_illumina_sec(
-SELECT
+INSERT INTO staging_illumina_sec
+( SELECT
 	date_start,
-	COALESCE(sfki.code_repository,
-	COALESCE(db_ic_sec.new_repository,db_ic_sec2.new_repository,ica_sec.clean_id_repository)) id_repository,
+	COALESCE(sfki.code_repository, COALESCE(db_ic_sec.new_repository,db_ic_sec2.new_repository,ica_sec.clean_id_repository)) id_repository,
 	ica_sec.new_id_batch id_batch,
 	ica_sec.pipeline_name,
 	ica_sec.run_name,
 	COALESCE(db_ic_sec2.new_cram, ica_sec.cram) cram,
-	ica_sec.cram_size,
+	COALESCE(db_ic_sec2.new_cram_size, ica_sec.cram_size) cram_size,
 	COALESCE(db_ic_sec2.new_vcf, ica_sec.vcf) vcf,
-	ica_sec.vcf_size,
+	COALESCE(db_ic_sec2.new_vcf_size,ica_sec.vcf_size) vcf_size,
 	ica_sec.tag_user_tags,
 	illumina_qc_2.percent_dups,
 	illumina_qc_2.percent_q30_bases,
@@ -118,62 +118,55 @@ FROM
 	) illumina_qs_2 ON ica_sec.id_repository = illumina_qs_2.id_repository
 	-- 	 So TYPE TURNED OUT TO BE FOUND WITHIN TWO PLACES: SAMPLES AND THE ANALYSIS.
 	LEFT JOIN (
-		SELECT DISTINCT
-			id_repository,
-			new_repository
-		FROM
-			dynamodb_fix_samples 
-		WHERE
-			sequencer = "Illumina"
-			AND fix_type = "id_repository"
-			AND new_repository IS NOT NULL
-	) db_ic_sec ON ica_sec.id_repository = db_ic_sec.id_repository
-	LEFT JOIN (
-		SELECT DISTINCT
-			dbfa1.run_name,
-			dbfa1.id_repository,
-			dbfa1.new_repository,
-			dbfa2.cram,
-			dbfa2.new_cram,
-			dbfa3.vcf,
-			dbfa3.new_vcf
+		SELECT 
+			id_repository
+			, new_repository
 		FROM (
-			SELECT DISTINCT
-				run_name,
-				id_repository,
-				new_repository
-			FROM
-				dynamodb_fix_analysis
+			SELECT
+				id_repository
+				, new_repository
+				, ROW_NUMBER() OVER (
+					PARTITION BY id_repository
+					ORDER BY time_requested DESC
+				) AS rn
+			FROM dynamodb_fix_samples
 			WHERE
-				sequencer = "Illumina"
-				AND fix_type= "id_repository"
+				sequencer = 'Illumina'
+				AND fix_type = 'id_repository'
 				AND new_repository IS NOT NULL
-		) dbfa1
-		LEFT JOIN (
-			SELECT DISTINCT
-				run_name,
-				cram,
-				new_cram
-			FROM
+		) ranked
+		WHERE rn = 1
+	) db_ic_sec 
+		ON ica_sec.id_repository = db_ic_sec.id_repository
+	LEFT JOIN (
+		SELECT
+			run_name
+			, id_repository
+			, MAX(CASE WHEN fix_type = 'id_repository' THEN new_repository END) AS new_repository
+			, MAX(CASE WHEN fix_type = 'cram' THEN cram END) AS cram
+			, MAX(CASE WHEN fix_type = 'cram' THEN new_cram END) AS new_cram
+			, MAX(CASE WHEN fix_type = 'cram' THEN cram_size END) AS cram_size
+			, MAX(CASE WHEN fix_type = 'cram' THEN new_cram_size END) AS new_cram_size
+			, MAX(CASE WHEN fix_type = 'vcf' THEN vcf END) AS vcf
+			, MAX(CASE WHEN fix_type = 'vcf' THEN new_vcf END) AS new_vcf
+			, MAX(CASE WHEN fix_type = 'vcf' THEN vcf_size END) AS vcf_size
+			, MAX(CASE WHEN fix_type = 'vcf' THEN new_vcf_size END) AS new_vcf_size
+		FROM (
+			SELECT 
+				*
+				, ROW_NUMBER() OVER (
+					PARTITION BY run_name
+					ORDER BY time_requested DESC
+				) AS rn
+			FROM 
 				dynamodb_fix_analysis
-			WHERE
-				sequencer = "Illumina"
-				AND fix_type= "cram"
-				AND new_cram IS NOT NULL
-		) dbfa2 ON dbfa1.run_name = dbfa2.run_name
-		LEFT JOIN (
-			SELECT DISTINCT
-				run_name,
-				vcf,
-				new_vcf
-			FROM
-				dynamodb_fix_analysis
-			WHERE
-				sequencer = "Illumina"
-				AND fix_type= "vcf"
-				AND new_vcf IS NOT NULL
-		) dbfa3 ON dbfa1.run_name = dbfa3.run_name
-	) db_ic_sec2 ON ica_sec.run_name = db_ic_sec2.run_name
+			WHERE 
+				sequencer = 'Illumina'
+		) ranked
+		WHERE 
+			rn = 1
+	) db_ic_sec2 
+		ON ica_sec.run_name = db_ic_sec2.run_name
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
 WHERE
 	ica_sec.rn = 1);
