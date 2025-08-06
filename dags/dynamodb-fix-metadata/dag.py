@@ -64,7 +64,7 @@ samples_fix_fetch_transform_to_db_task = PythonOperator(
         "object_path": SAMPLES_FIX_OBJECT_PATH,
         "transform_func": transform_fix_samples_data,
         "db_secret_url": RDS_SECRET,
-        "multi_files": False,
+        "all_files": True,
         "curr_ds": "{{ ds }}"
     },
     templates_dict={"insert_query": samples_loader_query},
@@ -95,7 +95,7 @@ analysis_fix_transform_to_db_task = PythonOperator(
         "object_path": ANALYSIS_FIX_OBJECT_PATH,
         "transform_func": transform_fix_analysis_data,
         "db_secret_url": RDS_SECRET,
-        "multi_files": False,
+        "all_files": True,
         "curr_ds": "{{ ds }}"
     },
     templates_dict={"insert_query": analysis_loader_query},
