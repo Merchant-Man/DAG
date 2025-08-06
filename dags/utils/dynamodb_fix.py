@@ -52,7 +52,7 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
         # Split by 'fix_type' and upload to S3
         fix_types = ['id_repository'
                      , 'id_library'
-                     , 'id_index_zlims'
+                     , 'id_zlims_index'
                      , 'cram'
                      , 'vcf'
                      ]
