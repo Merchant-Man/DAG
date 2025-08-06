@@ -12,8 +12,8 @@
 -- Your SQL code goes here
 START TRANSACTION;
 DELETE FROM staging_mgi_sec;
-INSERT INTO
-	staging_mgi_sec (
+INSERT INTO staging_mgi_sec 
+(
 	WITH
 		-- Latest sample-level fix for MGI (id_repository fix)
 		dbfa_mgi_1 AS (
@@ -158,37 +158,37 @@ INSERT INTO
 				ON ztronpro_analysis.run_name = dbfa_mgi_2.run_name
 		)
 
-	-- Final deduplication: one row per run_name
-	SELECT
-		date_start
-		, id_repository
-		, id_batch
-		, pipeline_name
-		, run_name
-		, cram
-		, cram_size
-		, vcf
-		, vcf_size
-		, tag_user_tags
-		, percent_dups
-		, percent_q30_bases
-		, total_seqs
-		, depth
-		, median_coverage
-		, contamination
-		, at_least_10x
-		, at_least_20x
-		, ploidy_estimation
-		, snp
-		, indel
-		, ts_tv
-	FROM (
-		SELECT *,
-			ROW_NUMBER() OVER (
-				PARTITION BY run_name
-				ORDER BY date_start DESC
-			) AS rn
-		FROM res
-	) t
-	WHERE rn = 1;
+		-- Final deduplication: one row per run_name
+		SELECT
+			date_start
+			, id_repository
+			, id_batch
+			, pipeline_name
+			, run_name
+			, cram
+			, cram_size
+			, vcf
+			, vcf_size
+			, tag_user_tags
+			, percent_dups
+			, percent_q30_bases
+			, total_seqs
+			, depth
+			, median_coverage
+			, contamination
+			, at_least_10x
+			, at_least_20x
+			, ploidy_estimation
+			, snp
+			, indel
+			, ts_tv
+		FROM (
+			SELECT *,
+				ROW_NUMBER() OVER (
+					PARTITION BY run_name
+					ORDER BY date_start DESC
+				) AS rn
+			FROM res
+		) t
+		WHERE rn = 1;
 COMMIT;
