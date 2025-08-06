@@ -65,15 +65,16 @@ FROM (
 			, MAX(CASE WHEN fix_type = 'vcf' THEN vcf_size END) AS vcf_size
 			, MAX(CASE WHEN fix_type = 'vcf' THEN new_vcf_size END) AS new_vcf_size
 		FROM (
-			SELECT *
-				, ROW_NUMBER() OVER (
-					PARTITION BY run_name
+			SELECT *,
+				ROW_NUMBER() OVER (
+					PARTITION BY run_name, fix_type
 					ORDER BY time_requested DESC
 				) AS rn
 			FROM dynamodb_fix_analysis
 			WHERE sequencer = 'ONT'
 		) ranked
 		WHERE rn = 1
+		GROUP BY run_name
 	) dbfa_ont 
 		ON wfhv_sec.run_name = dbfa_ont.run_name
 WHERE

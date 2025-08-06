@@ -23,37 +23,32 @@ DELETE FROM staging_seq;
 INSERT INTO staging_seq 
 (
 	WITH
-		-- Consolidated DynamoDB fixes for MGI
+	-- Consolidated DynamoDB fixes for MGI
 		db_mgi_fixes AS (
-		SELECT
-			id_repository
-			, id_library
-			, new_repository
-			, id_zlims_index
-			, new_index
-			, new_library
-		FROM (
 			SELECT
 				id_repository
-				, id_library
-				, MAX(CASE WHEN fix_type = 'id_repository' THEN new_repository END) AS new_repository
-				, MAX(CASE WHEN fix_type = 'id_zlims_index' THEN id_zlims_index END) AS id_zlims_index
-				, MAX(CASE WHEN fix_type = 'id_zlims_index' THEN new_index END) AS new_index
-				, MAX(CASE WHEN fix_type = 'id_library' THEN new_library END) AS new_library
-				, ROW_NUMBER() OVER (
-					PARTITION BY id_repository, id_library
-					ORDER BY time_requested DESC
-				) AS rn
-			FROM 
-				dynamodb_fix_samples
-			WHERE 
-				sequencer = 'MGI'
-			GROUP BY 
-				id_repository
-				, id_library
-				, time_requested
-		) ranked_fixes
-		WHERE rn = 1
+				, NULLIF(id_library, 'EMPTY') AS id_library
+				, MAX(new_repository) AS new_repository
+				, MAX(id_zlims_index) AS id_zlims_index
+				, MAX(new_index) AS new_index
+				, MAX(new_library) AS new_library
+			FROM (
+				SELECT
+					id_repository
+					, id_library
+					, CASE WHEN fix_type = 'id_repository' THEN new_repository END AS new_repository
+					, CASE WHEN fix_type = 'id_zlims_index' THEN id_zlims_index END AS id_zlims_index
+					, CASE WHEN fix_type = 'id_zlims_index' THEN new_index END AS new_index
+					, CASE WHEN fix_type = 'id_library' THEN new_library END AS new_library
+					, ROW_NUMBER() OVER (
+						PARTITION BY id_repository, id_library, fix_type
+						ORDER BY time_requested DESC
+					) AS rn
+				FROM dynamodb_fix_samples
+				WHERE sequencer = 'MGI'
+			) ranked
+			WHERE rn = 1
+			GROUP BY id_repository, NULLIF(id_library, 'EMPTY')
 		),
 		
 		-- List of samples to exclude in ztronpro (e.g., old hg37)
@@ -80,8 +75,8 @@ INSERT INTO staging_seq
 					ROW_NUMBER() OVER (
 						PARTITION BY COALESCE(db_mgi.new_repository, seq_zlims.id_repository)
 						ORDER BY seq_zlims.date_create DESC
-					) rn,
-					COALESCE(db_mgi.new_repository, seq_zlims.id_repository) AS id_repository
+					) rn
+					, COALESCE(db_mgi.new_repository, seq_zlims.id_repository) AS id_repository
 					, COALESCE(db_mgi.new_library, seq_zlims.id_flowcell) AS id_library
 					, 'MGI' AS sequencer
 					, seq_zlims.date_create AS date_primary
@@ -170,9 +165,12 @@ INSERT INTO staging_seq
 						WHEN id_repository LIKE '%_M' OR id_repository LIKE '%_T' THEN REGEXP_SUBSTR(id_repository, '[A-Za-z0-9]+')
 						ELSE id_repository
 					END AS clean_id_repository
-					, COALESCE(
-						REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), 'LP.+'),
-						TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))
+					, NULLIF(
+						COALESCE(
+							REGEXP_SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(sample_list_technical_tags, '''bssh.run.name:LP.* '''), "[\'\",]", "")), 'LP.+'),
+							TRIM(REGEXP_REPLACE(REGEXP_SUBSTR(tag_user_tags, '''LP.+?'''), "[\'\"]", ""))
+						),
+						'EMPTY'
 					) AS id_library
 					, time_modified
 				FROM ica_samples
@@ -182,32 +180,36 @@ INSERT INTO staging_seq
 					AND `status` != 'DELETED'
 					AND ski.origin_code_repository IS NULL
 			) seq_ica
+
 			LEFT JOIN (
-				SELECT
-					id_repository
-					, id_library
-					, new_repository
-					, new_library
-				FROM (
-					SELECT
-						id_repository
-						, id_library
-						, MAX(CASE WHEN fix_type = 'id_repository' THEN new_repository END) AS new_repository
-						, MAX(CASE WHEN fix_type = 'id_library' THEN new_library END) AS new_library
-						, ROW_NUMBER() OVER (
-							PARTITION BY id_repository, id_library
-							ORDER BY MAX(time_requested) DESC
-						) AS rn
-					FROM dynamodb_fix_samples
-					WHERE sequencer = 'Illumina'
-					GROUP BY 
-						id_repository
-						, id_library
-				) sub
-				WHERE rn = 1
+			SELECT
+			    id_repository
+			    , NULLIF(id_library, 'EMPTY') AS id_library
+			    , MAX(new_repository) AS new_repository
+			    , MAX(new_library) AS new_library
+			FROM (
+			    SELECT
+			        id_repository
+			        , id_library
+			        , CASE WHEN fix_type = 'id_repository' THEN new_repository END AS new_repository
+			        , CASE WHEN fix_type = 'id_library' THEN new_library END AS new_library
+			    FROM (
+			        SELECT *,
+			            ROW_NUMBER() OVER (
+			                PARTITION BY id_repository, id_library, fix_type
+			                ORDER BY time_requested DESC
+			            ) AS rn
+			        FROM dynamodb_fix_samples
+			        WHERE sequencer = 'Illumina'
+			    ) ranked
+			    WHERE rn = 1
+			) pivoted
+			GROUP BY 
+				id_repository
+				, NULLIF(id_library, 'EMPTY')
 			) db_ica
-				ON seq_ica.clean_id_repository = db_ica.id_repository 
-					AND seq_ica.id_library = db_ica.id_library
+			ON seq_ica.clean_id_repository = db_ica.id_repository
+			-- AND seq_ica.id_library = db_ica.id_library
 		) t
 		LEFT JOIN staging_fix_ski_id_repo sfki 
 			ON t.id_repository = sfki.new_origin_code_repository
@@ -234,5 +236,4 @@ INSERT INTO staging_seq
 			wfhv_samples seq_wfhv
 		WHERE NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
 );
-
 COMMIT;

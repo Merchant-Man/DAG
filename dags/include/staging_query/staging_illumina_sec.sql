@@ -152,19 +152,16 @@ FROM
 			, MAX(CASE WHEN fix_type = 'vcf' THEN vcf_size END) AS vcf_size
 			, MAX(CASE WHEN fix_type = 'vcf' THEN new_vcf_size END) AS new_vcf_size
 		FROM (
-			SELECT 
-				*
-				, ROW_NUMBER() OVER (
-					PARTITION BY run_name
+			SELECT *,
+				ROW_NUMBER() OVER (
+					PARTITION BY run_name, fix_type
 					ORDER BY time_requested DESC
 				) AS rn
-			FROM 
-				dynamodb_fix_analysis
-			WHERE 
-				sequencer = 'Illumina'
+			FROM dynamodb_fix_analysis
+			WHERE sequencer = 'Illumina'
 		) ranked
-		WHERE 
-			rn = 1
+		WHERE rn = 1
+		GROUP BY run_name
 	) db_ic_sec2 
 		ON ica_sec.run_name = db_ic_sec2.run_name
 	LEFT JOIN staging_fix_ski_id_repo sfki ON ica_sec.id_repository = sfki.new_origin_code_repository
