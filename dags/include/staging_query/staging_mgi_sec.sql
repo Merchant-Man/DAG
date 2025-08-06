@@ -136,6 +136,7 @@ INSERT INTO
 				, NULL AS percent_q30_bases
 				, NULL AS total_seqs
 				, ztronpro_qc.depth AS depth
+				, NULL AS median_coverage
 				, NULL AS contamination
 				, ztronpro_qc.at_least_10x
 				, ztronpro_qc.at_least_20x
