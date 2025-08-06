@@ -41,7 +41,7 @@ with open(os.path.join("dags/repo/dags/include/loader", ANALYSIS_LOADER_QUERY)) 
 
 # Define tasks
 samples_fix_fetch_transform_and_load_task = PythonOperator(
-    task_id='samples_fix_fetch_transform_and_load',
+    task_id='samples_fix_fetch_transform_and_load_to_s3',
     python_callable=fetch_dynamodb_and_load_to_s3,
     provide_context=True,
     dag=dag,

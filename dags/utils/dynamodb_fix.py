@@ -38,6 +38,7 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
             return  # Skip the task if no data is found
 
         # Transform data into a DataFrame
+        data_items = [ {k: str(v) if v is not None else "" for k, v in item.items()} for item in data_items ]
         df = pd.DataFrame(data_items)
         if "created_at" not in df.columns:
             df["created_at"] = ts
@@ -102,15 +103,11 @@ def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
             ,"new_library"
             ,"id_zlims_index"
             ,"new_index"]
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['id'])
-    # Ensure all columns exist
+    df = df.drop_duplicates(subset=["id"])
     for col in insert_columns:
         if col not in df.columns:
             df[col] = ""
-    # Subset and enforce column order
     df = df[insert_columns]
-    # Convert all values to strings and replace NaNs
     df = df.fillna("").astype(str)
     return df
 
