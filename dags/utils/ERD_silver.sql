@@ -1065,3 +1065,63 @@ CREATE TABLE phenovar_section (
 
 CREATE INDEX group_id_idx
 ON phenovar_section(group_id);
+
+CREATE TABLE dynamodb_fix_samples (
+	id VARCHAR(100),
+	id_repository VARCHAR(32),
+	id_library VARCHAR(32),
+	sequencer VARCHAR(32),
+	id_requestor VARCHAR(32),
+	created_at DATETIME,
+	updated_at DATETIME,
+	time_requested DATETIME,
+	fix_type VARCHAR(64),
+	new_repository VARCHAR(32),
+	new_library VARCHAR(32),
+	id_zlims_index VARCHAR(32),
+	new_index VARCHAR(32),
+	PRIMARY KEY (id)
+)
+
+CREATE INDEX id_repository_idx
+ON dynamodb_fix_samples(id_repository);
+CREATE INDEX id_library_idx
+ON dynamodb_fix_samples(id_library);
+CREATE INDEX sequencer_idx
+ON dynamodb_fix_samples(sequencer);
+CREATE INDEX new_repository_idx
+ON dynamodb_fix_samples(new_repository);
+CREATE INDEX new_library_idx
+ON dynamodb_fix_samples(new_library);
+
+
+CREATE TABLE dynamodb_fix_analysis (
+	id VARCHAR(100),
+	id_repository VARCHAR(32),
+	sequencer VARCHAR(32),
+	run_name VARCHAR(32),
+	id_requestor VARCHAR(128),
+	created_at DATETIME,
+	updated_at DATETIME,
+	time_requested DATETIME,
+	fix_type VARCHAR(64),
+	new_repository VARCHAR(32),
+	cram TEXT,
+	new_cram TEXT,
+	vcf TEXT,
+	new_vcf TEXT,
+	cram_size BIGINT UNSIGNED,
+	new_cram_size BIGINT UNSIGNED,
+	vcf_size BIGINT UNSIGNED,
+	new_vcf_size BIGINT UNSIGNED,
+	PRIMARY KEY (id)
+)
+
+CREATE INDEX id_repository_idx
+ON dynamodb_fix_analysis(id_repository);
+CREATE INDEX run_name_idx
+ON dynamodb_fix_analysis(run_name);
+CREATE INDEX sequencer_idx
+ON dynamodb_fix_analysis(sequencer);
+CREATE INDEX new_repository_idx
+ON dynamodb_fix_analysis(new_repository);
