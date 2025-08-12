@@ -156,6 +156,7 @@ def read_and_calculate_percentage_reads(**kwargs):
 
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
     grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
+    return grouped_df
 
     logger.info("📊 Demux aggregation complete. Sample:")
     logger.info(grouped_df.head(10).to_string(index=False))
