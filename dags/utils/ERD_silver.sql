@@ -1081,7 +1081,7 @@ CREATE TABLE dynamodb_fix_samples (
 	id_zlims_index VARCHAR(32),
 	new_index VARCHAR(32),
 	PRIMARY KEY (id)
-)
+);
 
 CREATE INDEX id_repository_idx
 ON dynamodb_fix_samples(id_repository);
@@ -1115,7 +1115,7 @@ CREATE TABLE dynamodb_fix_analysis (
 	vcf_size BIGINT UNSIGNED,
 	new_vcf_size BIGINT UNSIGNED,
 	PRIMARY KEY (id)
-)
+);
 
 CREATE INDEX id_repository_idx
 ON dynamodb_fix_analysis(id_repository);
