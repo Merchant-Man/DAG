@@ -20,8 +20,8 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 QC_LOADER_QEURY = "wfhv_qc_loader.sql"
 SAMPLES_LOADER_QEURY = "wfhv_samples_loader.sql"
 ANALYSIS_LOADER_QEURY = "wfhv_analysis_loader.sql"
-S3_DYNAMODB_FIX_ID = "dynamodb/fix/id_repository/"
-S3_DYNAMODB_FIX_LIBRARY = "dynamodb/fix/id_library/"
+S3_DYNAMODB_FIX_ID = "dynamodb/fix/samples/id_repository/"
+S3_DYNAMODB_FIX_LIBRARY = "dynamodb/fix/samples/id_library/"
 
 default_args = {
     'owner': 'bgsi-data',

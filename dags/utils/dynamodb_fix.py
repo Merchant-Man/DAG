@@ -12,13 +12,24 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
         table = DynamoDBHook(aws_conn_id=aws_conn_id, resource_type='dynamodb').get_conn().Table(dynamodb_table)
 
         ds = kwargs.get("ds", "2025-03-02")
+        # ds="2025-01-01"
 
         ds_datetime = datetime.strptime(ds, "%Y-%m-%d")
-        ts = ds_datetime.strftime('%Y:%m:%d 00:00:00')
-
+        ts = ds_datetime.strftime('%Y:%m:%d %H:%M:%S') 
+        print(f"[DEBUG] Using timestamp filter: {ts}")
+        response = table.scan(
+            FilterExpression=Attr('time_requested').exists()
+        )
+        items = response.get('Items', [])
+        print(f"[DEBUG] Found {len(items)} items with 'time_requested' field")
+        for item in items:
+            print("[DEBUG] time_requested:", item.get("time_requested"))
+        items = table.scan(Limit=5).get("Items", [])
+        for i, item in enumerate(items):
+            print(f"[DEBUG] Item {i}: {item}")
         # Filter items with timestamps >= this day
         response = table.scan(
-            FilterExpression=Attr('timestamps').gte(ts)
+            FilterExpression=Attr('time_requested').gte(ts)
         )
         data_items = response.get('Items', [])
 
@@ -27,10 +38,25 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
             return  # Skip the task if no data is found
 
         # Transform data into a DataFrame
+        data_items = [ {k: str(v) if v is not None else "" for k, v in item.items()} for item in data_items ]
         df = pd.DataFrame(data_items)
+        if "created_at" not in df.columns:
+            df["created_at"] = ts
+        if "updated_at" not in df.columns:
+            df["updated_at"] = ts
+
+        # Reorder columns
+        priority_cols = ['id','id_repository','time_requested']
+        other_cols = [col for col in df.columns if col not in priority_cols]
+        df = df[priority_cols + other_cols]
 
         # Split by 'fix_type' and upload to S3
-        fix_types = ['id_repository', 'id_library']
+        fix_types = ['id_repository'
+                     , 'id_library'
+                     , 'id_zlims_index'
+                     , 'cram'
+                     , 'vcf'
+                     ]
         s3 = S3Hook(aws_conn_id=aws_conn_id)
 
         for fix_type in fix_types:
@@ -61,3 +87,57 @@ def fetch_dynamodb_and_load_to_s3(aws_conn_id: str, dynamodb_table: str, bronze_
     except Exception as e:
         logging.error(f"[ERROR] Failed to process data: {e}")
         raise  
+
+def transform_fix_samples_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    insert_columns=[
+            "id"
+            ,"id_repository"
+            ,"id_library"
+            ,"sequencer"
+            ,"id_requestor"
+            ,"created_at"
+            ,"updated_at"
+            ,"time_requested"
+            ,"fix_type"
+            ,"new_repository"
+            ,"new_library"
+            ,"id_zlims_index"
+            ,"new_index"]
+    df = df.drop_duplicates(subset=["id"])
+    for col in insert_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[insert_columns]
+    df = df.fillna("").astype(str)
+    return df
+
+def transform_fix_analysis_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    insert_columns = [
+        "id"
+        , "id_repository"
+        , "sequencer"
+        , "run_name"
+        , "id_requestor"
+        , "created_at"
+        , "updated_at"
+        , "time_requested"
+        , "fix_type"
+        , "new_repository"
+        , "cram"
+        , "new_cram"
+        , "vcf"
+        , "new_vcf"
+        , "cram_size"
+        , "new_cram_size"
+        , "vcf_size"
+        , "new_vcf_size"
+    ]
+
+    df = df.drop_duplicates(subset=["id"])
+    for col in insert_columns:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[insert_columns]
+    df = df.fillna("").astype(str)
+
+    return df

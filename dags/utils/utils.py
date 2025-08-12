@@ -403,7 +403,7 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
                 csv_obj=s3.get_key(bucket_name=bucket_name, key=file_key)
                 content = csv_obj.get()['Body'].read()
                 try:
-                    temp_df = pd.read_csv(io.BytesIO(content))
+                    temp_df = pd.read_csv(io.BytesIO(content), dtype=str)
                     if not temp_df.empty:
                         df = pd.concat([df, temp_df], ignore_index=True)
                     else:
