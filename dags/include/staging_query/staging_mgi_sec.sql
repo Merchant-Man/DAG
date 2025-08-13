@@ -6,7 +6,8 @@
  -- Changes	 :	 15-03-2025 Abdullah Faqih - Adding filter to remove test, demo, benchmark, and dev id repositories.
 				 30-04-2025 Abdullah Faqih - Adding ztron pro analysis
 				 30-06-2025 Abdullah Faqih - Adding transcation lock to the query
-				 05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table 				
+				 05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table
+				 13-08-2025 Abdullah Faqih - Fixing multiple run_names filtering for the resuts; Excluding test id repositories
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -26,7 +27,7 @@ INSERT INTO staging_mgi_sec
 					, id_library
 					, new_repository
 					, ROW_NUMBER() OVER (
-						PARTITION BY id_repository, id_library
+						PARTITION BY id_repository
 						ORDER BY time_requested DESC
 					) AS rn
 				FROM dynamodb_fix_samples
@@ -59,7 +60,7 @@ INSERT INTO staging_mgi_sec
 						ORDER BY time_requested DESC
 					) AS rn
 				FROM dynamodb_fix_analysis
-				WHERE sequencer = 'MGI'
+				WHERE sequencer = 'MGI' AND NOT REGEXP_LIKE(id_requestor, '(?i)test')
 			) ranked
 			WHERE rn = 1
 			GROUP BY run_name
@@ -97,7 +98,7 @@ INSERT INTO staging_mgi_sec
 			FROM (
 				SELECT *,
 					ROW_NUMBER() OVER (
-						PARTITION BY id_repository, run_name
+						PARTITION BY id_repository
 						ORDER BY date_start DESC
 					) AS rn
 				FROM mgi_analysis
@@ -107,12 +108,12 @@ INSERT INTO staging_mgi_sec
 			LEFT JOIN (
 				SELECT *,
 					ROW_NUMBER() OVER (
-						PARTITION BY run_name
+						PARTITION BY id_repository
 						ORDER BY at_least_50x DESC
 					) AS rn
 				FROM mgi_qc
 				WHERE NOT REGEXP_LIKE(id_repository, '(?i)(demo|test|benchmark|dev)')
-			) mgi_qc_2 ON mgi_analysis_2.run_name = mgi_qc_2.run_name
+			) mgi_qc_2 ON mgi_analysis_2.id_repository = mgi_qc_2.id_repository
 				AND mgi_qc_2.rn = 1
 			LEFT JOIN dbfa_mgi_1 ON mgi_analysis_2.id_repository = dbfa_mgi_1.id_repository
 			LEFT JOIN dbfa_mgi_2 ON mgi_analysis_2.run_name = dbfa_mgi_2.run_name
@@ -121,21 +122,20 @@ INSERT INTO staging_mgi_sec
 			UNION ALL
 
 			SELECT
-				ztronpro_analysis.date_secondary AS date_start
-				, COALESCE(dbfa_mgi_2.new_repository, dbfa_mgi_1.new_repository, ztronpro_analysis.id_repository)
+				zpro_analysis.date_secondary AS date_start
+				, COALESCE(dbfa_mgi_2.new_repository, dbfa_mgi_1.new_repository, zpro_analysis.id_repository) AS id_repository
 				, NULL AS id_batch
 				, 'ZTRONPRO-MEGABOLT' AS pipeline_name
-				, ztronpro_analysis.run_name
-				, COALESCE(dbfa_mgi_2.cram, ztronpro_analysis.cram) AS cram
-				, COALESCE(dbfa_mgi_2.new_cram_size, ztronpro_analysis.cram_size) AS cram_size
-				, COALESCE(dbfa_mgi_2.vcf, ztronpro_analysis.vcf) AS vcf
-				, COALESCE(dbfa_mgi_2.vcf_size, ztronpro_analysis.vcf_size) AS vcf_size
+				, zpro_analysis.run_name
+				, COALESCE(dbfa_mgi_2.cram, zpro_analysis.cram) AS cram
+				, COALESCE(dbfa_mgi_2.new_cram_size, zpro_analysis.cram_size) AS cram_size
+				, COALESCE(dbfa_mgi_2.vcf, zpro_analysis.vcf) AS vcf
+				, COALESCE(dbfa_mgi_2.vcf_size, zpro_analysis.vcf_size) AS vcf_size
 				, NULL AS tag_user_tags
 				, ztronpro_qc.percent_dups
 				, NULL AS percent_q30_bases
 				, NULL AS total_seqs
-				, ztronpro_qc.depth AS depth
-				, NULL AS median_coverage
+				, ztronpro_qc.depth AS median_coverage
 				, NULL AS contamination
 				, ztronpro_qc.at_least_10x
 				, ztronpro_qc.at_least_20x
@@ -147,14 +147,24 @@ INSERT INTO staging_mgi_sec
 				, snp
 				, indel
 				, ts_tv
-			FROM ztronpro_analysis
+				, ztronpro_qc.depth AS depth
+			FROM 
+			(
+					SELECT *,
+					ROW_NUMBER() OVER (
+						PARTITION BY id_repository
+						ORDER BY date_secondary DESC
+					) AS rn
+				FROM ztronpro_analysis
+			)  zpro_analysis 
 			LEFT JOIN ztronpro_qc
-				ON ztronpro_analysis.id_repository = ztronpro_qc.id_repository 
-				AND ztronpro_analysis.run_name = ztronpro_qc.run_name
+				ON zpro_analysis.id_repository = ztronpro_qc.id_repository 
+				AND zpro_analysis.run_name = ztronpro_qc.run_name
 			LEFT JOIN dbfa_mgi_1
-				ON ztronpro_analysis.id_repository = dbfa_mgi_1.id_repository
+				ON zpro_analysis.id_repository = dbfa_mgi_1.id_repository
 			LEFT JOIN dbfa_mgi_2
-				ON ztronpro_analysis.run_name = dbfa_mgi_2.run_name
+				ON zpro_analysis.run_name = dbfa_mgi_2.run_name
+			WHERE rn=1
 		)
 
 		-- Final deduplication: one row per run_name
@@ -184,7 +194,7 @@ INSERT INTO staging_mgi_sec
 		FROM (
 			SELECT *,
 				ROW_NUMBER() OVER (
-					PARTITION BY run_name
+					PARTITION BY id_repository
 					ORDER BY date_start DESC
 				) AS rn
 			FROM res
