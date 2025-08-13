@@ -47,10 +47,9 @@ WITH
 				SELECT
 					seq.id_repository,
 					sbp.id_patient,
-					sbp.id_mpi,¡
+					sbp.id_mpi,
 					sbp.id_subject,
 					sbp.biobank_nama origin_biobank,
-					sbp.patient_categ,
 					-- null sex means we can't find the simbiox data on both registries.
 					sbp.registry_sex sex,
 					sbp.patient_categ,
@@ -76,7 +75,7 @@ WITH
 					-- QC   
 					COALESCE(mgi_sec.at_least_10x, illumina_sec.at_least_10x, ont_sec.at_least_10x) AS at_least_10x,
 					COALESCE(mgi_sec.at_least_20x, illumina_sec.at_least_20x, ont_sec.at_least_20x) AS at_least_20x,
-					COALESCE(mgi_sec.depth, illumina_sec.median_coverage, ont_sec.median_coverage) AS coverage,
+					COALESCE(mgi_sec.median_coverage, illumina_sec.median_coverage, ont_sec.median_coverage) AS coverage,
 					-- mgi doesnt contain contamination data
 					COALESCE(illumina_sec.contamination, ont_sec.contamination) AS contamination,
 					-- only illumina contain this metric

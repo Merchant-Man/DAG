@@ -6,7 +6,8 @@
 -- Changes	: 
 				02-03-2025 Abdullah Faqih - Adding filter for testing id repositories
 				30-06-2025 Abdullah Faqih - Adding transcation lock to the query
-				05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table  
+				05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table
+				13-08-2025 Abdullah Faqih - Excluding test id repositories
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 START TRANSACTION;
@@ -71,7 +72,7 @@ FROM (
 					ORDER BY time_requested DESC
 				) AS rn
 			FROM dynamodb_fix_analysis
-			WHERE sequencer = 'ONT'
+			WHERE sequencer = 'ONT' AND NOT REGEXP_LIKE(id_requestor, '(?i)test')
 		) ranked
 		WHERE rn = 1
 		GROUP BY run_name
