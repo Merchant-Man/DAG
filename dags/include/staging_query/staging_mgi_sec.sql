@@ -81,7 +81,6 @@ INSERT INTO staging_mgi_sec
 				, mgi_qc_2.percent_dups
 				, NULL AS percent_q30_bases
 				, mgi_qc_2.total_seqs
-				, mgi_qc_2.depth
 				, mgi_qc_2.median_coverage
 				, NULL AS contamination
 				, mgi_qc_2.at_least_10x
@@ -94,6 +93,7 @@ INSERT INTO staging_mgi_sec
 				, mgi_qc_2.snp
 				, mgi_qc_2.indel
 				, mgi_qc_2.ts_tv
+				, mgi_qc_2.depth
 			FROM (
 				SELECT *,
 					ROW_NUMBER() OVER (
@@ -172,7 +172,6 @@ INSERT INTO staging_mgi_sec
 			, percent_dups
 			, percent_q30_bases
 			, total_seqs
-			, depth
 			, median_coverage
 			, contamination
 			, at_least_10x
@@ -181,6 +180,7 @@ INSERT INTO staging_mgi_sec
 			, snp
 			, indel
 			, ts_tv
+			, depth
 		FROM (
 			SELECT *,
 				ROW_NUMBER() OVER (
