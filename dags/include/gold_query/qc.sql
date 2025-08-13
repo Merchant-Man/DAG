@@ -47,10 +47,9 @@ WITH
 				SELECT
 					seq.id_repository,
 					sbp.id_patient,
-					sbp.id_mpi,¡
+					sbp.id_mpi,
 					sbp.id_subject,
 					sbp.biobank_nama origin_biobank,
-					sbp.patient_categ,
 					-- null sex means we can't find the simbiox data on both registries.
 					sbp.registry_sex sex,
 					sbp.patient_categ,

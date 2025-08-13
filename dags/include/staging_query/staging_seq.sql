@@ -41,11 +41,11 @@ INSERT INTO staging_seq
 					, CASE WHEN fix_type = 'id_zlims_index' THEN new_index END AS new_index
 					, CASE WHEN fix_type = 'id_library' THEN new_library END AS new_library
 					, ROW_NUMBER() OVER (
-						PARTITION BY id_repository, id_library, fix_type
+						PARTITION BY id_repository, new_repository, new_library, new_index, fix_type
 						ORDER BY time_requested DESC
 					) AS rn
 				FROM dynamodb_fix_samples
-				WHERE sequencer = 'MGI'
+				WHERE sequencer = 'MGI' AND NOT REGEXP_LIKE(id_requestor, '(?i)test')
 			) ranked
 			WHERE rn = 1
 			GROUP BY id_repository, NULLIF(id_library, 'EMPTY')
@@ -86,7 +86,6 @@ INSERT INTO staging_seq
 				FROM zlims_samples seq_zlims
 				LEFT JOIN db_mgi_fixes db_mgi
 					ON seq_zlims.id_repository = db_mgi.id_repository
-					AND seq_zlims.id_flowcell = db_mgi.id_library
 				WHERE seq_zlims.date_create >= '2023-11-01'
 
 				UNION ALL
@@ -110,7 +109,7 @@ INSERT INTO staging_seq
 					ON REGEXP_SUBSTR(zpro.original_sample_id, "[^_]+") = db_mgi2.id_repository
 						AND zpro.flow_cell_id = db_mgi2.id_library
 				WHERE NOT REGEXP_LIKE(original_sample_id, "(?i)test|AshkenazimTrio")
-					AND REGEXP_SUBSTR(zpro.original_sample_id, "[^_]+") NOT IN (
+					AND zpro.original_sample_id NOT IN (
 						SELECT code_repository 
 						FROM deleted_hg37
 					)

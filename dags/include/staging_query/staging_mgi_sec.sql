@@ -6,7 +6,8 @@
  -- Changes	 :	 15-03-2025 Abdullah Faqih - Adding filter to remove test, demo, benchmark, and dev id repositories.
 				 30-04-2025 Abdullah Faqih - Adding ztron pro analysis
 				 30-06-2025 Abdullah Faqih - Adding transcation lock to the query
-				 05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table 				
+				 05-08-2025 Renata Triwijaya - Adding dynamodb-fix on MGI analysis table
+				 13-08-2025 Abdullah Faqih - Fixing multiple run_names filtering for the resuts; Excluding test id repositories
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -59,7 +60,7 @@ INSERT INTO staging_mgi_sec
 						ORDER BY time_requested DESC
 					) AS rn
 				FROM dynamodb_fix_analysis
-				WHERE sequencer = 'MGI'
+				WHERE sequencer = 'MGI' AND NOT REGEXP_LIKE(id_requestor, '(?i)test')
 			) ranked
 			WHERE rn = 1
 			GROUP BY run_name
@@ -81,7 +82,6 @@ INSERT INTO staging_mgi_sec
 				, mgi_qc_2.percent_dups
 				, NULL AS percent_q30_bases
 				, mgi_qc_2.total_seqs
-				, mgi_qc_2.depth
 				, mgi_qc_2.median_coverage
 				, NULL AS contamination
 				, mgi_qc_2.at_least_10x
@@ -94,6 +94,7 @@ INSERT INTO staging_mgi_sec
 				, mgi_qc_2.snp
 				, mgi_qc_2.indel
 				, mgi_qc_2.ts_tv
+				, mgi_qc_2.depth
 			FROM (
 				SELECT *,
 					ROW_NUMBER() OVER (
@@ -172,7 +173,6 @@ INSERT INTO staging_mgi_sec
 			, percent_dups
 			, percent_q30_bases
 			, total_seqs
-			, depth
 			, median_coverage
 			, contamination
 			, at_least_10x
@@ -181,10 +181,11 @@ INSERT INTO staging_mgi_sec
 			, snp
 			, indel
 			, ts_tv
+			, depth
 		FROM (
 			SELECT *,
 				ROW_NUMBER() OVER (
-					PARTITION BY run_name
+					PARTITION BY id_repository
 					ORDER BY date_start DESC
 				) AS rn
 			FROM res
