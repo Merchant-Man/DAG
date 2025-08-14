@@ -1,11 +1,10 @@
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Any, Union, Optional
-
+from typing import Dict, Any, Optional
+from airflow.providers.docker.operators.docker import DockerOperator
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
-
 from utils.utils import fetch_and_dump, silver_transform_to_db
 from utils.phenovar_transform import (
     transform_demography_data,
@@ -15,6 +14,9 @@ from utils.phenovar_transform import (
     transform_ethical_clearance_data,
     transform_form_data
 )
+from phenovar_iron import main as phenovar_iron_main
+from kubernetes.client import models as k8s  # optional (for resources/imagePullSecrets)
+
 
 AWS_CONN_ID = "aws"
 PHENOVAR_CONN_ID = "phenovar-prod"
@@ -239,6 +241,25 @@ transform_funcs = {
 for key in fetch_task_keys:
     tasks_fetch[key] = create_fetch_dump_task(key)
     tasks_silver[key] = create_silver_transform_task(key, transform_funcs[key])
+    
+
+PythonOperator(
+    task_id="run_phenovar_iron",
+    python_callable=phenovar_iron_main,
+    dag=dag,
+    executor_config={
+        "pod_override": k8s.V1Pod(
+            spec=k8s.V1PodSpec(
+                containers=[
+                    k8s.V1Container(
+                        name="base",
+                        image="624658759468.dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest",
+                    )
+                ]
+            )
+        )
+    },
+)
 
 
 # Define task dependencies
