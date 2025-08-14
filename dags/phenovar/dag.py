@@ -247,6 +247,15 @@ PythonOperator(
     task_id="run_phenovar_iron",
     python_callable=phenovar_iron_main,
     dag=dag,
+    op_args={
+        "AES_ENCRYPTION_SECRET_KEY": Variable.get("AES_ENCRYPTION_SECRET_KEY"),
+        "IV": Variable.get("AES_ENCRYPTION_IV_TOKEN"),
+        "RDS_SECRET": Variable.get("RDS_SECRET").replace("mysqldb", "pymysql"),
+        "TABLE_NAME": "decrypted_phenovar_participants",
+        "PHENOVAR_USERNAME": Variable.get("PHENOVAR_EMAIL"),
+        "PHENOVAR_PASSWORD": Variable.get("PHENOVAR_PASSWORD")
+    },
+    provide_context=True,
     executor_config={
         "pod_override": k8s.V1Pod(
             spec=k8s.V1PodSpec(
