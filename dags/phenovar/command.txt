@@ -1,0 +1,37 @@
+# Build image
+docker build -t phenovar-decryptor:latest .
+
+# Test Image
+docker run --rm \
+  -e PHENOVAR_USERNAME="your@email" \
+  -e PHENOVAR_PASSWORD="yourPassword" \
+  -e RDS_SECRET="mysql+mysqldb://user:pass@host:3306/dbname" \
+  phenovar-decryptor:latest \
+  --key "YOUR_32_CHAR_AES_KEY" \
+  --iv  "YOUR_16_CHAR_IV"
+
+# Login to ECR
+aws ecr get-login-password --region ap-southeast-3 --profile <local_aws_profile> | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query "Account" --output text --profile <local_aws_profile>).dkr.ecr.ap-southeast-3.amazonaws.com
+
+# Tag local docker image with ECR destination
+docker tag <image_local_tag_id> $(aws sts get-caller-identity --query "Account" --output text --profile <local_aws_profile>).dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest
+
+# Push the image
+docker push $(aws sts get-caller-identity --query "Account" --output text --profile <local_aws_profile>).dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest
+
+# list images 
+aws ecr list-images --repository-name <repository_name> --profile <local_profile>
+
+
+
+
+aws ecr get-login-password --region ap-southeast-3 --profile bgsi-atlantis | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query "Account" --output text --profile bgsi-atlantis).dkr.ecr.ap-southeast-3.amazonaws.com
+
+# Tag local docker image with ECR destination
+docker tag 050d05876e25 $(aws sts get-caller-identity --query "Account" --output text --profile bgsi-atlantis).dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest
+
+# Push the image
+docker push $(aws sts get-caller-identity --query "Account" --output text --profile bgsi-atlantis).dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest
+
+# list images
+aws ecr list-images --repository-name airflow/phenovar_decrypt_demography --profile bgsi-atlantis

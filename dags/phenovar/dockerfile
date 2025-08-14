@@ -1,0 +1,34 @@
+# Use a slim Python base with wheels support for pandas
+FROM python:3.11-slim
+
+# Prevent Python from writing .pyc at runtime (we'll compile at build) and make stdout unbuffered
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# System deps (mostly for clean SSL/certificates & timezone data)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN chmod 666 /var/run/docker.sock
+# Workdir
+WORKDIR /app
+
+# Copy dependency list first to leverage Docker layer caching
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip && pip install -r /app/requirements.txt
+
+# Copy application code and entrypoint
+COPY phenovar_iron.py /app/phenovar_iron.py
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Pre-compile python bytecode so the image already contains compiled code
+RUN python -m compileall -q /app
+# Security: run as non-root
+# RUN useradd -m -u 10001 appuser
+# USER appuser
+
+# Default entrypoint: parse --key/--iv args and export envs, then exec the script
+# ENTRYPOINT ["/app/entrypoint.sh"]
