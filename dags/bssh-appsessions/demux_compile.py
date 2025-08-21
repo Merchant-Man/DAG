@@ -297,7 +297,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
     # ✅ Write final output CSV to S3 (bronze/final_output)
     try:
         out_df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df
-        out_key = f"{object_path}/bclconvert_appsessions_{curr_ds}.csv"
+        out_key = f"{object_path}/{curr_ds}.csv"
         s3.put_object(Bucket=bucket_name, Key=out_key, Body=out_df.to_csv(index=False).encode("utf-8"))
         logger.info(f"✅ Wrote final output to s3://{bucket_name}/{out_key}")
     except Exception as e:
