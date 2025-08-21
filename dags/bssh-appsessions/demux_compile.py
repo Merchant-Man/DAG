@@ -1,3 +1,4 @@
+import os
 import boto3
 import requests
 import pandas as pd
@@ -8,13 +9,19 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
+from utils.appsession_transform import transform_appsession_data
+from botocore.exceptions import ClientError
+from utils.silver_transform_to_db import silver_transform_to_db
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
+RDS_SECRET = Variable.get("RDS_SECRET")
+LOADER_QEURY = "illumina_appsession_loader.sql"
 AWS_CONN_ID = "aws"
-PREFIX = "bssh/Demux/"                 
+DEMUX_METRICS_PREFIX = "bssh/intermediate/demux_metrics/"
+PREFIX = "bssh/Demux/"
 FILENAME_SUFFIX = "Demultiplex_Stats.csv"
 YIELD_BUCKET = "bgsi-data-dwh-bronze"
 YIELD_PREFIX = "illumina/qs/"
@@ -107,9 +114,8 @@ def transform_data(df, curr_ds):
     return df
 
 def read_and_calculate_percentage_reads(**kwargs):
-    ti = kwargs["ti"]
+    ds = kwargs["ds"]
 
-    # Connect to S3
     s3 = get_boto3_client_from_connection(conn_id=AWS_CONN_ID)
     paginator = s3.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX)
@@ -127,9 +133,10 @@ def read_and_calculate_percentage_reads(**kwargs):
     all_dfs = []
     for key in matching_keys:
         obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-        csv_content = obj['Body'].read().decode('utf-8')
+        csv_content = obj["Body"].read().decode("utf-8")
         df = pd.read_csv(StringIO(csv_content))
         df = df[df["SampleID"] != "Undetermined"]
+        # coerce numeric for columns that start with '#' or '%'
         for col in df.columns:
             if col.startswith("#") or col.startswith("%"):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -141,31 +148,27 @@ def read_and_calculate_percentage_reads(**kwargs):
 
     combined_df = pd.concat(all_dfs, ignore_index=True)
 
+    # ✅ sum by SampleID (the key)
     grouped_df = combined_df.groupby("SampleID", as_index=False).agg({
-        '# Reads': 'sum',
-        '# Perfect Index Reads': 'sum',
-        '# One Mismatch Index Reads': 'sum',
-        '# Two Mismatch Index Reads': 'sum'
+        "# Reads": "sum",
+        "# Perfect Index Reads": "sum",
+        "# One Mismatch Index Reads": "sum",
+        "# Two Mismatch Index Reads": "sum",
     })
-    total_reads = grouped_df['# Reads'].sum()
-    grouped_df['% Reads'] = (grouped_df['# Reads'] / total_reads * 100).round(2)
 
-    # ✅ Print and log debug info
-    print(grouped_df[['SampleID', '# Reads']].head())
-    print("Grouped columns:", grouped_df.columns.tolist())
+    # overall percent-of-total reads
+    total_reads = grouped_df["# Reads"].sum()
+    grouped_df["% Reads"] = (grouped_df["# Reads"] / total_reads * 100).round(2)
 
+    # normalize for downstream merge (BioSampleName)
     grouped_df.rename(columns={"SampleID": "BioSampleName"}, inplace=True)
-    grouped_df["BioSampleName"] = grouped_df["BioSampleName"].astype(str).str.strip().str.upper()
-    return grouped_df
+    grouped_df = clean_biosample_column(grouped_df, "BioSampleName")
 
-    logger.info("📊 Demux aggregation complete. Sample:")
-    logger.info(grouped_df.head(10).to_string(index=False))
-
-    # Push to XCom
-    ti.xcom_push(key='demux_metrics', value=grouped_df.to_dict(orient='records'))
-    logger.info("✅ Demux metrics pushed to XCom.")
-    return True
-
+    # write aggregated metrics back under the base prefix (no intermediate)
+    out_key = f"{PREFIX}demux_metrics_{ds}.csv"
+    s3.put_object(Bucket=BUCKET_NAME, Key=out_key, Body=grouped_df.to_csv(index=False).encode("utf-8"))
+    logger.info(f"✅ Demux metrics (summed by SampleID) written to s3://{BUCKET_NAME}/{out_key}")
+    
 def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
     curr_ds = kwargs['ds']
 
@@ -195,17 +198,22 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
     bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
 
     # Add demux metrics
-    logger.info("📦 Pulling Demultiplex metrics from XCom...")
-    ti = kwargs.get("ti")
-    demux_data = ti.xcom_pull(task_ids='process_demux_csvs', key='demux_metrics')
+    # Add demux metrics (read from S3; no XCom)
+    logger.info("📦 Loading Demultiplex metrics from S3...")
+    ds = kwargs["ds"]
+    demux_key = f"{PREFIX}demux_metrics_{ds}.csv"
     
-    if demux_data:
-        demux_df = pd.DataFrame(demux_data)
+    try:
+        demux_obj = s3.get_object(Bucket=bucket_name, Key=demux_key)
+        demux_df = pd.read_csv(StringIO(demux_obj["Body"].read().decode("utf-8")))
         demux_df = clean_biosample_column(demux_df, "BioSampleName")
         bcl_df = pd.merge(bcl_df, demux_df, on="BioSampleName", how="left")
-        logger.info("✅ Demultiplex metrics merged.")
-    else:
-        logger.warning("⚠️ No Demultiplex metrics found in XCom.")
+        logger.info(f"✅ Demultiplex metrics merged from s3://{bucket_name}/{demux_key}")
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") == "NoSuchKey":
+            logger.warning(f"⚠️ Demultiplex metrics not found at s3://{bucket_name}/{demux_key}")
+        else:
+            logger.error(f"❌ Failed to load demux metrics from S3: {e}")
 
     # Append Yield
     logger.info("🔗 Appending Yield data...")
@@ -286,7 +294,15 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, transform_f
 
     except Exception as e:
         logger.warning(f"⚠️ Failed to extract or print latest Run and BioSample rows: {e}")
-    return bcl_df.to_dict(orient='records')
+    # ✅ Write final output CSV to S3 (bronze/final_output)
+    try:
+        out_df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df
+        out_key = f"{object_path}/bclconvert_appsessions_{curr_ds}.csv"
+        s3.put_object(Bucket=bucket_name, Key=out_key, Body=out_df.to_csv(index=False).encode("utf-8"))
+        logger.info(f"✅ Wrote final output to s3://{bucket_name}/{out_key}")
+    except Exception as e:
+        logger.error(f"❌ Failed to write final output to S3: {e}")
+        raise
 # ----------------------------
 # DAG Definition
 # ----------------------------
@@ -308,6 +324,10 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
+BASE_DIR = os.path.dirname(__file__)
+loader_path = os.path.join(BASE_DIR, "include", "loader", LOADER_QEURY)
+with open(loader_path) as f:
+    loader_query = f.read()
 
 process_task = PythonOperator(
     task_id='process_demux_csvs',
@@ -328,4 +348,20 @@ fetch_and_dump_task = PythonOperator(
     },
     provide_context=True
 )
-process_task >> fetch_and_dump_task
+
+silver_upsert_appsessions = PythonOperator(
+    task_id="silver_upsert_bclconvert_appsessions",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": BUCKET_NAME,
+        "object_path": "bssh/final_output",        # read from your dumped final output
+        "transform_func": transform_appsession_data,  # <-- use the appsession transform here
+        "db_secret_url": RDS_SECRET,
+        "curr_ds": "{{ ds }}",
+    },
+    templates_dict={"insert_query": loader_query},   # <-- illumina_appsession_loader.sql
+    provide_context=True,
+)
+process_task >> fetch_and_dump_task >> silver_upsert_appsessions
