@@ -324,11 +324,8 @@ dag = DAG(
     schedule_interval=timedelta(days=1),
     catchup=False
 )
-BASE_DIR = os.path.dirname(__file__)
-loader_path = os.path.join(BASE_DIR, "include", "loader", LOADER_QEURY)
-with open(loader_path) as f:
+with open(os.path.join("dags/repo/dags/include/loader", LOADER_QEURY)) as f:
     loader_query = f.read()
-
 process_task = PythonOperator(
     task_id='process_demux_csvs',
     python_callable=read_and_calculate_percentage_reads,
