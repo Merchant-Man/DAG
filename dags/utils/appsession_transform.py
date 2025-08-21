@@ -28,39 +28,39 @@ def transform_appsession_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         "GeneratedSampleId": "generated_sample_id",
         "Yield": "yield",
         "TotalFlowcellYield": "total_flowcell_yield",
-        # created_at / updated_at handled below
+        "created_at": "created_at",
+        "updated_at": "updated_at",
     }
 
-    # If both exist, coalesce into id_repository then drop BioSampleName
+    # If both exist, coalesce into id_repository, then drop BioSampleName
     if "id_repository" in df.columns and "BioSampleName" in df.columns:
         df["id_repository"] = df["id_repository"].where(
             df["id_repository"].notna() & (df["id_repository"] != ""),
             df["BioSampleName"]
         )
         df.drop(columns=["BioSampleName"], inplace=True)
-    else:
-        # Rename only for columns that are present
-        df.rename(columns={k: v for k, v in cols.items() if k in df.columns}, inplace=True)
 
-    # Ensure all mapped target columns exist (create empty if missing)
-    for target in cols.values():
-        if target not in df.columns:
-            df[target] = ""
+    # Rename all other present columns per mapping (BioSampleName is already handled)
+    rename_map = {k: v for k, v in cols.items() if k in df.columns and k != "BioSampleName"}
+    df.rename(columns=rename_map, inplace=True)
 
-    # Ensure timestamps
+    # Ensure timestamps exist
     if "created_at" not in df.columns:
         df["created_at"] = ts
     if "updated_at" not in df.columns:
         df["updated_at"] = ts
 
+    # Ensure all target columns exist (create empty if missing)
+    target_cols = list(cols.values())
+    for c in target_cols:
+        if c not in df.columns:
+            df[c] = ""
+
     # Cast to str and fill na for MySQL
     df = df.astype(str)
     df.fillna("", inplace=True)
 
-    # Keep only mapped + timestamps, in stable order
-    new_cols = list(cols.values()) + ["created_at", "updated_at"]
-    df = df[new_cols]
+    # Keep only mapped columns in stable order (no duplicates)
+    df = df[target_cols]
 
     return df
-
-    
