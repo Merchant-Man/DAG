@@ -11,7 +11,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from utils.appsession_transform import transform_appsession_data
 from botocore.exceptions import ClientError
-from utils.silver_transform_to_db import silver_transform_to_db
+from silver_transform_to_db import silver_transform_to_db
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
