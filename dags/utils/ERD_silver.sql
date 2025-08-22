@@ -217,39 +217,42 @@ ON illumina_qc(run_name);
 
 
 -- Already check for illumina_qc id_repository should be unique
-CREATE TABLE illumina_appsessions (
+CREATE TABLE bclconvert_appsessions (
+  id_repository VARCHAR(255) NOT NULL COMMENT 'Unique key (BioSampleName)',
   row_type VARCHAR(32) COMMENT 'Type of the row, e.g. "session"',
   session_id VARCHAR(64) COMMENT 'ID of the session',
   session_name VARCHAR(255) COMMENT 'Name of the session',
-  date_created DATETIME COMMENT 'Date when the session is created',
-  date_modified DATETIME COMMENT 'Date when the session is modified',
+  date_created DATETIME(6) COMMENT 'Date when the session is created',
+  date_modified DATETIME(6) COMMENT 'Date when the session is modified',
   execution_status VARCHAR(32) COMMENT 'Status of the session execution',
-  ica_link VARCHAR(255) COMMENT 'Link to the ICA analysis',
+  ica_link VARCHAR(1024) COMMENT 'Link to the ICA analysis',
   ica_project_id VARCHAR(64) COMMENT 'ID of the ICA project',
   workflow_reference VARCHAR(255) COMMENT 'Reference to the workflow',
   run_id VARCHAR(64) COMMENT 'ID of the run associated with the session',
   run_name VARCHAR(255) COMMENT 'Run name associated with the session',
-  percent_gt_q30 FLOAT UNSIGNED COMMENT 'Percentage of bases with quality score greater than 30',
+  percent_gt_q30 DECIMAL(6,3) UNSIGNED COMMENT 'Pct bases Q>30',
   flowcell_barcode VARCHAR(64) COMMENT 'Barcode of the flowcell',
   reagent_barcode VARCHAR(64) COMMENT 'Barcode of the reagent',
   `status` VARCHAR(32) COMMENT 'Status of the session',
   experiment_name VARCHAR(255) COMMENT 'Name of the experiment',
-  run_date_created DATETIME COMMENT 'Date when the run is created',
+  run_date_created DATETIME(6) COMMENT 'Date when the run is created',
   biosample_name VARCHAR(255) COMMENT 'Name of the biosample associated with the session',
   biosample_id VARCHAR(64) COMMENT 'ID of the biosample associated with the session',
-  computed_yield_bp FLOAT UNSIGNED COMMENT 'Computed yield in base pairs',
+  computed_yield_bp BIGINT UNSIGNED COMMENT 'Computed yield in base pairs',
   generated_sample_id VARCHAR(64) COMMENT 'ID of the generated sample',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp of record creation. Using MySQL TZ.',
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.',
-  yield FLOAT COMMENT 'Yield in base pairs',
-  total_flowcell_yield FLOAT COMMENT 'Total yield for the flowcell',
-  PRIMARY KEY (session_id, biosample_id)
+  `yield` BIGINT UNSIGNED COMMENT 'Yield in base pairs',
+  total_flowcell_yield BIGINT UNSIGNED COMMENT 'Total yield for the flowcell',
+  updated_at DATETIME(6) NOT NULL DEFAULT NOW(6) COMMENT 'Last update (controlled by upsert, not auto)',
+  created_at DATETIME(6) NOT NULL DEFAULT NOW(6) COMMENT 'Created at',
+  PRIMARY KEY (id_repository)
 );
 
-CREATE INDEX biosample_name_idx ON illumina_appsessions(biosample_name);
-CREATE INDEX biosample_id_idx ON illumina_appsessions(biosample_id);
-CREATE INDEX run_name_idx ON illumina_appsessions(run_name);
-CREATE INDEX experiment_name_idx ON illumina_appsessions(experiment_name);
+CREATE INDEX biosample_name_idx ON bclconvert_appsessions(biosample_name);
+CREATE INDEX biosample_id_idx ON bclconvert_appsessions(biosample_id);
+CREATE INDEX run_name_idx ON bclconvert_appsessions(run_name);
+CREATE INDEX run_id_idx ON bclconvert_appsessions(run_id);
+CREATE INDEX experiment_name_idx ON bclconvert_appsessions(experiment_name);
+
 
 
 -- for QS, combination of id_repository,lane,read_number,yield should be unique
