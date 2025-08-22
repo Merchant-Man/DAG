@@ -158,7 +158,7 @@ FROM
 					ORDER BY time_requested DESC
 				) AS rn
 			FROM dynamodb_fix_analysis
-			WHERE sequencer = 'Illumina'
+			WHERE sequencer = 'Illumina' AND NOT REGEXP_LIKE(id_requestor, '(?i)test')
 		) ranked
 		WHERE rn = 1
 		GROUP BY run_name

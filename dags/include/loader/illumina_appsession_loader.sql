@@ -1,4 +1,3 @@
--- Load BCLConvert session data
 INSERT INTO bclconvert_appsessions (
     row_type
     , session_id
@@ -25,7 +24,6 @@ INSERT INTO bclconvert_appsessions (
     , updated_at
 )
 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-
 ON DUPLICATE KEY UPDATE
 row_type = VALUES(row_type),
 session_id = VALUES(session_id),
@@ -49,4 +47,3 @@ biosample_id = VALUES(biosample_id),
 computed_yield_bps = VALUES(computed_yield_bps),
 generated_sample_id = VALUES(generated_sample_id),
 updated_at = '{{ ts }}';
-
