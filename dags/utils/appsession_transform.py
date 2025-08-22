@@ -4,7 +4,7 @@ import numpy as np
 def transform_appsession_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.copy().drop_duplicates()
 
-    # Map source -> DB columns
+    # Source -> DB names (no created_at/updated_at, no biosample_name)
     rename_map = {
         "RowType": "row_type",
         "SessionId": "session_id",
@@ -23,28 +23,21 @@ def transform_appsession_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         "Status": "status",
         "ExperimentName": "experiment_name",
         "RunDateCreated": "run_date_created",
-        "BioSampleName": "id_repository",        # PK
+        "BioSampleName": "id_repository",          # <-- your PK
         "BioSampleId": "biosample_id",
         "ComputedYieldBps": "computed_yield_bps",
         "GeneratedSampleId": "generated_sample_id",
         "Yield": "yield",
         "TotalFlowcellYield": "total_flowcell_yield",
-        # DO NOT include created_at/updated_at (SQL sets NOW(6))
     }
+    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
-    # If both exist, prefer an already-present id_repository, else fallback to BioSampleName
-    if "id_repository" in df.columns and "BioSampleName" in df.columns:
-        df["id_repository"] = df["id_repository"].where(
-            df["id_repository"].notna() & (df["id_repository"] != ""),
-            df["BioSampleName"]
-        )
-        df.drop(columns=["BioSampleName"], inplace=True)
+    # Ensure PK exists; drop rows without id_repository (e.g., Run rows with no sample)
+    if "id_repository" not in df.columns:
+        df["id_repository"] = None
+    df = df[df["id_repository"].notna() & (df["id_repository"] != "")]
 
-    # Rename what we have
-    rename_map_effective = {k: v for k, v in rename_map.items() if k in df.columns}
-    df.rename(columns=rename_map_effective, inplace=True)
-
-    # Keep only the placeholders used by the INSERT (no timestamps)
+    # Whitelist exactly the placeholders used by the SQL (no biosample_name, no timestamps)
     target_cols = [
         "id_repository",
         "row_type", "session_id", "session_name", "date_created", "date_modified",
@@ -60,28 +53,18 @@ def transform_appsession_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         if c not in df.columns:
             df[c] = None
 
-    # Normalize nulls (let MySQL receive NULL, not "")
+    # Keep NULLs as None (don’t cast to str; don’t fill with "")
     df.replace({np.nan: None, "nan": None, "NaT": None, "": None}, inplace=True)
 
-    # Optional: strip timezone markers in date_created/date_modified if they exist
+    # (Optional) strip tz markers from date strings your SQL won’t parse itself
     def _strip_tz(val):
-        if val is None:
-            return None
-        s = str(val)
-        s = s.replace("T", " ").replace("Z", "")
-        # drop any +HH:MM or -HH:MM suffix
-        if "+" in s:
-            s = s.split("+", 1)[0]
-        if "-" in s and s.count("-") > 2 and s.endswith((":00", ":30", ":45")):
-            # crude handle for trailing -HH:MM offsets
-            s = s.rsplit("-", 1)[0]
+        if val is None: return None
+        s = str(val).replace("T", " ").replace("Z", "")
+        if "+" in s: s = s.split("+", 1)[0]
         return s
-
     for c in ("date_created", "date_modified"):
         if c in df.columns:
             df[c] = df[c].map(_strip_tz)
 
-    # IMPORTANT: do NOT cast to str; keep types so ints stay ints and NULLs stay None
-    df = df[target_cols]
+    return df[target_cols]
 
-    return df
