@@ -261,6 +261,6 @@ silver_transform_to_db_task = PythonOperator(
     templates_dict={"insert_query": loader_query},
     provide_context=True
 )
-# DAG flow
+# DAG flow``
 fetch_and_dump_task >> silver_transform_to_db_task
 # fetch_and_dump_task 
