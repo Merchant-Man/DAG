@@ -31,7 +31,7 @@ BASE_URL = "https://ica.illumina.com/ica/rest/api"
 BSSH_APIKEY = Variable.get("BSSH_APIKEY1")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 # Updated OBJECT_PATH to match what silver_transform_to_db expects
-DEMUX_OBJECT_PATH = "bssh/Demux"
+DEMUX_OBJECT_PATH = "bssh/demux"
 
 
 # ----------------------------
@@ -98,7 +98,7 @@ demux_qs_fetch_and_dump_task = PythonOperator(
         "object_path": "bssh/final_output",
         # "transform_func": transform_data,
         "API_KEY": API_KEY,
-        "BASE_URL": API_BASE, 
+        "BASE_URL": BASE_URL, 
         "PROJECT_ID": PROJECT_ID
     },
     provide_context=True
