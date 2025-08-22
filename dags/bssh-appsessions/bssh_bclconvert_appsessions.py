@@ -11,6 +11,8 @@ import os
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dateutil.parser import isoparse
 from datetime import timezone
+from utils.utils import silver_transform_to_db
+
 # Silver task
 #from utils.utils import fetch_and_dump, silver_transform_to_db
 
@@ -50,8 +52,9 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
     while True:
         resp = requests.get(
-            f"{API_BASE}/appsessions?offset={offset}&limit={limit}&sortBy=DateCreated&sortDir=Desc",
-            headers=headers
+                f"{API_BASE}/appsessions?offset={offset}&limit={limit}"
+                f"&sortBy=DateCreated&sortDir=Desc&DateCreated>={curr_ds}",
+                headers=headers
         )
 
         resp.raise_for_status()
@@ -147,10 +150,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
 
     df = pd.DataFrame(all_rows)
     df = transform_func(df, curr_ds) if transform_func else df
-
-    df["created_at"] = curr_ds
-    df["updated_at"] = curr_ds
-
+    
     logger.info(f"✔ Final DataFrame shape: {df.shape}")
 
     buffer = io.StringIO()
@@ -164,6 +164,44 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
     logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
     print(f"✅ Saved to S3: {s3_path}")
 
+def transform_appsessions_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    cols = {
+    'row_type': df['RowType']
+    , 'session_id': df['SessionId']
+    , 'session_name': df['SessionName']
+    , 'date_created': df['DateCreated']
+    , 'date_modified': df['DateModified']
+    , 'execution_status': df['ExecutionStatus']
+    , 'ica_link': df['ICA_Link']
+    , 'ica_project_id': df['ICA_ProjectId']
+    , 'workflow_reference': df['WorkflowReference']
+    , 'run_id': df['RunId']
+    , 'run_name': df['RunName']
+    , 'percent_gt_q30': df['PercentGtQ30']
+    , 'flowcell_barcode': df['FlowcellBarcode']
+    , 'reagent_barcode': df['ReagentBarcode']
+    , 'status': df['Status']
+    , 'experiment_name': df['ExperimentName']
+    , 'run_date_created': df['RunDateCreated']
+    , 'id_repository': df['BioSampleName']
+    , 'biosample_id': df['BioSampleId']
+    , 'computed_yield_bps': df['ComputedYieldBps']
+    , 'generated_sample_id': df['GeneratedSampleId']
+    }
+
+    # Construct the new DataFrame
+    df = pd.DataFrame(cols)
+    
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+    # Need to fillna so that the mysql connector can insert the data.
+    df = df.astype(str)
+    df.fillna(value="", inplace=True)
+    return df
 # ----------------------------
 # DAG Definition
 # ----------------------------
@@ -208,23 +246,21 @@ fetch_and_dump_task = PythonOperator(
     provide_context=True
 )
 
-#silver_transform_to_db_task = PythonOperator(
-#    task_id="silver_transform_to_db",
-#    python_callable=silver_transform_to_db,
-#    dag=dag,
-#    op_kwargs={
-#        "aws_conn_id": AWS_CONN_ID,
-#        "bucket_name": S3_DWH_BRONZE,
-#        "object_path": f"{OBJECT_PATH}/{{{{ ds }}}}",
-#        "transform_func": transform_data,
-#        "db_secret_url": RDS_SECRET,
-#        "curr_ds": "{{ ds }}",
-#        "multi_files": True  # Enable multi-files mode to find files with date in name
-#    },
-#    templates_dict={"insert_query": loader_query},
-#    provide_context=True
-#)
-
+silver_transform_to_db_task = PythonOperator(
+    task_id="analysis_silver_transform_to_db",
+    python_callable=silver_transform_to_db,
+    dag=dag,
+    op_kwargs={
+        "aws_conn_id": AWS_CONN_ID,
+        "bucket_name": S3_DWH_BRONZE,
+        "object_path": OBJECT_PATH,
+        "db_secret_url": RDS_SECRET,
+        "transform_func": transform_appsessions_data,
+        "multi_files": True,
+        "curr_ds": "{{ ds }}"},
+    templates_dict={"insert_query": loader_query},
+    provide_context=True
+)
 # DAG flow
-#fetch_and_dump_task >> silver_transform_to_db_task
-fetch_and_dump_task
+fetch_and_dump_task >> silver_transform_to_db_task
+# fetch_and_dump_task 
