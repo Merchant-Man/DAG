@@ -55,7 +55,6 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                 f"{API_BASE}/appsessions?offset={offset}&limit={limit}"
                 f"&sortBy=DateCreated&sortDir=Desc&DateCreated>={curr_ds}",
                 headers=headers
-            headers=headers
         )
 
         resp.raise_for_status()
