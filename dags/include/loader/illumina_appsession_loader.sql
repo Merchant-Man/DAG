@@ -5,7 +5,7 @@ INSERT INTO bclconvert_appsessions (
   run_id, run_name, percent_gt_q30, flowcell_barcode, reagent_barcode,
   `status`, experiment_name,
   run_date_created,
-  biosample_name, biosample_id,
+  biosample_id,
   computed_yield_bps, generated_sample_id,
   `yield`, total_flowcell_yield,
   updated_at, created_at
@@ -16,16 +16,15 @@ VALUES (
   %(execution_status)s, %(ica_link)s, %(ica_project_id)s, %(workflow_reference)s,
   %(run_id)s, %(run_name)s, %(percent_gt_q30)s, %(flowcell_barcode)s, %(reagent_barcode)s,
   %(status)s, %(experiment_name)s,
-  -- e.g. 2025-08-05T08:38:40.0000000Z → microseconds
+  -- 2025-08-05T08:38:40.0000000Z → microseconds
   STR_TO_DATE(SUBSTRING_INDEX(REPLACE(REPLACE(%(run_date_created)s,'T',' '),'Z',''),'.',2),
               '%Y-%m-%d %H:%i:%s.%f'),
-  %(biosample_name)s, %(biosample_id)s,
+  %(biosample_id)s,
   %(computed_yield_bps)s, %(generated_sample_id)s,
   %(yield)s, %(total_flowcell_yield)s,
   NOW(6), NOW(6)
 )
 ON DUPLICATE KEY UPDATE
-  -- update only if incoming run_date_created is newer (or stored is NULL)
   row_type            = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(row_type),            row_type),
   session_id          = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(session_id),          session_id),
   session_name        = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(session_name),        session_name),
@@ -42,7 +41,6 @@ ON DUPLICATE KEY UPDATE
   `status`            = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(`status`),            `status`),
   experiment_name     = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(experiment_name),     experiment_name),
   run_date_created    = GREATEST(run_date_created, VALUES(run_date_created)),
-  biosample_name      = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(biosample_name),      biosample_name),
   biosample_id        = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(biosample_id),        biosample_id),
   computed_yield_bps  = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(computed_yield_bps),  computed_yield_bps),
   generated_sample_id = IF(run_date_created IS NULL OR VALUES(run_date_created) > run_date_created, VALUES(generated_sample_id), generated_sample_id),
