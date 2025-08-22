@@ -18,7 +18,7 @@ INSERT INTO bclconvert_appsessions (
     , experiment_name
     , run_date_created
     , id_repository
-    , bio_sample_id
+    , biosample_id
     , computed_yield_bps
     , generated_sample_id
     , created_at
