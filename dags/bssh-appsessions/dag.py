@@ -41,7 +41,7 @@ DEMUX_OBJECT_PATH = "bssh/Demux"
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 3),
+    'start_date': datetime(2025, 8, 20),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -96,7 +96,7 @@ demux_qs_fetch_and_dump_task = PythonOperator(
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": "bssh/final_output",
-        "transform_func": transform_data,
+        # "transform_func": transform_data,
         "API_KEY": API_KEY,
         "BASE_URL": API_BASE, 
         "PROJECT_ID": PROJECT_ID
