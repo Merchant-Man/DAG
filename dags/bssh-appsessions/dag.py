@@ -90,7 +90,7 @@ bclconvert_qs_fetch_and_dump_task = PythonOperator(
 
 demux_qs_fetch_and_dump_task = PythonOperator(
     task_id="bronze_fetch_bssh_bclconvertandQC",
-    python_callable=fetch_bclconvert_and_dump,
+    python_callable=fetch_bclconvertDemux_and_dump,
     dag=dag,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
