@@ -8,7 +8,7 @@ import re
 import os
 from utils.utils import silver_transform_to_db
 from utils.bssh import fetch_bclconvert_and_dump, fetch_bclconvertDemux_and_dump
-from utils.bssh_tra import transform_appsessions_data
+# from utils.bssh_tra import transform_appsessions_data
 
 # ----------------------------
 # Constants and Config
