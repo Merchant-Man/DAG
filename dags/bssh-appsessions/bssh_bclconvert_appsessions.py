@@ -55,7 +55,6 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
                 f"{API_BASE}/appsessions?offset={offset}&limit={limit}"
                 f"&sortBy=DateCreated&sortDir=Desc&DateCreated>={curr_ds}",
                 headers=headers
-            headers=headers
         )
 
         resp.raise_for_status()
@@ -165,6 +164,44 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
     logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
     print(f"✅ Saved to S3: {s3_path}")
 
+def transform_appsessions_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+    cols = {
+    'row_type': df['RowType']
+    , 'session_id': df['SessionId']
+    , 'session_name': df['SessionName']
+    , 'date_created': df['DateCreated']
+    , 'date_modified': df['DateModified']
+    , 'execution_status': df['ExecutionStatus']
+    , 'ica_link': df['ICA_Link']
+    , 'ica_project_id': df['ICA_ProjectId']
+    , 'workflow_reference': df['WorkflowReference']
+    , 'run_id': df['RunId']
+    , 'run_name': df['RunName']
+    , 'percent_gt_q30': df['PercentGtQ30']
+    , 'flowcell_barcode': df['FlowcellBarcode']
+    , 'reagent_barcode': df['ReagentBarcode']
+    , 'status': df['Status']
+    , 'experiment_name': df['ExperimentName']
+    , 'run_date_created': df['RunDateCreated']
+    , 'id_repository': df['BioSampleName']
+    , 'biosample_id': df['BioSampleId']
+    , 'computed_yield_bps': df['ComputedYieldBps']
+    , 'generated_sample_id': df['GeneratedSampleId']
+    }
+
+    # Construct the new DataFrame
+    df = pd.DataFrame(cols)
+    
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+    # Need to fillna so that the mysql connector can insert the data.
+    df = df.astype(str)
+    df.fillna(value="", inplace=True)
+    return df
 # ----------------------------
 # DAG Definition
 # ----------------------------
@@ -218,6 +255,7 @@ silver_transform_to_db_task = PythonOperator(
         "bucket_name": S3_DWH_BRONZE,
         "object_path": OBJECT_PATH,
         "db_secret_url": RDS_SECRET,
+        "transform_func": transform_appsessions_data,
         "multi_files": True,
         "curr_ds": "{{ ds }}"},
     templates_dict={"insert_query": loader_query},
