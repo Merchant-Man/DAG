@@ -238,7 +238,7 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path, API_KE
 
             if demux_items:
                 file_id = demux_items[0]["data"]["id"]
-                download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
+                download_url = create_download_url(API_KEY, PROJECT_ID, file_id, BASE_URL)
                 response = requests.get(download_url)
                 response.raise_for_status()
 
