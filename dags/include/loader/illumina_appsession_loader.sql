@@ -24,7 +24,7 @@ INSERT INTO bclconvert_appsessions (
     , created_at
     , updated_at
 )
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
 ON DUPLICATE KEY UPDATE
 row_type = VALUES(row_type),
