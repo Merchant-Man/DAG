@@ -216,42 +216,54 @@ CREATE INDEX run_name_idx
 ON illumina_qc(run_name);
 
 
--- Already check for illumina_qc id_repository should be unique
+-- id_repository should be unique
 CREATE TABLE bclconvert_appsessions (
-  id_repository VARCHAR(255) NOT NULL COMMENT 'Unique key (BioSampleName)',
-  row_type VARCHAR(32) COMMENT 'Type of the row, e.g. "session"',
-  session_id VARCHAR(64) COMMENT 'ID of the session',
-  session_name VARCHAR(255) COMMENT 'Name of the session',
-  date_created DATETIME(6) COMMENT 'Date when the session is created',
-  date_modified DATETIME(6) COMMENT 'Date when the session is modified',
-  execution_status VARCHAR(32) COMMENT 'Status of the session execution',
-  ica_link VARCHAR(1024) COMMENT 'Link to the ICA analysis',
-  ica_project_id VARCHAR(64) COMMENT 'ID of the ICA project',
-  workflow_reference VARCHAR(255) COMMENT 'Reference to the workflow',
-  run_id VARCHAR(64) COMMENT 'ID of the run associated with the session',
-  run_name VARCHAR(255) COMMENT 'Run name associated with the session',
-  percent_gt_q30 DECIMAL(6,3) UNSIGNED COMMENT 'Pct bases Q>30',
-  flowcell_barcode VARCHAR(64) COMMENT 'Barcode of the flowcell',
-  reagent_barcode VARCHAR(64) COMMENT 'Barcode of the reagent',
-  `status` VARCHAR(32) COMMENT 'Status of the session',
-  experiment_name VARCHAR(255) COMMENT 'Name of the experiment',
-  run_date_created DATETIME(6) COMMENT 'Date when the run is created',
-  biosample_name VARCHAR(255) COMMENT 'Name of the biosample associated with the session',
-  biosample_id VARCHAR(64) COMMENT 'ID of the biosample associated with the session',
-  computed_yield_bp BIGINT UNSIGNED COMMENT 'Computed yield in base pairs',
-  generated_sample_id VARCHAR(64) COMMENT 'ID of the generated sample',
-  `yield` BIGINT UNSIGNED COMMENT 'Yield in base pairs',
-  total_flowcell_yield BIGINT UNSIGNED COMMENT 'Total yield for the flowcell',
-  updated_at DATETIME(6) NOT NULL DEFAULT NOW(6) COMMENT 'Last update (controlled by upsert, not auto)',
-  created_at DATETIME(6) NOT NULL DEFAULT NOW(6) COMMENT 'Created at',
+  id_repository VARCHAR(64) NOT NULL COMMENT 'Unique key derived from BioSampleName',
+  -- Session / run fields
+  row_type VARCHAR(32) NULL,
+  session_id VARCHAR(64) NULL,
+  session_name VARCHAR(255) NULL,
+  date_created DATETIME NULL,
+  date_modified DATETIME NULL,
+  execution_status VARCHAR(32) NULL,
+  ica_link VARCHAR(255) NULL,
+  ica_project_id VARCHAR(64) NULL,
+  workflow_reference VARCHAR(255) NULL,
+  run_id VARCHAR(64) NULL,
+  run_name VARCHAR(255) NULL,
+  percent_gt_q30 FLOAT NULL,
+  flowcell_barcode VARCHAR(64) NULL,
+  reagent_barcode VARCHAR(64) NULL,
+  `status` VARCHAR(32) NULL,
+  experiment_name VARCHAR(255) NULL,
+  run_date_created DATETIME(6) NULL,
+  biosample_id VARCHAR(64) NULL,
+
+  -- Yields
+  computed_yield_bps FLOAT NULL,
+  generated_sample_id VARCHAR(64) NULL,
+  `yield` FLOAT NULL,
+  total_flowcell_yield FLOAT NULL,
+
+  -- Read metrics
+  reads_total BIGINT UNSIGNED NULL,
+  reads_perfect_index BIGINT UNSIGNED NULL,
+  reads_one_mismatch_index BIGINT UNSIGNED NULL,
+  reads_two_mismatch_index BIGINT UNSIGNED NULL,
+  reads_percent DOUBLE NULL,
+
+  -- Timestamps (at the far right)
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'MySQL server time',
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'MySQL server time',
+
   PRIMARY KEY (id_repository)
 );
 
-CREATE INDEX biosample_name_idx ON bclconvert_appsessions(biosample_name);
-CREATE INDEX biosample_id_idx ON bclconvert_appsessions(biosample_id);
-CREATE INDEX run_name_idx ON bclconvert_appsessions(run_name);
-CREATE INDEX run_id_idx ON bclconvert_appsessions(run_id);
-CREATE INDEX experiment_name_idx ON bclconvert_appsessions(experiment_name);
+-- Helpful indexes
+CREATE INDEX idx_bcl_app_biosample_id ON bclconvert_appsessions (biosample_id);
+CREATE INDEX idx_bcl_app_run_name ON bclconvert_appsessions (run_name);
+CREATE INDEX idx_bcl_app_experiment_name ON bclconvert_appsessions (experiment_name);
+CREATE INDEX idx_bcl_app_run_date_created ON bclconvert_appsessions (run_date_created);
 
 
 
