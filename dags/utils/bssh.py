@@ -160,7 +160,7 @@ def create_download_url(api_key: str, project_id: str, file_id: str, BASE_URL:st
     response.raise_for_status()
     return response.json().get("url")
 
-def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix, API_KEY, BASE_URL, PROJECT_ID,
+def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path, API_KEY, BASE_URL, PROJECT_ID,
                                    transform_func=None, curr_ds=None, **kwargs):
     analyses = []
     page_size = 100
@@ -242,7 +242,7 @@ def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix,
                 response = requests.get(download_url)
                 response.raise_for_status()
 
-                s3_key = f"{object_path_prefix}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
+                s3_key = f"{object_path}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
                 s3.load_bytes(
                     bytes_data=response.content,
                     key=s3_key,

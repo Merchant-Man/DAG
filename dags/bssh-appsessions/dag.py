@@ -95,7 +95,7 @@ demux_qs_fetch_and_dump_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": "bssh/final_output",
+        "object_path": DEMUX_OBJECT_PATH,
         # "transform_func": transform_data,
         "API_KEY": API_KEY,
         "BASE_URL": BASE_URL, 
