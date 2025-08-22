@@ -159,7 +159,7 @@ def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path,
     buffer.seek(0)
 
     s3 = S3Hook(aws_conn_id=aws_conn_id)
-    s3_path = f"{object_path}/bclconvert_appsessions-{curr_ds}.csv"
+    s3_path = f"{object_path}/{curr_ds}/bclconvert_appsessions-{curr_ds}.csv"
     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
 
     logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
