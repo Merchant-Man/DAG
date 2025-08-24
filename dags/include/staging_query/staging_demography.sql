@@ -285,6 +285,14 @@ INSERT INTO staging_demography(
 								phenovar_docs_rekrutmen_basic
 							WHERE
 								path = 'Admisi Partisipan|Tipe Partisipan'
+							UNION ALL
+							-- Also adding here for missing ones 
+							SELECT
+								DISTINCT
+								id_subject,
+								corrected_participant_type participant_type
+							FROM
+								demography_corrected_participant_type
 						) t1
 						LEFT JOIN demography_corrected_participant_type t2 ON t1.id_subject = t2.id_subject
 				) t
