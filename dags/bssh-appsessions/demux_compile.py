@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
-RDS_SECRET = Variable.get("RDS_SECRET")
+RDS_SECRET = Variable.get("RDS_SECRET_DEV")
 LOADER_QEURY = "illumina_appsession_loader.sql"
 AWS_CONN_ID = "aws"
 DEMUX_METRICS_PREFIX = "bssh/intermediate/demux_metrics/"

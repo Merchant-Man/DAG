@@ -14,7 +14,6 @@ from utils.phenovar_transform import (
     transform_ethical_clearance_data,
     transform_form_data
 )
-from utils.phenovar_iron import main as phenovar_iron_main
 from kubernetes.client import models as k8s  # optional (for resources/imagePullSecrets)
 
 
@@ -241,35 +240,6 @@ transform_funcs = {
 for key in fetch_task_keys:
     tasks_fetch[key] = create_fetch_dump_task(key)
     tasks_silver[key] = create_silver_transform_task(key, transform_funcs[key])
-
-
-PythonOperator(
-    task_id="run_phenovar_iron",
-    python_callable=phenovar_iron_main,
-    dag=dag,
-    op_args={
-        "AES_ENCRYPTION_SECRET_KEY": Variable.get("AES_ENCRYPTION_SECRET_KEY"),
-        "IV": Variable.get("AES_ENCRYPTION_IV_TOKEN"),
-        "RDS_SECRET": Variable.get("RDS_SECRET").replace("mysqldb", "pymysql"),
-        "TABLE_NAME": "decrypted_phenovar_participants",
-        "PHENOVAR_USERNAME": Variable.get("PHENOVAR_EMAIL"),
-        "PHENOVAR_PASSWORD": Variable.get("PHENOVAR_PASSWORD")
-    },
-    provide_context=True,
-    executor_config={
-        "pod_override": k8s.V1Pod(
-            spec=k8s.V1PodSpec(
-                containers=[
-                    k8s.V1Container(
-                        name="base",
-                        image="624658759468.dkr.ecr.ap-southeast-3.amazonaws.com/airflow/phenovar_decrypt_demography:latest",
-                    )
-                ]
-            )
-        )
-    },
-)
-
 
 # Define task dependencies
 tasks_fetch["demography"] >> tasks_silver["demography"]  # type: ignore
