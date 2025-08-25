@@ -716,6 +716,13 @@ INSERT INTO staging_demography(
 			FROM
 				phenovar_participants
 				LEFT JOIN phenovar_digital_consent ON phenovar_participants.id_subject = phenovar_digital_consent.id_subject
+			WHERE
+				NOT phenovar_participants.id_subject IN (
+					SELECT
+						id_subject
+					FROM
+						tb_particip
+				)
 		)
 		-- SELECT * FROM tb_particip	
 ,
