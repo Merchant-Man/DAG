@@ -4,8 +4,8 @@ from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.models import Variable
 from datetime import datetime, timedelta
 from utils.utils import silver_transform_to_db
-from utils.bssh import fetch_bclconvert_runs_with_flowcell_yield_and_dump, fetch_demux_qs_ica_to_s3
-from utils.illumina_transform import transform_bssh_data, transform_demux_data, transform_qs_data
+from utils.bssh import fetch_bclconvert_runs_and_biosamples, fetch_demux_qs_ica_to_s3
+from utils.illumina_transform import transform_demux_data, transform_qs_data
 import os
 # ----------------------------
 # Constants and Config
@@ -65,7 +65,7 @@ with open(os.path.join("dags/repo/dags/include/loader", QS_LOADER_QUERY)) as f:
 # Bronze task
 bssh_fetch_and_dump_task = PythonOperator(
     task_id="bronze_fetch_bssh_and_dump",
-    python_callable=fetch_bclconvert_runs_with_flowcell_yield_and_dump,
+    python_callable=fetch_bclconvert_runs_and_biosamples,
     dag=dag,
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
