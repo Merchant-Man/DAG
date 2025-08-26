@@ -16,7 +16,7 @@ RDS_SECRET = Variable.get("RDS_SECRET")
 S3_DWH_BRONZE = Variable.get("S3_DWH_BRONZE")
 
 API_BASE = "https://api.aps4.sh.basespace.illumina.com/v2"
-BASE_URL = "https://ica.illumina.com/ica/rest/api"
+ICA_BASE = "https://ica.illumina.com/ica/rest/api"
 BSSH_APIKEY = Variable.get("API_KEY_BSSH")
 API_KEY = Variable.get("API_KEY_ICA")
 PROJECT_ID = Variable.get("ICA_PROJECT_BSSH_ID")
@@ -73,7 +73,8 @@ bssh_fetch_and_dump_task = PythonOperator(
         "api_token": BSSH_APIKEY,
         "bucket_name": S3_DWH_BRONZE,
         "run_object_path": BSSH_RUN_OBJECT_PATH,
-        "biosample_object_path": BSSH_BIOSAMPLE_OBJECT_PATH
+        "biosample_object_path": BSSH_BIOSAMPLE_OBJECT_PATH,
+        "curr_ds": "{{ ds }}"
     },
     provide_context=True
 )
@@ -85,12 +86,12 @@ demux_qs_fetch_and_dump_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "API_KEY": API_KEY,
-        "BASE_URL": BASE_URL, 
+        "BASE_URL": ICA_BASE, 
         "PROJECT_ID": PROJECT_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path_demux": DEMUX_OBJECT_PATH,
         "object_path_qs": QS_OBJECT_PATH,
-
+        "curr_ds": "{{ ds }}"
     },
     provide_context=True
 )
