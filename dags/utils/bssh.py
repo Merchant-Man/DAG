@@ -68,7 +68,7 @@ def fetch_bclconvert_runs_and_biosamples(
             return None
 
     # ---- cutoff: use Airflow ds unless overridden in kwargs ----
-    df="2025-08-10"
+    ds="2025-08-10"
     # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
