@@ -23,17 +23,17 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.drop_duplicates()
 
     cols = {
-        'SampleID': 'id_repository',
-        'Lane': 'lane',
-        'index': 'index',
-        'index2': 'index2',
-        'ReadNumber': 'read_number',
-        'Yield': 'yield',
-        'YieldQ30': 'yield_q30',
-        'QualityScoreSum': 'quality_score_sum',
-        'Mean Quality Score (PF)': 'mean_quality_score_pf',
-        '% Q30': 'percent_q30',
-        'id_library':'id_library'
+        'SampleID': 'id_repository'
+        , 'Lane': 'lane'
+        , 'index': 'index'
+        , 'index2': 'index2'
+        , 'ReadNumber': 'read_number'
+        , 'Yield': 'yield'
+        , 'YieldQ30': 'yield_q30'
+        , 'QualityScoreSum': 'quality_score_sum'
+        , 'Mean Quality Score (PF)': 'mean_quality_score_pf'
+        , '% Q30': 'percent_q30'
+        , 'id_library':'id_library'
     }
     df.rename(columns=cols, inplace=True)
 
@@ -56,18 +56,18 @@ def transform_demux_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.drop_duplicates()
 
     cols = {
-        'SampleID': 'id_repository',
-        'Lane': 'lane',
-        'Index': 'index_seq',   # avoids SQL keyword clash
-        '# Reads': 'total_reads',
-        '# Perfect Index Reads': 'total_perfect_index_reads',
-        '# One Mismatch Index Reads': 'total_one_mismatch_index_reads',
-        '# Two Mismatch Index Reads': 'total_two_mismatch_index_reads',
-        '% Reads': 'percent_reads',
-        '% Perfect Index Reads': 'percent_perfect_index_reads',
-        '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads',
-        '% Two Mismatch Index Reads': 'percent_two_mismatch_index_reads',
-        'id_library': 'id_library'
+        'SampleID': 'id_repository'
+        , 'Lane': 'lane'
+        , 'Index': 'index'
+        , '# Reads': 'total_reads'
+        , '# Perfect Index Reads': 'total_perfect_index_reads'
+        , '# One Mismatch Index Reads': 'total_one_mismatch_index_reads'
+        , '# Two Mismatch Index Reads': 'total_two_mismatch_index_reads'
+        , '% Reads': 'percent_reads'
+        , '% Perfect Index Reads': 'percent_perfect_index_reads'
+        , '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads'
+        , '% Two Mismatch Index Reads': 'percent_two_mismatch_index_reads'
+        , 'id_library': 'id_library'
 
     }
     df.rename(columns=cols, inplace=True)
@@ -107,28 +107,28 @@ def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df['run_name'] = df['Sample'].apply(_get_run_name)
     
     cols = {
-        'id_repository': 'id_repository',
-        'run_name':'run_name',
-        'dragen_mapping-Number_of_duplicate_marked_reads_pct': 'percent_dups',
-        'dragen_mapping-Q30_bases_pct': 'percent_q30_bases', 
-        'dragen_mapping-Total_input_reads': 'total_seqs',
-        # 'dragen_mapping-Reads_with_mate_sequenced_pct': 'm_seqs',
-        'dragen_mapping-Estimated_sample_contamination': 'contam',
-        'dragen_mapping-Secondary_alignments_pct': 'non_primary',
-        'dragen_mapping-Mapped_reads_pct': 'percent_mapped',
-        'dragen_mapping-Properly_paired_reads_pct': 'percent_proper_pairs',
-        'dragen_mapping-Total_alignments': 'reads_mapped',
-        'dragen_coverage-wgs_pct_of_genome_with_coverage_50x_inf': 'at_least_50x',
-        # 'dragen_coverage-wgs_pct_of_genome_with_coverage_30x_inf': 'at_least_30x',
-        'dragen_coverage-wgs_pct_of_genome_with_coverage_20x_inf': 'at_least_20x',
-        'dragen_coverage-wgs_pct_of_genome_with_coverage_10x_inf': 'at_least_10x',
-        'dragen_coverage-wgs_median_autosomal_coverage_over_genome': 'median_coverage',
-        'dragen_variant_calling-Total': 'vars',
-        'dragen_variant_calling-SNPs_pct': 'snp',
-        'dragen_variant_calling-Indels_pct': 'indel',
-        'dragen_variant_calling-Ti_Tv_ratio': 'ts_tv',
-        'dragen_coverage-wgs_average_alignment_coverage_over_genome': 'depth',
-        'dragen_ploidy_estimation-Ploidy_estimation': 'ploidy_estimation'
+        'id_repository': 'id_repository'
+        , 'run_name':'run_name'
+        , 'dragen_mapping-Number_of_duplicate_marked_reads_pct': 'percent_dups'
+        , 'dragen_mapping-Q30_bases_pct': 'percent_q30_bases'
+        , 'dragen_mapping-Total_input_reads': 'total_seqs'
+        #,  'dragen_mapping-Reads_with_mate_sequenced_pct': 'm_seqs'
+        , 'dragen_mapping-Estimated_sample_contamination': 'contam'
+        , 'dragen_mapping-Secondary_alignments_pct': 'non_primary'
+        , 'dragen_mapping-Mapped_reads_pct': 'percent_mapped'
+        , 'dragen_mapping-Properly_paired_reads_pct': 'percent_proper_pairs'
+        , 'dragen_mapping-Total_alignments': 'reads_mapped'
+        , 'dragen_coverage-wgs_pct_of_genome_with_coverage_50x_inf': 'at_least_50x'
+        #,  'dragen_coverage-wgs_pct_of_genome_with_coverage_30x_inf': 'at_least_30x'
+        , 'dragen_coverage-wgs_pct_of_genome_with_coverage_20x_inf': 'at_least_20x'
+        , 'dragen_coverage-wgs_pct_of_genome_with_coverage_10x_inf': 'at_least_10x'
+        , 'dragen_coverage-wgs_median_autosomal_coverage_over_genome': 'median_coverage'
+        , 'dragen_variant_calling-Total': 'vars'
+        , 'dragen_variant_calling-SNPs_pct': 'snp'
+        , 'dragen_variant_calling-Indels_pct': 'indel'
+        , 'dragen_variant_calling-Ti_Tv_ratio': 'ts_tv'
+        , 'dragen_coverage-wgs_average_alignment_coverage_over_genome': 'depth'
+        , 'dragen_ploidy_estimation-Ploidy_estimation': 'ploidy_estimation'
     }
     df.rename(columns=cols, inplace=True)
 

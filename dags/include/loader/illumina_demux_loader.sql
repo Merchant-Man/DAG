@@ -20,7 +20,7 @@ VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON DUPLICATE KEY UPDATE
 id_repository = VALUES(id_repository)
 , lane = VALUES(lane)
-, `index` = VALUES(index_seq)
+, `index` = VALUES(`index`)
 , total_reads = VALUES(total_reads)
 , total_perfect_index_reads = VALUES(total_perfect_index_reads)
 , total_one_mismatch_index_reads = VALUES(total_one_mismatch_index_reads)
