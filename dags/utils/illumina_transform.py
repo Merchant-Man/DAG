@@ -1,6 +1,23 @@
 import pandas as pd
 import re
 
+
+def transform_bssh_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+
+    df = df.astype(str)
+    
+    # Need to fillna so that the mysql connector can insert the data.
+    df.fillna(value="", inplace=True)
+
+    return df
+
 def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()

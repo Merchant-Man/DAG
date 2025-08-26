@@ -5,7 +5,7 @@ from airflow.models import Variable
 from datetime import datetime, timedelta
 from utils.utils import silver_transform_to_db
 from utils.bssh import fetch_bclconvert_runs_and_biosamples, fetch_demux_qs_ica_to_s3
-from utils.illumina_transform import transform_demux_data, transform_qs_data
+from utils.illumina_transform import transform_demux_data, transform_qs_data, transform_bssh_data
 import os
 # ----------------------------
 # Constants and Config
@@ -21,8 +21,8 @@ BSSH_APIKEY = Variable.get("API_KEY_BSSH")
 API_KEY = Variable.get("API_KEY_ICA")
 PROJECT_ID = Variable.get("ICA_PROJECT_BSSH_ID")
 
-BSSH_RUN_OBJECT_PATH = "illumina/bssh/runs/"
-BSSH_BIOSAMPLE_OBJECT_PATH = "illumina/bssh/biosamples/"
+BSSH_RUN_OBJECT_PATH = "illumina/bssh/runs"
+BSSH_BIOSAMPLE_OBJECT_PATH = "illumina/bssh/biosamples"
 DEMUX_OBJECT_PATH = "illumina/demux"
 QS_OBJECT_PATH = "illumina/qs"
 
@@ -104,6 +104,7 @@ bssh_run_silver_transform_to_db_task = PythonOperator(
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path": BSSH_RUN_OBJECT_PATH,
+        "transform_func": transform_bssh_data,
         "db_secret_url": RDS_SECRET,
         "all_files": True,
         "curr_ds": "{{ ds }}"
@@ -119,7 +120,8 @@ bssh_biosample_silver_transform_to_db_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "bucket_name": S3_DWH_BRONZE,
-        "object_path": BSSH_RUN_OBJECT_PATH,
+        "object_path": BSSH_BIOSAMPLE_OBJECT_PATH,
+        "transform_func": transform_bssh_data,
         "db_secret_url": RDS_SECRET,
         "all_files": True,
         "curr_ds": "{{ ds }}"
