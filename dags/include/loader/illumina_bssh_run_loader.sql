@@ -13,7 +13,7 @@ INSERT INTO illumina_bssh_runs (
     , flowcell_barcode
     , reagent_barcode
     , status
-    , experiment_name
+    , id_library
     , run_date_created
     , total_flowcell_yield_Gbps
     , created_at
@@ -37,7 +37,7 @@ session_id = VALUES(session_id)
 , flowcell_barcode = VALUES(flowcell_barcode)
 , reagent_barcode = VALUES(reagent_barcode)
 , status = VALUES(status)
-, experiment_name = VALUES(experiment_name)
+, id_library = VALUES(id_library)
 , run_date_created = VALUES(run_date_created)
 , total_flowcell_yield_Gbps = VALUES(total_flowcell_yield_Gbps)
 , updated_at = '{{ ts }}'
