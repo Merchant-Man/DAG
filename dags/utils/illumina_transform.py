@@ -9,6 +9,7 @@ def transform_bssh_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'experiment_name': 'id_library'
         , 'biosample_name': 'id_repository'
     }
+
     df.rename(columns=cols, inplace=True)
 
     if "created_at" not in df.columns:
@@ -64,10 +65,10 @@ def transform_demux_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'SampleID': 'id_repository'
         , 'Lane': 'lane'
         , 'Index': 'index'
-        , '# Reads': 'total_reads'
-        , '# Perfect Index Reads': 'total_perfect_index_reads'
-        , '# One Mismatch Index Reads': 'total_one_mismatch_index_reads'
-        , '# Two Mismatch Index Reads': 'total_two_mismatch_index_reads'
+        , '# Reads': 'reads'
+        , '# Perfect Index Reads': 'perfect_index_reads'
+        , '# One Mismatch Index Reads': 'one_mismatch_index_reads'
+        , '# Two Mismatch Index Reads': 'two_mismatch_index_reads'
         , '% Reads': 'percent_reads'
         , '% Perfect Index Reads': 'percent_perfect_index_reads'
         , '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads'

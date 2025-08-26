@@ -2,10 +2,10 @@ INSERT INTO illumina_demux (
     id_repository
     , lane
     , `index`
-    , total_reads
-    , total_perfect_index_reads
-    , total_one_mismatch_index_reads
-    , total_two_mismatch_index_reads
+    , reads
+    , perfect_index_reads
+    , one_mismatch_index_reads
+    , two_mismatch_index_reads
     , percent_reads
     , percent_perfect_index_reads
     , percent_one_mismatch_index_reads
@@ -21,10 +21,10 @@ ON DUPLICATE KEY UPDATE
 id_repository = VALUES(id_repository)
 , lane = VALUES(lane)
 , `index` = VALUES(`index`)
-, total_reads = VALUES(total_reads)
-, total_perfect_index_reads = VALUES(total_perfect_index_reads)
-, total_one_mismatch_index_reads = VALUES(total_one_mismatch_index_reads)
-, total_two_mismatch_index_reads = VALUES(total_two_mismatch_index_reads)
+, reads = VALUES(reads)
+, perfect_index_reads = VALUES(perfect_index_reads)
+, one_mismatch_index_reads = VALUES(one_mismatch_index_reads)
+, two_mismatch_index_reads = VALUES(two_mismatch_index_reads)
 , percent_reads = VALUES(percent_reads)
 , percent_perfect_index_reads = VALUES(percent_perfect_index_reads)
 , percent_one_mismatch_index_reads = VALUES(percent_one_mismatch_index_reads)
