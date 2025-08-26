@@ -12,6 +12,7 @@
 												 Adding QC category for tiered coverage classification.
 				- 18-07-2025: Renata Triwijaya - Adding patient_categ column.
 				- 06-08-2025: Renata Triwijaya - Changing MGI coverage value from median_coverage to depth.
+				- 25-08-2025: Renata Triwijaya - Adding is_excluded column from staging_demography.
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
@@ -49,6 +50,7 @@ WITH
 					sbp.id_patient,
 					sbp.id_mpi,
 					sbp.id_subject,
+					sdg.is_excluded,
 					sbp.biobank_nama origin_biobank,
 					-- null sex means we can't find the simbiox data on both registries.
 					sbp.registry_sex sex,
@@ -99,6 +101,7 @@ WITH
 				FROM
 					staging_seq seq
 					LEFT JOIN staging_simbiox_biosamples_patients sbp ON seq.id_repository = sbp.code_repository
+					LEFT JOIN staging_demography sdg ON sbp.id_subject = sdg.id_subject
 					# Started from here, the number of rows can be duplicated i.e. an id_repository can have multiple secondary analysis run with different run_name.
 					# Unless we do window functino on id_repo ONLY based on datetime available.
 					LEFT JOIN

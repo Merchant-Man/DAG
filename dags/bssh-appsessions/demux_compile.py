@@ -15,6 +15,7 @@ from utils.utils import silver_transform_to_db
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 # ---- CONFIG ----
 BUCKET_NAME = Variable.get("S3_DWH_BRONZE")
 RDS_SECRET = Variable.get("RDS_SECRET_DEV")

@@ -15,6 +15,7 @@
 				 30-06-2025 Abdullah Faqih - Adding transcation lock to the query
 				 04-08-2025 Renata Triwijaya - Separation of dynamodb-fix based on fix_type
 												Adding fix feature for ztronpro samples
+				 25-08-2025 Renata Triwijaya - Excluding duplicate samples with typo in id_repository
  ---------------------------------------------------------------------------------------------------------------------------------
  */
 -- Your SQL code goes here
@@ -233,6 +234,9 @@ INSERT INTO staging_seq
 			, NULL AS id_index
 		FROM 
 			wfhv_samples seq_wfhv
-		WHERE NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
+		LEFT JOIN samples_exclusion exc
+			ON seq_wfhv.id_repository = exc.id_repository
+		WHERE exc.id_repository IS NULL
+			AND NOT REGEXP_LIKE(seq_wfhv.id_repository, "(?i)(demo|test|benchmark|dev|barcode)")
 );
 COMMIT;
