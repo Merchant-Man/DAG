@@ -160,3 +160,6 @@ qs_silver_transform_to_db_task = PythonOperator(
     templates_dict={"insert_query": qs_loader_query},
     provide_context=True
 )
+
+bssh_fetch_and_dump_task >> [bssh_run_silver_transform_to_db_task, bssh_biosample_silver_transform_to_db_task]
+demux_qs_fetch_and_dump_task >> [demux_silver_transform_to_db_task, qs_silver_transform_to_db_task]
