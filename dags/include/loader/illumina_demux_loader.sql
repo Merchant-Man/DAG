@@ -1,7 +1,7 @@
 INSERT INTO illumina_demux (
     id_repository
     , lane
-    , index_seq
+    , `index`
     , total_reads
     , total_perfect_index_reads
     , total_one_mismatch_index_reads

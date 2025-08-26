@@ -32,7 +32,8 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         'YieldQ30': 'yield_q30',
         'QualityScoreSum': 'quality_score_sum',
         'Mean Quality Score (PF)': 'mean_quality_score_pf',
-        '% Q30': 'percent_q30'
+        '% Q30': 'percent_q30',
+        'id_library':'id_library'
     }
     df.rename(columns=cols, inplace=True)
 
@@ -45,7 +46,7 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     
     # Need to fillna so that the mysql connector can insert the data.
     df.fillna(value="", inplace=True)
-    new_cols = list(cols.values()) + ["created_at", "updated_at"]
+    new_cols = ([c for c in cols.values() if c != "id_library"] + ["created_at", "updated_at", "id_library"])
     df = df[new_cols]
 
     return df
@@ -66,6 +67,8 @@ def transform_demux_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         '% Perfect Index Reads': 'percent_perfect_index_reads',
         '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads',
         '% Two Mismatch Index Reads': 'percent_two_mismatch_index_reads',
+        'id_library': 'id_library'
+
     }
     df.rename(columns=cols, inplace=True)
 
