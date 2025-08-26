@@ -33,6 +33,40 @@ def transform_qs_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
 
     return df
 
+def transform_demux_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+
+    cols = {
+        'SampleID': 'id_repository',
+        'Lane': 'lane',
+        'Index': 'index_seq',   # avoids SQL keyword clash
+        '# Reads': 'total_reads',
+        '# Perfect Index Reads': 'total_perfect_index_reads',
+        '# One Mismatch Index Reads': 'total_one_mismatch_index_reads',
+        '# Two Mismatch Index Reads': 'total_two_mismatch_index_reads',
+        '% Reads': 'percent_reads',
+        '% Perfect Index Reads': 'percent_perfect_index_reads',
+        '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads',
+        '% Two Mismatch Index Reads': 'percent_two_mismatch_index_reads',
+    }
+    df.rename(columns=cols, inplace=True)
+
+    if "created_at" not in df.columns:
+        df["created_at"] = ts
+    if "updated_at" not in df.columns:
+        df["updated_at"] = ts
+
+    df = df.astype(str)
+    
+    # Need to fillna so that the mysql connector can insert the data.
+    df.fillna(value="", inplace=True)
+    new_cols = list(cols.values()) + ["created_at", "updated_at"]
+    df = df[new_cols]
+
+    return df
+
+
 def transform_qc_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
