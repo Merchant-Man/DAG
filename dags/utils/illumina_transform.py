@@ -5,6 +5,11 @@ import re
 def transform_bssh_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
+    cols = {
+        'experiment_name': 'id_library'
+        , 'biosample_name': 'id_repository'
+    }
+    df.rename(columns=cols, inplace=True)
 
     if "created_at" not in df.columns:
         df["created_at"] = ts
@@ -68,7 +73,6 @@ def transform_demux_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         , '% One Mismatch Index Reads': 'percent_one_mismatch_index_reads'
         , '% Two Mismatch Index Reads': 'percent_two_mismatch_index_reads'
         , 'id_library': 'id_library'
-
     }
     df.rename(columns=cols, inplace=True)
 
