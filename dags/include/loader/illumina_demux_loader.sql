@@ -15,7 +15,7 @@ INSERT INTO illumina_demux (
     , updated_at
 )
 
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
 ON DUPLICATE KEY UPDATE
 id_repository = VALUES(id_repository)
