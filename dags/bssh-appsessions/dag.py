@@ -26,8 +26,8 @@ BSSH_BIOSAMPLE_OBJECT_PATH = "illumina/bssh/biosamples/"
 DEMUX_OBJECT_PATH = "illumina/demux"
 QS_OBJECT_PATH = "illumina/qs"
 
-BSSH_RUN_LOADER_QUERY = "illumina_bssh_loader.sql"
-BSSH_BIOSAMPLE_LOADER_QUERY = "illumina_bssh_loader.sql"
+BSSH_RUN_LOADER_QUERY = "illumina_bssh_run_loader.sql"
+BSSH_BIOSAMPLE_LOADER_QUERY = "illumina_bssh_biosample_loader.sql"
 DEMUX_LOADER_QUERY = "illumina_demux_loader.sql"
 QS_LOADER_QUERY = "illumina_qs_loader.sql"
 

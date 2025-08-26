@@ -188,7 +188,7 @@ def fetch_bclconvert_runs_and_biosamples(
                 data = response.json() or {}
                 total_yield = data.get("YieldTotal")
                 if total_yield is not None:
-                    df_runs.loc[df_runs["run_id"] == run_id, "total_flowcell_yield_gbp"] = total_yield
+                    df_runs.loc[df_runs["run_id"] == run_id, "total_flowcell_yield_Gbps"] = total_yield
             except Exception as e:
                 logger.warning(f"Failed fetching stats for run {run_id}: {e}")
 
