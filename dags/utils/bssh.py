@@ -47,7 +47,7 @@ def fetch_bclconvert_runs_and_biosamples(
       - df_biosamples: biosample yields parsed from Logs.Tail
     Upload both CSVs to S3 iff DataFrame is non-empty.
     """
-    ds="2025-08-10"
+    ds="2025-07-10"
     # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = _parse_iso(ds)
 
@@ -274,7 +274,7 @@ def fetch_demux_qs_ica_to_s3(
 
     # ---------- fetch analyses ----------
     HEADERS = {"accept": "application/vnd.illumina.v3+json", "X-API-Key": API_KEY}
-    ds="2025-08-10"
+    ds="2025-07-10"
     # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     s3 = S3Hook(aws_conn_id=aws_conn_id)

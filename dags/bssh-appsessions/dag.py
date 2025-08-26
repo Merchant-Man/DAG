@@ -85,11 +85,11 @@ demux_qs_fetch_and_dump_task = PythonOperator(
     op_kwargs={
         "aws_conn_id": AWS_CONN_ID,
         "API_KEY": API_KEY,
-        "BASE_URL": API_BASE, 
+        "BASE_URL": BASE_URL, 
         "PROJECT_ID": PROJECT_ID,
         "bucket_name": S3_DWH_BRONZE,
         "object_path_demux": DEMUX_OBJECT_PATH,
-        "object_path_qs": QS_OBJECT_PATH ,
+        "object_path_qs": QS_OBJECT_PATH,
 
     },
     provide_context=True
