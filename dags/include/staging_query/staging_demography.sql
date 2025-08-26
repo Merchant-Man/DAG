@@ -508,7 +508,8 @@ INSERT INTO staging_demography(
 				t2.id_subject,
 				t7.patient_categ,
 				t3.biobank_nama,
-				code_repository,
+				t1.origin_code_repository,
+				t1.code_repository,
 				t5.specimen_type_name,
 				CASE
 					WHEN specimen_type_name = "Buffycoat" THEN 1
@@ -585,6 +586,7 @@ INSERT INTO staging_demography(
 			SELECT
 				id_subject,
 				GROUP_CONCAT(DISTINCT biobank_nama SEPARATOR "; ") biobank_nama,
+				GROUP_CONCAT(DISTINCT origin_code_repository SEPARATOR "; ") origin_code_repository,
 				SUM(is_buffycoat) count_buffycoat,
 				SUM(is_plasma) count_plasma,
 				SUM(is_urin) count_urin,
@@ -887,7 +889,8 @@ INSERT INTO staging_demography(
 				CASE WHEN t5.is_wgs_sequenced IS NULL THEN FALSE
 				ELSE t5.is_wgs_sequenced END is_wgs_sequenced,
 				CASE WHEN t5.is_wgs_secondary_analysed IS NULL THEN FALSE 
-				ELSE t5.is_wgs_secondary_analysed END is_wgs_secondary_analysed
+				ELSE t5.is_wgs_secondary_analysed END is_wgs_secondary_analysed,
+				t4.origin_code_repository
 			FROM
 				all_demog t1
 				LEFT JOIN all_demog2 t2 ON t1.id_subject = t2.id_subject
