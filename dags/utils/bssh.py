@@ -16,15 +16,20 @@ logger = LoggingMixin().log
 
 # ---------- util ----------
 def _parse_iso(ts: str) -> Optional[datetime]:
-    """Accepts 'YYYY-MM-DD' or ISO 'YYYY-MM-DDTHH:MM:SSZ' -> aware UTC datetime."""
+    """Accepts 'YYYY-MM-DD' or ISO 'YYYY-MM-DDTHH:MM:SS[.fff][Z]', timezone-aware UTC datetime."""
     if not ts:
         return None
     try:
         if "T" in ts:
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if ts.endswith("Z"):
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(ts)  # may be naive or aware
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        # date-only
         return datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except Exception:
         return None
+
 
 def fetch_bclconvert_runs_and_biosamples(
     aws_conn_id: str,
@@ -47,7 +52,7 @@ def fetch_bclconvert_runs_and_biosamples(
       - df_biosamples: biosample yields parsed from Logs.Tail
     Upload both CSVs to S3 iff DataFrame is non-empty.
     """
-    ds="2025-07-10"
+    ds="2025-08-10"
     # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = _parse_iso(ds)
 
