@@ -13,23 +13,10 @@ from typing import Dict, Any, List, Optional, Tuple
 
 logger = LoggingMixin().log
 
-
 # ---------- util ----------
-def _parse_iso(ts: str) -> Optional[datetime]:
-    """Accepts 'YYYY-MM-DD' or ISO 'YYYY-MM-DDTHH:MM:SS[.fff][Z]', timezone-aware UTC datetime."""
-    if not ts:
-        return None
-    try:
-        if "T" in ts:
-            if ts.endswith("Z"):
-                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            dt = datetime.fromisoformat(ts)  # may be naive or aware
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        # date-only
-        return datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    except Exception:
-        return None
-
+import re
+from datetime import datetime, timezone
+from typing import Optional
 
 def fetch_bclconvert_runs_and_biosamples(
     aws_conn_id: str,
@@ -48,13 +35,41 @@ def fetch_bclconvert_runs_and_biosamples(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Fetch newest BCLConvert sessions; build:
-      - df_runs: run-level info (+ total_flowcell_yield_gbp)
+      - df_runs: run-level info (+ total_flowcell_yield_Gbps)
       - df_biosamples: biosample yields parsed from Logs.Tail
     Upload both CSVs to S3 iff DataFrame is non-empty.
     """
-    ds="2025-08-10"
-    # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
-    cutoff = _parse_iso(ds)
+    import re
+    from io import StringIO
+    from datetime import datetime, timezone
+    from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+    # ---- robust ICA timestamp parser (handles .0000000Z etc.) ----
+    _ICA_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$')
+    def parse_ica_ts(ts: Optional[str]) -> Optional[datetime]:
+        if not ts:
+            return None
+        m = _ICA_TS_RE.match(ts)
+        if m:
+            base = m.group(1)
+            frac = m.group(2) or ""
+            frac6 = (frac + "000000")[:6]  # pad/truncate to 6
+            iso = f"{base}.{frac6}+00:00" if frac6 else f"{base}+00:00"
+            try:
+                return datetime.fromisoformat(iso)
+            except Exception:
+                return None
+        # fallback: date-only or with offset
+        try:
+            if "T" in ts:
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+
+    # ---- cutoff: use Airflow ds unless overridden in kwargs ----
+    ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     if logger is None:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
@@ -79,22 +94,24 @@ def fetch_bclconvert_runs_and_biosamples(
         resp.raise_for_status()
         payload = resp.json() or {}
         sessions = payload.get("Items", []) or []
+
         if not sessions:
             logger.info("No sessions returned; stopping pagination.")
             break
 
-        # Filter by cutoff using DateModified (fallback to DateCreated)
-        if cutoff:
-            pre = len(sessions)
-            sessions = [
-                s for s in sessions
-                if ((_parse_iso(s.get("DateModified")) or _parse_iso(s.get("DateCreated"))) or datetime.min.replace(tzinfo=timezone.utc)) >= cutoff
-            ]
-            logger.info(f"Cutoff filter {ds}: kept {len(sessions)}/{pre} sessions in this page.")
-            if not sessions:
-                break
+        # visibility: page time range
+        page_times = [(parse_ica_ts(s.get("DateModified")) or parse_ica_ts(s.get("DateCreated"))) for s in sessions]
+        page_times = [t for t in page_times if t]
+        if page_times:
+            logger.info("Page offset %d time range: %s .. %s (cutoff %s)",
+                        offset, min(page_times), max(page_times), cutoff)
 
+        # ---- process sessions that pass cutoff (do NOT early-break if none) ----
         for session in sessions:
+            tmod = parse_ica_ts(session.get("DateModified")) or parse_ica_ts(session.get("DateCreated"))
+            if not tmod or tmod < cutoff:
+                continue
+
             if "BCLConvert" not in (session.get("Name") or ""):
                 continue
             session_id = session.get("Id")
@@ -105,7 +122,7 @@ def fetch_bclconvert_runs_and_biosamples(
             detail_url = f"{api_base}/appsessions/{session_id}"
             dresp = requests.get(detail_url, headers=headers)
             if dresp.status_code != 200:
-                logger.warning(f"⚠️ Detail fetch failed for {session_id}: {dresp.status_code}")
+                logger.warning("⚠️ Detail fetch failed for %s: %s", session_id, dresp.status_code)
                 continue
             detail = dresp.json() or {}
 
@@ -175,6 +192,9 @@ def fetch_bclconvert_runs_and_biosamples(
                 break
 
         offset += page_limit
+        # stop when API signals end
+        if len(sessions) < page_limit:
+            break
 
     # ---- Build DataFrames ----
     df_runs = pd.DataFrame(run_rows)
@@ -195,7 +215,7 @@ def fetch_bclconvert_runs_and_biosamples(
                 if total_yield is not None:
                     df_runs.loc[df_runs["run_id"] == run_id, "total_flowcell_yield_Gbps"] = total_yield
             except Exception as e:
-                logger.warning(f"Failed fetching stats for run {run_id}: {e}")
+                logger.warning("Failed fetching stats for run %s: %s", run_id, e)
 
     # ---- Save to S3 only if non-empty ----
     s3 = S3Hook(aws_conn_id=aws_conn_id)
@@ -205,21 +225,22 @@ def fetch_bclconvert_runs_and_biosamples(
         buf = StringIO()
         df_runs.to_csv(buf, index=False)
         s3.load_string(string_data=buf.getvalue(), key=runs_key, bucket_name=bucket_name, replace=True)
-        logger.info(f"✔ Uploaded Runs CSV → s3://{bucket_name}/{runs_key} (shape={df_runs.shape})")
+        logger.info("Uploaded Runs CSV → s3://%s/%s (shape=%s)", bucket_name, runs_key, df_runs.shape)
     else:
-        logger.info("No runs found.")
+        logger.info("No runs found, skipping Runs CSV upload.")
 
     if not df_biosamples.empty:
         bios_key = f"{biosample_object_path}/{ds}.csv"
         buf = StringIO()
         df_biosamples.to_csv(buf, index=False)
         s3.load_string(string_data=buf.getvalue(), key=bios_key, bucket_name=bucket_name, replace=True)
-        logger.info(f"✔ Uploaded BioSamples CSV → s3://{bucket_name}/{bios_key} (shape={df_biosamples.shape})")
+        logger.info("Uploaded BioSamples CSV → s3://%s/%s (shape=%s)", bucket_name, bios_key, df_biosamples.shape)
     else:
-        logger.info("No biosamples found")
+        logger.info("No biosamples found, skipping BioSamples CSV upload.")
 
-    logger.info(f"Final shapes: Runs={df_runs.shape}, BioSamples={df_biosamples.shape}")
+    logger.info("Final shapes: Runs=%s, BioSamples=%s", df_runs.shape, df_biosamples.shape)
     return df_runs, df_biosamples
+
 
 
 def fetch_demux_qs_ica_to_s3(
