@@ -79,7 +79,7 @@ bssh_fetch_and_dump_task = PythonOperator(
 )
 
 demux_qs_fetch_and_dump_task = PythonOperator(
-    task_id="bronze_fetch_bssh_bclconvertandQC",
+    task_id="bronze_fetch_demux_qs_and_dump",
     python_callable=fetch_demux_qs_ica_to_s3,
     dag=dag,
     op_kwargs={
