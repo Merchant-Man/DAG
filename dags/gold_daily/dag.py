@@ -81,7 +81,7 @@ with dag:
         sensor_configs = [
             {"task_id": "pgx_report", "external_dag_id": "pgx_report", "execution_delta": timedelta(
                 hours=1, minutes=30), "allowed_states": ["success"]},
-            {"task_id": "zlims_pl", "external_dag_id": "bssh-pl",
+            {"task_id": "bssh_pl", "external_dag_id": "bssh-pl",
                 "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
             {"task_id": "zlims_pl", "external_dag_id": "zlims-pl",
                 "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
@@ -207,7 +207,7 @@ with dag:
             conn_id=conn_id,
             sql=sheets_sequencing_query
         )
-        
+
         staging_illumina_primary_task
 
         staging_ski_fix_id_repo_task >> [
