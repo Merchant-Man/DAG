@@ -1,5 +1,6 @@
 from airflow.utils.log.logging_mixin import LoggingMixin
 from datetime import datetime, timezone
+import io
 from io import StringIO
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import urllib.parse
