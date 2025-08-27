@@ -15,6 +15,7 @@ QC_QUERY = "qc.sql"
 ONQ_LIMS_QUERY = "lims_report.sql"
 PGX_REPORT_QUERY = "pgx_report.sql"
 STAG_DEMOG = "staging_demography.sql"
+ILLUMINA_PRIMARY = "staging_illumina_primary.sql"
 ILLUMINA_SEC = "staging_illumina_sec.sql"
 MGI_SEC = "staging_mgi_sec.sql"
 ONT_SEC = "staging_ont_sec.sql"
@@ -57,6 +58,7 @@ onq_lims_query = load_query("gold_query", QC_QUERY)
 qc_query = load_query("gold_query", QC_QUERY)
 pgx_report_query = load_query("gold_query", PGX_REPORT_QUERY)
 staging_demography_query = load_query("staging_query", STAG_DEMOG)
+staging_illumina_primary_query = load_query("staging_query", ILLUMINA_PRIMARY)
 staging_illumina_sec_query = load_query("staging_query", ILLUMINA_SEC)
 staging_mgi_sec_query = load_query("staging_query", MGI_SEC)
 staging_ont_sec_query = load_query("staging_query", ONT_SEC)
@@ -79,6 +81,8 @@ with dag:
         sensor_configs = [
             {"task_id": "pgx_report", "external_dag_id": "pgx_report", "execution_delta": timedelta(
                 hours=1, minutes=30), "allowed_states": ["success"]},
+            {"task_id": "zlims_pl", "external_dag_id": "bssh-pl",
+                "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
             {"task_id": "zlims_pl", "external_dag_id": "zlims-pl",
                 "execution_delta": timedelta(hours=1, minutes=30), "allowed_states": ["success"]},
             {"task_id": "wfhv_pl", "external_dag_id": "wfhv-pl",
@@ -136,6 +140,11 @@ with dag:
             task_id="staging_demography",
             conn_id=conn_id,
             sql=staging_demography_query
+        )
+        staging_illumina_primary_task = SQLExecuteQueryOperator(
+            task_id="staging_illumina_primary",
+            conn_id=conn_id,
+            sql=staging_illumina_primary_query
         )
         staging_illumina_sec_task = SQLExecuteQueryOperator(
             task_id="staging_illumina_sec",
@@ -198,6 +207,8 @@ with dag:
             conn_id=conn_id,
             sql=sheets_sequencing_query
         )
+        
+        staging_illumina_primary_task
 
         staging_ski_fix_id_repo_task >> [
             staging_simbiox_task, staging_simbiox_transfer_task, gold_sheet_sequencing_task]  # type: ignore

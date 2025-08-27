@@ -2,7 +2,7 @@ INSERT INTO illumina_demux (
     id_repository
     , lane
     , `index`
-    , reads
+    , `reads`
     , perfect_index_reads
     , one_mismatch_index_reads
     , two_mismatch_index_reads
@@ -21,7 +21,7 @@ ON DUPLICATE KEY UPDATE
 id_repository = VALUES(id_repository)
 , lane = VALUES(lane)
 , `index` = VALUES(`index`)
-, reads = VALUES(reads)
+, `reads` = VALUES(`reads`)
 , perfect_index_reads = VALUES(perfect_index_reads)
 , one_mismatch_index_reads = VALUES(one_mismatch_index_reads)
 , two_mismatch_index_reads = VALUES(two_mismatch_index_reads)

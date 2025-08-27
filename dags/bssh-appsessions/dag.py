@@ -38,7 +38,7 @@ QS_LOADER_QUERY = "illumina_qs_loader.sql"
 default_args = {
     'owner': 'bgsi-data',
     'depends_on_past': False,
-    'start_date': datetime(2025, 6, 3),
+    'start_date': datetime(2025, 8, 26),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -46,7 +46,7 @@ default_args = {
 }
 
 dag = DAG(
-    'bssh',
+    'bssh-pl',
     default_args=default_args,
     description='Fetch QC from BSSH',
     schedule_interval=timedelta(days=1),

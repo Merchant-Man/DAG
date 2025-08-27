@@ -68,8 +68,8 @@ def fetch_bclconvert_runs_and_biosamples(
             return None
 
     # ---- cutoff: use Airflow ds unless overridden in kwargs ----
-    ds="2025-08-10"
-    # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    # ds="2025-08-10" #testing
+    ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     if logger is None:
@@ -301,9 +301,8 @@ def fetch_demux_qs_ica_to_s3(
 
     # ---------- fetch analyses ----------
     HEADERS = {"accept": "application/vnd.illumina.v3+json", "X-API-Key": API_KEY}
-    ds="2025-07-10"
-    
-    # ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    # ds="2025-07-10" #testing
+    ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
     cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     s3 = S3Hook(aws_conn_id=aws_conn_id)
 
