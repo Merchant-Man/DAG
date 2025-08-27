@@ -8,15 +8,8 @@ import requests
 import pandas as pd
 import logging
 import sys
-import io
 from typing import Dict, Any, List, Optional, Tuple
-
 logger = LoggingMixin().log
-
-# ---------- util ----------
-import re
-from datetime import datetime, timezone
-from typing import Optional
 
 def fetch_bclconvert_runs_and_biosamples(
     aws_conn_id: str,
@@ -39,10 +32,6 @@ def fetch_bclconvert_runs_and_biosamples(
       - df_biosamples: biosample yields parsed from Logs.Tail
     Upload both CSVs to S3 iff DataFrame is non-empty.
     """
-    import re
-    from io import StringIO
-    from datetime import datetime, timezone
-    from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
     # ---- robust ICA timestamp parser (handles .0000000Z etc.) ----
     _ICA_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$')
@@ -123,7 +112,7 @@ def fetch_bclconvert_runs_and_biosamples(
             detail_url = f"{api_base}/appsessions/{session_id}"
             dresp = requests.get(detail_url, headers=headers)
             if dresp.status_code != 200:
-                logger.warning("⚠️ Detail fetch failed for %s: %s", session_id, dresp.status_code)
+                logger.warning("Detail fetch failed for %s: %s", session_id, dresp.status_code)
                 continue
             detail = dresp.json() or {}
 
@@ -137,6 +126,20 @@ def fetch_bclconvert_runs_and_biosamples(
 
             # --- Run rows ---
             for run in run_items:
+                seq_stats = (run.get("SequencingStats") or {}) if isinstance(run, dict) else {}
+                yield_total = seq_stats.get("YieldTotal")
+
+                run_id = run.get("Id")
+                if yield_total is None and run_id:
+                    try:
+                        stats_url = f"{api_base}/runs/{run_id}/sequencingstats"
+                        stats_resp = session.get(stats_url, headers={"x-access-token": api_token, "Accept": "application/json"})
+                        stats_resp.raise_for_status()
+                        stats = stats_resp.json() or {}
+                        yield_total = stats.get("YieldTotal")
+                    except Exception as e:
+                        logger.warning("Failed fetching stats for run %s: %s", run_id, e)
+
                 run_rows.append({
                     "session_id": session_id,
                     "session_name": detail.get("Name"),
@@ -154,6 +157,7 @@ def fetch_bclconvert_runs_and_biosamples(
                     "status": run.get("Status"),
                     "experiment_name": run.get("ExperimentName"),
                     "run_date_created": run.get("DateCreated"),
+                    "total_flowcell_yield_Gbps": yield_total,
                 })
 
                 # ---- BioSample rows (Logs.Tail parsing) ----
@@ -200,23 +204,6 @@ def fetch_bclconvert_runs_and_biosamples(
     # ---- Build DataFrames ----
     df_runs = pd.DataFrame(run_rows)
     df_biosamples = pd.DataFrame(biosample_rows)
-
-    # ---- Enrich Run rows with sequencing stats ----
-    if not df_runs.empty:
-        for _, row in df_runs.iterrows():
-            run_id = row.get("run_id")
-            if not run_id or str(run_id).lower() == "nan":
-                continue
-            api_url = f"{api_base}/runs/{run_id}/sequencingstats"
-            try:
-                response = requests.get(api_url, headers={"x-access-token": api_token, "Accept": "application/json"})
-                response.raise_for_status()
-                data = response.json() or {}
-                total_yield = data.get("YieldTotal")
-                if total_yield is not None:
-                    df_runs.loc[df_runs["run_id"] == run_id, "total_flowcell_yield_Gbps"] = total_yield
-            except Exception as e:
-                logger.warning("Failed fetching stats for run %s: %s", run_id, e)
 
     # ---- Save to S3 only if non-empty ----
     s3 = S3Hook(aws_conn_id=aws_conn_id)
