@@ -31,9 +31,9 @@ INSERT INTO staging_illumina_primary
         , demux.percent_reads
         , qs.yield
         , qs.yield_q30
-    FROM illumina_biosamples samples
+    FROM illumina_bssh_biosamples samples
     LEFT JOIN
-        illumina_runs runs
+        illumina_bssh_runs runs
         ON samples.session_id=runs.session_id
     LEFT JOIN (
         SELECT
