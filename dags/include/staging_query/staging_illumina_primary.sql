@@ -13,7 +13,7 @@ INSERT INTO staging_illumina_primary
 (
     SELECT 
         samples.id_repository
-        runs.id_library
+        , runs.id_library
         , runs.session_id
         , runs.session_name
         , runs.date_created
