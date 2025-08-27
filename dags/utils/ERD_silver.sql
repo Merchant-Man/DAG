@@ -282,6 +282,7 @@ CREATE TABLE illumina_qs(
   percent_q30 FLOAT, 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP comment 'Timestamp of record creation. Using MySQL TZ.',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Timestamp of last update. Using MySQL TZ.'
+  id_library VARCHAR(32)
 );
 CREATE INDEX id_repository_idx
 ON illumina_qs(id_repository);
@@ -1138,3 +1139,101 @@ CREATE INDEX sequencer_idx
 ON dynamodb_fix_analysis(sequencer);
 CREATE INDEX new_repository_idx
 ON dynamodb_fix_analysis(new_repository);
+
+CREATE TABLE illumina_bssh_runs(
+    session_id VARCHAR(32) PRIMARY KEY
+    , session_name TEXT
+    , date_created TEXT
+    , date_modified TEXT
+    , execution_status TEXT
+    , ica_link TEXT
+    , ica_project_id TEXT
+    , workflow_reference TEXT
+    , run_id TEXT
+    , run_name TEXT
+    , percent_gt_q30 TEXT
+    , flowcell_barcode TEXT
+    , reagent_barcode TEXT
+    , status TEXT
+    , id_library TEXT
+    , run_date_created TEXT
+    , total_flowcell_yield_Gbps TEXT
+    , created_at datetime
+    , updated_at datetime
+    );
+CREATE INDEX session_id_idx
+ON illumina_bssh_runs(session_id);
+CREATE INDEX id_library_idx
+ON illumina_bssh_runs(id_library);
+
+CREATE TABLE illumina_bssh_biosamples(
+    session_id VARCHAR(32)
+    , session_name TEXT
+    , date_created TEXT
+    , run_name TEXT
+    , id_library VARCHAR(32)
+    , run_date_created TEXT
+    , id_repository VARCHAR(32)
+    , biosample_id TEXT
+    , computed_yield_bps TEXT
+    , generated_sample_id TEXT
+    , created_at datetime
+    , updated_at datetime
+    , PRIMARY KEY (session_id, id_library, id_repository)
+);
+CREATE INDEX session_id_idx
+ON illumina_bssh_biosamples(session_id);
+CREATE INDEX id_repository_idx
+ON illumina_bssh_biosamples(id_repository);
+CREATE INDEX id_library_idx
+ON illumina_bssh_biosamples(id_library);
+
+CREATE TABLE illumina_demux(
+    id_repository VARCHAR(32)
+    , lane VARCHAR(32)
+    , `index` TEXT
+    , `reads` VARCHAR(32)
+    , perfect_index_reads TEXT
+    , one_mismatch_index_reads TEXT
+    , two_mismatch_index_reads TEXT
+    , percent_reads TEXT
+    , percent_perfect_index_reads TEXT
+    , percent_one_mismatch_index_reads TEXT
+    , percent_two_mismatch_index_reads TEXT
+    , id_library VARCHAR(32)
+    , created_at datetime
+    , updated_at datetime
+    , PRIMARY KEY (id_repository, lane, id_library, `reads`)
+);
+CREATE INDEX id_repository_idx
+ON illumina_demux(id_repository);
+CREATE INDEX id_library_idx
+ON illumina_demux(id_library);
+CREATE INDEX lane_idx
+ON illumina_demux(lane);
+
+CREATE TABLE staging_illumina_primary (
+    id_repository VARCHAR(32)
+    , id_library VARCHAR(32)
+    , session_id TEXT
+    , session_name TEXT
+    , date_created TEXT
+    , date_modified TEXT
+    , execution_status TEXT
+    , workflow_reference TEXT
+    , run_id TEXT
+    , run_name TEXT
+    , percent_gt_q30 TEXT
+    , flowcell_barcode TEXT
+    , `status` TEXT
+    , run_date_created TEXT
+    , total_flowcell_yield_Gbps TEXT
+    , total_reads TEXT
+    , percent_reads TEXT
+    , yield TEXT
+    , yield_q30 TEXT
+    , PRIMARY KEY (id_repository, id_library));
+CREATE INDEX id_repository_idx
+ON staging_illumina_primary(id_repository);
+CREATE INDEX id_library_idx
+ON staging_illumina_primary(id_library);
