@@ -52,7 +52,7 @@ INSERT INTO staging_illumina_primary
         SELECT
             id_repository
             , id_library
-            , SUM(reads) total_reads
+            , SUM(`reads`) total_reads
             , SUM(percent_reads) percent_reads
         FROM illumina_demux
         GROUP BY
