@@ -1,582 +1,411 @@
-# import pandas as pd
-# from airflow.utils.log.logging_mixin import LoggingMixin
-# from airflow.models import Variable
-# from datetime import datetime, timedelta, timezone
-# from dateutil.parser import isoparse
-# import requests
-# import io
-# from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-# import urllib.parse
-# import re
+from airflow.utils.log.logging_mixin import LoggingMixin
+from datetime import datetime, timezone
+from io import StringIO
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+import urllib.parse
+import re
+import requests
+import pandas as pd
+import logging
+import sys
+from typing import Dict, Any, List, Optional, Tuple
+logger = LoggingMixin().log
 
-# # ----------------------------
-# # Bronze: Fetch from API and Dump to S3
-# # ----------------------------
-# logger = LoggingMixin().log
+def fetch_bclconvert_runs_and_biosamples(
+    aws_conn_id: str,
+    api_base: str,
+    api_token: str,
+    bucket_name: str,
+    run_object_path: str,
+    biosample_object_path: str,
+    *,
+    max_rows: int = 1000,
+    page_limit: int = 25,
+    sort_by: str = "DateCreated",
+    sort_dir: str = "Desc",
+    logger: Optional[logging.Logger] = None,
+    **kwargs
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Fetch newest BCLConvert sessions; build:
+      - df_runs: run-level info (+ total_flowcell_yield_Gbps)
+      - df_biosamples: biosample yields parsed from Logs.Tail
+    Upload both CSVs to S3 iff DataFrame is non-empty.
+    """
 
-# def fetch_bclconvert_and_dump(aws_conn_id, bucket_name, object_path, api_base,
-#                                transform_func=None, curr_ds=None, **kwargs):
-#     logger = LoggingMixin().log
-#     API_BASE=api_base
-#     curr_ds = kwargs["ds"]
-#     curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
-#     curr_date_end = curr_date_start + timedelta(days=2)
-#     headers = {
-#         "Authorization": f"Bearer {Variable.get('BSSH_APIKEY1')}",
-#         "Content-Type": "application/json"
-#     }
-#     logger.info(f"📅 Fetching sessions for: {curr_ds}")
+    # ---- robust ICA timestamp parser (handles .0000000Z etc.) ----
+    _ICA_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$')
+    def parse_ica_ts(ts: Optional[str]) -> Optional[datetime]:
+        if not ts:
+            return None
+        m = _ICA_TS_RE.match(ts)
+        if m:
+            base = m.group(1)
+            frac = m.group(2) or ""
+            frac6 = (frac + "000000")[:6]  # pad/truncate to 6
+            iso = f"{base}.{frac6}+00:00" if frac6 else f"{base}+00:00"
+            try:
+                return datetime.fromisoformat(iso)
+            except Exception:
+                return None
+        # fallback: date-only or with offset
+        try:
+            if "T" in ts:
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return datetime.strptime(ts, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
 
-#     limit = 25
-#     offset = 0
-#     all_rows = []
+    # ---- cutoff: use Airflow ds unless overridden in kwargs ----
+    # ds="2025-08-10" #testing
+    ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-#     while True:
-#         resp = requests.get(
-#                 f"{API_BASE}/appsessions?offset={offset}&limit={limit}"
-#                 f"&sortBy=DateCreated&sortDir=Desc&DateCreated>={curr_ds}",
-#                 headers=headers
-#         )
+    if logger is None:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
+        logger = logging.getLogger("bclconvert-fetch")
 
-#         resp.raise_for_status()
-#         sessions = resp.json().get("Items", [])
-#         if not sessions:
-#             break
+    run_rows: List[dict] = []
+    biosample_rows: List[dict] = []
+    offset = 0
 
-#         for session in sessions:
-#             name = session.get("Name", "")
-#             if "BCLConvert" not in name:
-#                 continue
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
 
-#             session_id = session["Id"]
-#             logger.info(f"🆔 Found BCLConvert session: {session_id} | {name}")
-#             logger.info(f"🔎 Trying AppSession ID: {session_id} — GET {API_BASE}/appsessions/{session_id}")
+    while len(run_rows) < max_rows:
+        url = (
+            f"{api_base}/appsessions"
+            f"?offset={offset}&limit={page_limit}&sortBy={sort_by}&sortDir={sort_dir}"
+        )
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+        payload = resp.json() or {}
+        sessions = payload.get("Items", []) or []
 
-#             detail_resp = requests.get(f"{API_BASE}/appsessions/{session_id}", headers=headers)
-#             if detail_resp.status_code != 200:
-#                 logger.warning(f"⚠ Failed to fetch session detail for {session_id}: {detail_resp.status_code}")
-#                 continue
+        if not sessions:
+            logger.info("No sessions returned; stopping pagination.")
+            break
 
-#             detail = detail_resp.json()
+        # visibility: page time range
+        page_times = [(parse_ica_ts(s.get("DateModified")) or parse_ica_ts(s.get("DateCreated"))) for s in sessions]
+        page_times = [t for t in page_times if t]
+        if page_times:
+            logger.info("Page offset %d time range: %s .. %s (cutoff %s)",
+                        offset, min(page_times), max(page_times), cutoff)
 
-#             properties = {
-#                 item["Name"]: item.get("Content")
-#                 for item in detail.get("Properties", {}).get("Items", [])
-#                 if item.get("Name")
-#             }
+        # ---- process sessions that pass cutoff (do NOT early-break if none) ----
+        for session in sessions:
+            tmod = parse_ica_ts(session.get("DateModified")) or parse_ica_ts(session.get("DateCreated"))
+            if not tmod or tmod < cutoff:
+                continue
 
-#             run_items = []
-#             for item in detail.get("Properties", {}).get("Items", []):
-#                 if item.get("Name") == "Input.Runs":
-#                     run_items = item.get("RunItems", [])
+            if "BCLConvert" not in (session.get("Name") or ""):
+                continue
+            session_id = session.get("Id")
+            if not session_id:
+                continue
 
-#             for run in run_items:
-#                 all_rows.append({
-#                     "RowType": "Run",
-#                     "SessionId": session_id,
-#                     "SessionName": detail.get("Name"),
-#                     "DateCreated": detail.get("DateCreated"),
-#                     "DateModified": detail.get("DateModified"),
-#                     "ExecutionStatus": detail.get("ExecutionStatus"),
-#                     "ICA_Link": detail.get("HrefIcaAnalysis"),
-#                     "ICA_ProjectId": properties.get("ICA.ProjectId"),
-#                     "WorkflowReference": properties.get("ICA.WorkflowSessionUserReference"),
-#                     "RunId": run.get("Id"),
-#                     "RunName": run.get("Name"),
-#                     "PercentGtQ30": run.get("SequencingStats", {}).get("PercentGtQ30"),
-#                     "FlowcellBarcode": run.get("FlowcellBarcode"),
-#                     "ReagentBarcode": run.get("ReagentBarcode"),
-#                     "Status": run.get("Status"),
-#                     "ExperimentName": run.get("ExperimentName"),
-#                     "RunDateCreated": run.get("DateCreated")
-#                 })
+            # --- detail ---
+            detail_url = f"{api_base}/appsessions/{session_id}"
+            dresp = requests.get(detail_url, headers=headers)
+            if dresp.status_code != 200:
+                logger.warning("Detail fetch failed for %s: %s", session_id, dresp.status_code)
+                continue
+            detail = dresp.json() or {}
 
-#             logs_tail = next(
-#                 (item.get("Content") for item in detail.get("Properties", {}).get("Items", [])
-#                  if item.get("Name") == "Logs.Tail"),
-#                 ""
-#             )
+            props_items = (detail.get("Properties") or {}).get("Items", []) or []
+            properties = {i.get("Name"): i.get("Content") for i in props_items if i.get("Name")}
 
-#             for line in logs_tail.splitlines():
-#                 if "Computed yield for biosample" in line:
-#                     match = re.search(
-#                         r"Computed yield for biosample '([^']+)' \(Id: (\d+)\): (\d+) Bps", line)
-#                     if match:
-#                         biosample_name = match.group(1)
-#                         biosample_id = match.group(2)
-#                         yield_bps = match.group(3)
+            run_items = []
+            for i in props_items:
+                if i.get("Name") == "Input.Runs":
+                    run_items = i.get("RunItems", []) or []
 
-#                         gen_sample_match = re.search(
-#                             rf"{biosample_name}.*?Generated new Sample: (\d+)",
-#                             logs_tail, re.DOTALL)
-#                         generated_sample_id = gen_sample_match.group(1) if gen_sample_match else None
+            # --- Run rows ---
+            for run in run_items:
+                seq_stats = (run.get("SequencingStats") or {}) if isinstance(run, dict) else {}
+                yield_total = seq_stats.get("YieldTotal")
 
-#                         all_rows.append({
-#                             "RowType": "BioSample",
-#                             "SessionId": session_id,
-#                             "SessionName": detail.get("Name"),
-#                             "DateCreated": detail.get("DateCreated"),
-#                             "RunName": run.get("Name"),
-#                             "ExperimentName": run.get("ExperimentName"),
-#                             "RunDateCreated": run.get("DateCreated"),
-#                             "BioSampleName": biosample_name,
-#                             "BioSampleId": biosample_id,
-#                             "ComputedYieldBps": yield_bps,
-#                             "GeneratedSampleId": generated_sample_id
-#                         })
+                run_id = run.get("Id")
+                if yield_total is None and run_id:
+                    try:
+                        stats_url = f"{api_base}/runs/{run_id}/sequencingstats"
+                        stats_resp = session.get(stats_url, headers={"x-access-token": api_token, "Accept": "application/json"})
+                        stats_resp.raise_for_status()
+                        stats = stats_resp.json() or {}
+                        yield_total = stats.get("YieldTotal")
+                    except Exception as e:
+                        logger.warning("Failed fetching stats for run %s: %s", run_id, e)
 
-#         offset += limit
+                run_rows.append({
+                    "session_id": session_id,
+                    "session_name": detail.get("Name"),
+                    "date_created": detail.get("DateCreated"),
+                    "date_modified": detail.get("DateModified"),
+                    "execution_status": detail.get("ExecutionStatus"),
+                    "ica_link": detail.get("HrefIcaAnalysis"),
+                    "ica_project_id": properties.get("ICA.ProjectId"),
+                    "workflow_reference": properties.get("ICA.WorkflowSessionUserReference"),
+                    "run_id": run.get("Id"),
+                    "run_name": run.get("Name"),
+                    "percent_gt_q30": (run.get("SequencingStats") or {}).get("PercentGtQ30"),
+                    "flowcell_barcode": run.get("FlowcellBarcode"),
+                    "reagent_barcode": run.get("ReagentBarcode"),
+                    "status": run.get("Status"),
+                    "experiment_name": run.get("ExperimentName"),
+                    "run_date_created": run.get("DateCreated"),
+                    "total_flowcell_yield_Gbps": yield_total,
+                })
 
-#     logger.info(f"✔ Total rows parsed: {len(all_rows)}")
+                # ---- BioSample rows (Logs.Tail parsing) ----
+                logs_tail = next((i.get("Content") for i in props_items if i.get("Name") == "Logs.Tail"), "")
+                if logs_tail:
+                    for line in logs_tail.splitlines():
+                        if "Computed yield for biosample" not in line:
+                            continue
+                        m = re.search(r"Computed yield for biosample '([^']+)' \(Id: (\d+)\): (\d+)\s+Bps", line)
+                        if not m:
+                            continue
+                        biosample_name, biosample_id, yield_bps = m.group(1), m.group(2), m.group(3)
 
-#     df = pd.DataFrame(all_rows)
-#     df = transform_func(df, curr_ds) if transform_func else df
-    
-#     # Need to fillna so that the mysql connector can insert the data.
-#     df = df.astype(str)
-#     df.fillna(value="", inplace=True)
+                        gen_m = re.search(
+                            rf"{re.escape(biosample_name)}.*?Generated new Sample:\s+(\d+)",
+                            logs_tail,
+                            flags=re.DOTALL,
+                        )
+                        generated_sample_id = gen_m.group(1) if gen_m else None
 
-#     logger.info(f"✔ Final DataFrame shape: {df.shape}")
+                        biosample_rows.append({
+                            "session_id": session_id,
+                            "session_name": detail.get("Name"),
+                            "date_created": detail.get("DateCreated"),
+                            "run_name": run.get("Name"),
+                            "experiment_name": run.get("ExperimentName"),
+                            "run_date_created": run.get("DateCreated"),
+                            "biosample_name": biosample_name,
+                            "biosample_id": biosample_id,
+                            "computed_yield_bps": int(yield_bps),
+                            "generated_sample_id": generated_sample_id,
+                        })
 
-#     buffer = io.StringIO()
-#     df.to_csv(buffer, index=False)
-#     buffer.seek(0)
+                if len(run_rows) >= max_rows:
+                    break
+            if len(run_rows) >= max_rows:
+                break
 
-#     s3 = S3Hook(aws_conn_id=aws_conn_id)
-#     s3_path = f"{object_path}/bclconvert_appsessions-{curr_ds}.csv"
-#     s3.load_string(buffer.getvalue(), s3_path, bucket_name=bucket_name, replace=True)
+        offset += page_limit
+        # stop when API signals end
+        if len(sessions) < page_limit:
+            break
 
-#     logger.info(f"✅ Saved to S3: s3://{bucket_name}/{s3_path}")
-#     print(f"✅ Saved to S3: {s3_path}")
+    # ---- Build DataFrames ----
+    df_runs = pd.DataFrame(run_rows)
+    df_biosamples = pd.DataFrame(biosample_rows)
+
+    # ---- Save to S3 only if non-empty ----
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+
+    if not df_runs.empty:
+        runs_key = f"{run_object_path}/{ds}.csv"
+        buf = StringIO()
+        df_runs.to_csv(buf, index=False)
+        s3.load_string(string_data=buf.getvalue(), key=runs_key, bucket_name=bucket_name, replace=True)
+        logger.info("Uploaded Runs CSV → s3://%s/%s (shape=%s)", bucket_name, runs_key, df_runs.shape)
+    else:
+        logger.info("No runs found, skipping Runs CSV upload.")
+
+    if not df_biosamples.empty:
+        bios_key = f"{biosample_object_path}/{ds}.csv"
+        buf = StringIO()
+        df_biosamples.to_csv(buf, index=False)
+        s3.load_string(string_data=buf.getvalue(), key=bios_key, bucket_name=bucket_name, replace=True)
+        logger.info("Uploaded BioSamples CSV → s3://%s/%s (shape=%s)", bucket_name, bios_key, df_biosamples.shape)
+    else:
+        logger.info("No biosamples found, skipping BioSamples CSV upload.")
+
+    logger.info("Final shapes: Runs=%s, BioSamples=%s", df_runs.shape, df_biosamples.shape)
+    return df_runs, df_biosamples
 
 
-# def create_download_url(api_key: str, project_id: str, file_id: str, BASE_URL:str) -> str:
-#     url = f"{BASE_URL}/projects/{project_id}/data/{file_id}:createDownloadUrl"
-#     headers = {
-#         "accept": "application/vnd.illumina.v3+json",
-#         "X-API-Key": api_key
-#     }
-#     response = requests.post(url, headers=headers, data='')
-#     response.raise_for_status()
-#     return response.json().get("url")
 
-<<<<<<< Updated upstream
-def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path, API_KEY, BASE_URL, PROJECT_ID,
-                                   transform_func=None, curr_ds=None, **kwargs):
-    analyses = []
+def fetch_demux_qs_ica_to_s3(
+    *,
+    aws_conn_id: str,
+    API_KEY: str,
+    PROJECT_ID: str,
+    BASE_URL: str,           # e.g. "https://ica.illumina.com/ica/rest/api"
+    bucket_name: str,        # destination bucket for both uploads
+    object_path_demux: str,  # e.g. "illumina/demux"
+    object_path_qs: str,     # e.g. "illumina/qs"
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Fetch ICA analyses (timeModified >= ds), pull Demultiplex_Stats.csv and Quality_Metrics.csv,
+    append id_library column, and upload to S3 — but skip upload if CSV is missing or empty.
+    """
+    def create_download_url(api_key: str, project_id: str, file_id: str, base_url: str) -> str:
+        url = f"{base_url}/projects/{project_id}/data/{file_id}:createDownloadUrl"
+        headers = {"accept": "application/vnd.illumina.v3+json", "X-API-Key": api_key}
+        r = requests.post(url, headers=headers, data="")
+        r.raise_for_status()
+        return r.json().get("url")
+
+    def parse_iso_utc(ts: str) -> datetime:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    LP_REGEX = re.compile(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", re.IGNORECASE)
+
+    def lookup_file_by_path(file_path: str) -> List[dict]:
+        encoded = urllib.parse.quote(file_path)
+        q = (
+            f"{BASE_URL}/projects/{PROJECT_ID}/data"
+            f"?filePath={encoded}"
+            f"&filenameMatchMode=EXACT"
+            f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
+            f"&status=AVAILABLE&type=FILE"
+        )
+        rr = requests.get(q, headers=HEADERS)
+        rr.raise_for_status()
+        return rr.json().get("items", [])
+
+    def download_csv_bytes(file_id: str) -> bytes:
+        url = create_download_url(API_KEY, PROJECT_ID, file_id, BASE_URL)
+        r = requests.get(url)
+        r.raise_for_status()
+        return r.content
+
+    def add_id_library(csv_bytes: bytes, id_library: str) -> Optional[bytes]:
+        """Return CSV bytes with id_library appended; return None if parsed CSV is empty."""
+        buf = io.StringIO(csv_bytes.decode("utf-8"))
+        df = pd.read_csv(buf)
+        if df.empty:
+            return None
+        df["id_library"] = id_library
+        return df.to_csv(index=False).encode("utf-8")
+
+    # ---------- fetch analyses ----------
+    HEADERS = {"accept": "application/vnd.illumina.v3+json", "X-API-Key": API_KEY}
+    # ds="2025-07-10" #testing
+    ds = kwargs.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    cutoff = datetime.strptime(ds, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    s3 = S3Hook(aws_conn_id=aws_conn_id)
+
+    analyses: List[dict] = []
     page_size = 100
     page_offset = 0
-    s3 = S3Hook(aws_conn_id=aws_conn_id)
-    logger = LoggingMixin().log
-    curr_ds = kwargs["ds"]
-    curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
-    curr_date_end = curr_date_start + timedelta(days=2)
-=======
-# def fetch_bclconvertDemux_and_dump(aws_conn_id, bucket_name, object_path_prefix, API_KEY, BASE_URL, PROJECT_ID,
-#                                    transform_func=None, curr_ds=None, **kwargs):
-#     analyses = []
-#     page_size = 100
-#     page_offset = 0
-#     s3 = S3Hook(aws_conn_id=aws_conn_id)
-#     logger = LoggingMixin().log
-#     curr_ds = kwargs["ds"]
-#     curr_date_start = datetime.strptime(curr_ds, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=1)
-#     curr_date_end = curr_date_start + timedelta(days=2)
->>>>>>> Stashed changes
 
-#     HEADERS = {
-#         "accept": "application/vnd.illumina.v3+json",
-#         "X-API-Key": API_KEY
-#     }
+    logger.info(f"[ICA] Fetching analyses updated on/after {ds} (UTC start-of-day cutoff)")
 
-#     logger.info(f"Fetching sessions for: {curr_ds}")
-
-<<<<<<< Updated upstream
     while True:
         url = (
             f"{BASE_URL}/projects/{PROJECT_ID}/analyses"
             f"?pageSize={page_size}&pageOffset={page_offset}&sort=reference%20desc"
         )
-        logger.info(f"Requesting URL: {url}")
+        logger.info(f"[ICA] GET {url}")
         resp = requests.get(url, headers=HEADERS)
         resp.raise_for_status()
         data = resp.json()
-
         items = data.get("items", [])
-        analyses.extend(items)
 
-        logger.info(f"Fetched {len(items)} analyses (offset {page_offset})")
+        logger.info(f"[ICA] Page offset {page_offset}: {len(items)} analyses")
+
+        for a in items:
+            tm = a.get("timeModified")
+            if tm and parse_iso_utc(tm) >= cutoff:
+                analyses.append(a)
 
         if len(items) < page_size:
             break
         page_offset += page_size
 
-    if not analyses:
-        logger.info("No analyses found.")
-        return
+    latest_analyses = sorted(
+        analyses, key=lambda a: parse_iso_utc(a["timeModified"]), reverse=True
+    ) if analyses else []
 
-    # Sort by timeCreated (latest first)
-    latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
-
-    def extract_lp_reference(reference_str):
-        match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
-        return match.group(1) if match else None
+    summary: Dict[str, Any] = {
+        "analyses_considered": len(latest_analyses),
+        "analyses_processed": 0,
+        "demux_uploaded": 0,
+        "quality_uploaded": 0,
+        "per_analysis": []
+    }
 
     for analysis in latest_analyses:
-        try:
-            reference = analysis.get("reference")
-            logger.info(f"Checking analysis reference: {reference}")
-            if not reference:
-                continue
-
-            lp_ref = extract_lp_reference(reference)
-            if not lp_ref:
-                logger.warning(f"Could not extract LP reference from: {reference}")
-                continue
-
-            # --- Handle Demultiplex_Stats.csv ---
-            demux_file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
-            demux_encoded = urllib.parse.quote(demux_file_path)
-
-            demux_query = (
-                f"{BASE_URL}/projects/{PROJECT_ID}/data"
-                f"?filePath={demux_encoded}"
-                f"&filenameMatchMode=EXACT"
-                f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-                f"&status=AVAILABLE&type=FILE"
-            )
-
-            demux_response = requests.get(demux_query, headers=HEADERS)
-            demux_response.raise_for_status()
-            demux_items = demux_response.json().get("items", [])
-
-            if demux_items:
-                file_id = demux_items[0]["data"]["id"]
-                download_url = create_download_url(API_KEY, PROJECT_ID, file_id, BASE_URL)
-                response = requests.get(download_url)
-                response.raise_for_status()
-
-                s3_key = f"{object_path}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
-                s3.load_bytes(
-                    bytes_data=response.content,
-                    key=s3_key,
-                    bucket_name=bucket_name,
-                    replace=True
-                )
-                logger.info(f"Uploaded Demultiplex_Stats to: s3://{bucket_name}/{s3_key}")
-            else:
-                logger.info(f"Demultiplex_Stats.csv not found for {reference}")
-
-            # Quality_Metrics.csv
-            quality_file_path = f"/ilmn-analyses/{reference}/output/Reports/Quality_Metrics.csv"
-            quality_encoded = urllib.parse.quote(quality_file_path)
-            
-            quality_query = (
-                f"{BASE_URL}/projects/{PROJECT_ID}/data"
-                f"?filePath={quality_encoded}"
-                f"&filenameMatchMode=EXACT"
-                f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-                f"&status=AVAILABLE&type=FILE"
-            )
-            
-            quality_response = requests.get(quality_query, headers=HEADERS)
-            quality_response.raise_for_status()
-            quality_items = quality_response.json().get("items", [])
-            
-            if quality_items:
-                file_id = quality_items[0]["data"]["id"]
-                download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
-                response = requests.get(download_url)
-                response.raise_for_status()
-            
-                # Final S3 key format: illumina/qs/{file_id}/Quality_Metrics.csv
-                qs_s3_key = f"illumina/qs/{file_id}/Quality_Metrics.csv"
-                s3.load_bytes(
-                    bytes_data=response.content,
-                    key=qs_s3_key,
-                    bucket_name="bgsi-data-dwh-bronze",
-                    replace=True
-                )
-                logger.info(f"Uploaded Quality_Metrics to: s3://bgsi-data-dwh-bronze/{qs_s3_key}")
-            else:
-                logger.info(f"Quality_Metrics.csv not found for {reference}")
-
-        except Exception as e:
-            logger.error(f"Error processing analysis {reference}: {e}", exc_info=True)
+        reference = analysis.get("reference")
+        if not reference:
             continue
 
+        status_row = {"reference": reference, "demux": "not_found", "quality": "not_found"}
 
-# def fetch_yield_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
-#     def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
-#         conn = Connection.get_connection_from_secrets(conn_id)
-#         return boto3.client(
-#             service,
-#             aws_access_key_id=conn.login,
-#             aws_secret_access_key=conn.password
-=======
-#     while True:
-#         url = (
-#             f"{BASE_URL}/projects/{PROJECT_ID}/analyses"
-#             f"?pageSize={page_size}&pageOffset={page_offset}&sort=reference%20desc"
->>>>>>> Stashed changes
-#         )
-#         logger.info(f"Requesting URL: {url}")
-#         resp = requests.get(url, headers=HEADERS)
-#         resp.raise_for_status()
-#         data = resp.json()
+        m = LP_REGEX.search(str(reference))
+        if not m:
+            logger.warning(f"[ICA] Could not extract id_library from reference: {reference}")
+            summary["per_analysis"].append(status_row)
+            continue
+        id_library = m.group(1)
 
-#         items = data.get("items", [])
-#         analyses.extend(items)
+        # --- Demultiplex_Stats.csv ---
+        try:
+            demux_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
+            demux_items = lookup_file_by_path(demux_path)
 
-#         logger.info(f"Fetched {len(items)} analyses (offset {page_offset})")
+            if demux_items:
+                demux_file_id = demux_items[0]["data"]["id"]
+                raw_bytes = download_csv_bytes(demux_file_id)
+                out_bytes = add_id_library(raw_bytes, id_library)
 
-#         if len(items) < page_size:
-#             break
-#         page_offset += page_size
+                if out_bytes is not None:
+                    demux_s3_key = f"{object_path_demux}/{reference}/{id_library}_Demultiplex_Stats.csv"
+                    s3.load_bytes(bytes_data=out_bytes, key=demux_s3_key, bucket_name=bucket_name, replace=True)
+                    logger.info(f"[S3] Uploaded Demultiplex_Stats → s3://{bucket_name}/{demux_s3_key}")
+                    status_row["demux"] = "uploaded"
+                    summary["demux_uploaded"] += 1
+                else:
+                    logger.info(f"[ICA] Demultiplex_Stats.csv empty for {reference}, skipping upload")
+                    status_row["demux"] = "empty_skipped"
+            else:
+                logger.info(f"[ICA] Demultiplex_Stats.csv not found for {reference}")
 
-#     if not analyses:
-#         logger.info("No analyses found.")
-#         return
+        except Exception as e:
+            logger.error(f"[ICA] Error processing Demultiplex_Stats for {reference}: {e}", exc_info=True)
+            status_row["demux"] = "error"
 
-#     # Sort by timeCreated (latest first)
-#     latest_analyses = sorted(analyses, key=lambda a: a["timeCreated"], reverse=True)
+        # --- Quality_Metrics.csv ---
+        try:
+            quality_path = f"/ilmn-analyses/{reference}/output/Reports/Quality_Metrics.csv"
+            quality_items = lookup_file_by_path(quality_path)
 
-#     def extract_lp_reference(reference_str):
-#         match = re.search(r"(LP[-_]?\d{7}(?:-P\d)?(?:[-_](?:rerun|redo))?)", reference_str, re.IGNORECASE)
-#         return match.group(1) if match else None
+            if quality_items:
+                quality_file_id = quality_items[0]["data"]["id"]
+                raw_bytes = download_csv_bytes(quality_file_id)
+                out_bytes = add_id_library(raw_bytes, id_library)
 
-#     for analysis in latest_analyses:
-#         try:
-#             reference = analysis.get("reference")
-#             logger.info(f"Checking analysis reference: {reference}")
-#             if not reference:
-#                 continue
+                if out_bytes is not None:
+                    qs_s3_key = f"{object_path_qs}/{quality_file_id}/Quality_Metrics.csv"
+                    s3.load_bytes(bytes_data=out_bytes, key=qs_s3_key, bucket_name=bucket_name, replace=True)
+                    logger.info(f"[S3] Uploaded Quality_Metrics → s3://{bucket_name}/{qs_s3_key}")
+                    status_row["quality"] = "uploaded"
+                    summary["quality_uploaded"] += 1
+                else:
+                    logger.info(f"[ICA] Quality_Metrics.csv empty for {reference}, skipping upload")
+                    status_row["quality"] = "empty_skipped"
+            else:
+                logger.info(f"[ICA] Quality_Metrics.csv not found for {reference}")
 
-#             lp_ref = extract_lp_reference(reference)
-#             if not lp_ref:
-#                 logger.warning(f"Could not extract LP reference from: {reference}")
-#                 continue
+        except Exception as e:
+            logger.error(f"[ICA] Error processing Quality_Metrics for {reference}: {e}", exc_info=True)
+            status_row["quality"] = "error"
 
-#             # --- Handle Demultiplex_Stats.csv ---
-#             demux_file_path = f"/ilmn-analyses/{reference}/output/Reports/Demultiplex_Stats.csv"
-#             demux_encoded = urllib.parse.quote(demux_file_path)
+        summary["analyses_processed"] += 1
+        summary["per_analysis"].append(status_row)
 
-#             demux_query = (
-#                 f"{BASE_URL}/projects/{PROJECT_ID}/data"
-#                 f"?filePath={demux_encoded}"
-#                 f"&filenameMatchMode=EXACT"
-#                 f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-#                 f"&status=AVAILABLE&type=FILE"
-#             )
-
-#             demux_response = requests.get(demux_query, headers=HEADERS)
-#             demux_response.raise_for_status()
-#             demux_items = demux_response.json().get("items", [])
-
-#             if demux_items:
-#                 file_id = demux_items[0]["data"]["id"]
-#                 download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
-#                 response = requests.get(download_url)
-#                 response.raise_for_status()
-
-#                 s3_key = f"{object_path_prefix}/{reference}/{lp_ref}_Demultiplex_Stats.csv"
-#                 s3.load_bytes(
-#                     bytes_data=response.content,
-#                     key=s3_key,
-#                     bucket_name=bucket_name,
-#                     replace=True
-#                 )
-#                 logger.info(f"Uploaded Demultiplex_Stats to: s3://{bucket_name}/{s3_key}")
-#             else:
-#                 logger.info(f"Demultiplex_Stats.csv not found for {reference}")
-
-#             # Quality_Metrics.csv
-#             quality_file_path = f"/ilmn-analyses/{reference}/output/Reports/Quality_Metrics.csv"
-#             quality_encoded = urllib.parse.quote(quality_file_path)
-            
-#             quality_query = (
-#                 f"{BASE_URL}/projects/{PROJECT_ID}/data"
-#                 f"?filePath={quality_encoded}"
-#                 f"&filenameMatchMode=EXACT"
-#                 f"&filePathMatchMode=STARTS_WITH_CASE_INSENSITIVE"
-#                 f"&status=AVAILABLE&type=FILE"
-#             )
-            
-#             quality_response = requests.get(quality_query, headers=HEADERS)
-#             quality_response.raise_for_status()
-#             quality_items = quality_response.json().get("items", [])
-            
-#             if quality_items:
-#                 file_id = quality_items[0]["data"]["id"]
-#                 download_url = create_download_url(API_KEY, PROJECT_ID, file_id)
-#                 response = requests.get(download_url)
-#                 response.raise_for_status()
-            
-#                 # Final S3 key format: illumina/qs/{file_id}/Quality_Metrics.csv
-#                 qs_s3_key = f"illumina/qs/{file_id}/Quality_Metrics.csv"
-#                 s3.load_bytes(
-#                     bytes_data=response.content,
-#                     key=qs_s3_key,
-#                     bucket_name="bgsi-data-dwh-bronze",
-#                     replace=True
-#                 )
-#                 logger.info(f"Uploaded Quality_Metrics to: s3://bgsi-data-dwh-bronze/{qs_s3_key}")
-#             else:
-#                 logger.info(f"Quality_Metrics.csv not found for {reference}")
-
-#         except Exception as e:
-#             logger.error(f"Error processing analysis {reference}: {e}", exc_info=True)
-#             continue
-
-
-# # def fetch_yield_and_dump(aws_conn_id, bucket_name, object_path, transform_func=None, **kwargs):
-# #     def get_boto3_client_from_connection(conn_id='aws_default', service='s3'):
-# #         conn = Connection.get_connection_from_secrets(conn_id)
-# #         return boto3.client(
-# #             service,
-# #             aws_access_key_id=conn.login,
-# #             aws_secret_access_key=conn.password
-# #         )
-# #     def clean_biosample_column(df, column="BioSampleName"):
-# #         """Standardize biosample column for consistent merging."""
-# #         df[column] = (
-# #             df[column]
-# #             .astype(str)
-# #             .str.strip()
-# #             .str.upper()
-# #             .str.replace(r"\s+", "", regex=True)
-# #         )
-# #         return df
-# #     curr_ds = kwargs['ds']
-
-# #     #  Load latest BCL AppSession
-# #     s3 = get_boto3_client_from_connection(conn_id=aws_conn_id)
-# #     appsession_prefix = "bssh/appsessions/"
-# #     paginator = s3.get_paginator("list_objects_v2")
-# #     page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=appsession_prefix)
-
-# #     latest_obj = None
-# #     for page in page_iterator:
-# #         for obj in page.get("Contents", []):
-# #             if obj["Key"].endswith(".csv") and "bclconvert_appsessions" in obj["Key"]:
-# #                 if latest_obj is None or obj["LastModified"] > latest_obj["LastModified"]:
-# #                     latest_obj = obj
-
-# #     if not latest_obj:
-# #         logger.warning(" No BCLConvert AppSession file found.")
-# #         return
-
-# #     bcl_key = latest_obj["Key"]
-# #     logger.info(f" Using BCLConvert AppSession file: {bcl_key}")
-# #     obj = s3.get_object(Bucket=bucket_name, Key=bcl_key)
-# #     bcl_df = pd.read_csv(StringIO(obj["Body"].read().decode("utf-8")))
-
-# #     bcl_df["RunId"] = bcl_df["RunId"].astype(str).str.strip().str.split(".").str[0]
-# #     bcl_df = clean_biosample_column(bcl_df, "BioSampleName")
-
-# #     # Add demux metrics
-# #     # Add demux metrics (read from S3; no XCom)
-# #     logger.info("📦 Loading Demultiplex metrics from S3...")
-# #     ds = kwargs["ds"]
-# #     demux_key = f"{PREFIX}demux_metrics_{ds}.csv"
-    
-# #     try:
-# #         demux_obj = s3.get_object(Bucket=bucket_name, Key=demux_key)
-# #         demux_df = pd.read_csv(StringIO(demux_obj["Body"].read().decode("utf-8")))
-# #         demux_df = clean_biosample_column(demux_df, "BioSampleName")
-# #         bcl_df = pd.merge(bcl_df, demux_df, on="BioSampleName", how="left")
-# #         logger.info(f"✅ Demultiplex metrics merged from s3://{bucket_name}/{demux_key}")
-# #     except ClientError as e:
-# #         if e.response.get("Error", {}).get("Code") == "NoSuchKey":
-# #             logger.warning(f"⚠️ Demultiplex metrics not found at s3://{bucket_name}/{demux_key}")
-# #         else:
-# #             logger.error(f"❌ Failed to load demux metrics from S3: {e}")
-
-# #     # Append Yield
-# #     logger.info("🔗 Appending Yield data...")
-# #     bcl_df = load_yield_csv(bcl_df)
-# #     bcl_df.loc[bcl_df["RowType"] != "BioSample", "Yield"] = None
-
-# #     # Fetch Total Flowcell Yield from API
-# #     logger.info("🔗 Fetching Flowcell-level Yield totals...")
-# #     bcl_df["TotalFlowcellYield"] = None
-# #     run_rows = bcl_df[bcl_df["RowType"] == "Run"]
-
-# #     for _, row in run_rows.iterrows():
-# #         run_id = row.get("RunId")
-# #         if not run_id or run_id.lower() == "nan":
-# #             continue
-    
-# #         api_url = f"{API_BASE_URL}/{run_id}/sequencingstats"
-# #         headers = {
-# #             "x-access-token": API_TOKEN,
-# #             "Accept": "application/json"
-# #         }
-    
-# #         try:
-# #             logger.info(f"📡 Requesting TotalFlowcellYield for RunId={run_id}")
-# #             response = requests.get(api_url, headers=headers)
-# #             response.raise_for_status()
-# #             data = response.json()
-# #             total_yield = data.get("YieldTotal")
-    
-# #             if total_yield is not None:
-# #                 bcl_df.loc[
-# #                     (bcl_df["RowType"] == "Run") & (bcl_df["RunId"] == run_id),
-# #                     "TotalFlowcellYield"
-# #                 ] = total_yield
-# #                 logger.info(f"✅ Assigned TotalFlowcellYield={total_yield} to RunId={run_id}")
-# #             else:
-# #                 logger.warning(f"⚠️ No YieldTotal found for RunId={run_id}")
-    
-# #         except Exception as e:
-# #             logger.error(f"❌ API error for RunId={run_id}: {e}")
-    
-# #     # After all runs have been processed, extract latest 200
-# #     try:
-# #         logger.info("📦 Filtering for the latest 200 Runs and BioSamples...")
-        
-# #         # Ensure DateCreated is datetime
-# #         bcl_df["DateCreated"] = pd.to_datetime(bcl_df["DateCreated"], errors="coerce")
-
-# #         # Show all rows/columns in logs
-# #         pd.set_option("display.max_rows", None)
-# #         pd.set_option("display.max_columns", None)
-# #         pd.set_option("display.width", 0)
-# #         pd.set_option("display.max_colwidth", None)
-
-# #         chunk_size = 24
-
-# #         # ✅ Log latest 200 Run rows
-# #         latest_runs = (
-# #             bcl_df[bcl_df["RowType"] == "Run"]
-# #             .sort_values("DateCreated", ascending=False)
-# #             .head(200)
-# #         )
-# #         logger.info("📋 Final latest 200 Run rows (full preview):")
-# #         for i in range(0, len(latest_runs), chunk_size):
-# #             chunk = latest_runs.iloc[i:i+chunk_size]
-# #             logger.info(f"\n🧾 Runs {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
-
-# #         # ✅ Log latest 200 BioSample rows
-# #         latest_samples = (
-# #             bcl_df[bcl_df["RowType"] == "BioSample"]
-# #             .sort_values("DateCreated", ascending=False)
-# #             .head(200)
-# #         )
-# #         logger.info("📋 Final latest 200 BioSample rows (full preview):")
-# #         for i in range(0, len(latest_samples), chunk_size):
-# #             chunk = latest_samples.iloc[i:i+chunk_size]
-# #             logger.info(f"\n🔬 BioSamples {i+1}–{i+len(chunk)}:\n{chunk.to_string(index=False)}")
-
-# #     except Exception as e:
-# #         logger.warning(f"⚠️ Failed to extract or print latest Run and BioSample rows: {e}")
-# #     # ✅ Write final output CSV to S3 (bronze/final_output)
-# #     try:
-# #         out_df = transform_func(bcl_df.copy(), curr_ds) if transform_func else bcl_df
-# #         out_key = f"{object_path}/{curr_ds}.csv"
-# #         s3.put_object(Bucket=bucket_name, Key=out_key, Body=out_df.to_csv(index=False).encode("utf-8"))
-# #         logger.info(f"✅ Wrote final output to s3://{bucket_name}/{out_key}")
-# #     except Exception as e:
-# #         logger.error(f"❌ Failed to write final output to S3: {e}")
-# #         raise
+    logger.info(
+        f"[DONE] considered={summary['analyses_considered']}, "
+        f"processed={summary['analyses_processed']}, "
+        f"demux_uploaded={summary['demux_uploaded']}, "
+        f"quality_uploaded={summary['quality_uploaded']}"
+    )
+    return summary
