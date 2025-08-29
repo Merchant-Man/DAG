@@ -35,20 +35,33 @@ def extract_info(pd_row: pd.DataFrame, col) -> Tuple[str, str]:
 
     s3_path = pd_row[col]
     # Example s3://bgsi-data-citus-output-liquid/0E0050901C01_9fb9a9ea/0E0050901C01.cram/0E0050901C01.cram
+    # s3://bgsi-data-dragen-output-liquid/0F0083701C01_e762c03d/0F0083701C01.cram
     if "bgsi-data-citus-output-liquid" in s3_path:
         pattern = r"bgsi-data-citus-output-liquid/([^/]+)/"
         match = re.search(pattern, s3_path)
         if match:
             long_run_name = match.group(1)
             run_name = long_run_name.split("-")[0]
-    elif "bgsi-data-dragen-output-liquid" in s3_path:
+    elif "bgsi-data-dragen-output-liquid/pro/analysis/" in s3_path:
         pattern = r"bgsi-data-dragen-output-liquid/pro/analysis/([^/]+)/"
+        match = re.search(pattern, s3_path)
+        if match:
+            long_run_name = match.group(1)
+            run_name = long_run_name.split("-")[0]
+    elif "bgsi-data-dragen-output-liquid" in s3_path:
+        pattern = r"bgsi-data-dragen-output-liquid/([^/]+)/"
         match = re.search(pattern, s3_path)
         if match:
             long_run_name = match.group(1)
             run_name = long_run_name.split("-")[0]
     elif "bgsi-data-citus-output" in s3_path:
         pattern = r"bgsi-data-citus-output/([^/]+)/"
+        match = re.search(pattern, s3_path)
+        if match:
+            run_name = match.group(1)
+            id_repository = run_name.split("_")[0]
+    elif "bgsi-data-wfhv-output" in s3_path:
+        pattern = r"bgsi-data-wfhv-output/([^/]+)/"
         match = re.search(pattern, s3_path)
         if match:
             run_name = match.group(1)
