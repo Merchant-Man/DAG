@@ -94,7 +94,7 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df["id_repository"] = df["userReference"].apply(split_user)
     # New regex for extracting id_batch
     df["id_batch"] = df["tags"].apply(lambda x: re.search(
-        r"(LP[\w\d]+)", str(ast.literal_eval(x)["userTags"]))) # type: ignore
+        r"(LP[\w\d-]+)", str(ast.literal_eval(x)["userTags"])).group(0) if re.search(r"(LP[\w\d-]+)", str(ast.literal_eval(x)["userTags"])) else "")  # type: ignore
     df["pipeline_name"] = df["pipeline"].apply(
         lambda x: ast.literal_eval(x)["code"])
     df["pipeline_type"] = "secondary"
@@ -106,13 +106,14 @@ def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
         temp_code_repo = ""
         if re.match(r"SKI_.*", ref):
             # SKI_3175140_9efb681c-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-8b97ceb8-ab78-489a-8d48-901f1b240c79
-            temp_code_repo = re.search(r"SKI_[^_]+", ref)[0] # type: ignore
+            temp_code_repo = re.search(r"SKI_[^_]+", ref)[0]  # type: ignore
         elif re.match(r"[^_]+_[\d]{6}_M_.*", ref):
             # 0C0123801C03_250209_M_1a75a295-ede8212c-9b83-4029-bade-7c19493b2fe7
-            temp_code_repo = re.search(r"[^_]+_[\d]{6}_[TM]{1}", ref)[0] # type: ignore
+            temp_code_repo = re.search(
+                r"[^_]+_[\d]{6}_[TM]{1}", ref)[0]  # type: ignore
         elif re.match(r"[^_-]+-1-DRAGEN-4-2-6-Germline.*", ref):
             # 0H0066801C01-1-DRAGEN-4-2-6-Germline-All-Callers-DRAGEN_Germline_WGS_4-2-6-v2_sw-mode-JK-b0a743a0-4762-436d-a988-4cd2be474910
-            temp_code_repo = re.search(r"[^_-]+", ref)[0] # type: ignore
+            temp_code_repo = re.search(r"[^_-]+", ref)[0]  # type: ignore
         else:
             # 0C0067101C03_8b688247-DRAGEN_Germline_WGS_4-2-7_sw-mode-JK-df9ac94b-dbe8-4eb9-b377-6b0946661c4a
             temp_code_repo = ref.split('_')[0]
@@ -222,4 +223,4 @@ silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-fetch_and_dump_task >> silver_transform_to_db_task # type: ignore
+fetch_and_dump_task >> silver_transform_to_db_task  # type: ignore
