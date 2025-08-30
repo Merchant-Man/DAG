@@ -220,7 +220,7 @@ with dag:
             staging_simbiox_task,
         ] >> gold_qc_task  # type: ignore
 
-        [gold_qc_task, sensors["pgx_report"]
+        [gold_qc_task, sensors["pgx_report"], staging_demography_task
          ] >> gold_pgx_report_task  # type: ignore
         [gold_pgx_report_task, gold_qc_task] >> onq_lims_analysis_report_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
