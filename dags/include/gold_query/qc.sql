@@ -13,6 +13,7 @@
 				- 18-07-2025: Renata Triwijaya - Adding patient_categ column.
 				- 06-08-2025: Renata Triwijaya - Changing MGI coverage value from median_coverage to depth.
 				- 25-08-2025: Renata Triwijaya - Adding is_excluded column from staging_demography.
+				- 01-09-2025: Renata Triwijaya - Fixing batch_sex_category to factor in total No Data alongside mismatches.
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
@@ -25,23 +26,25 @@ WITH
 			*,
 			CASE
 			-- previously I set id_library instead getting signficantly lower number. Changed to id_batch instead.
-				WHEN COUNT(
-					CASE
-						WHEN sex_ploidy_category = 'Mismatch' THEN 1
-					END
-				) OVER (
-					PARTITION BY
-						id_library
-				) > 2 THEN 'Fail'
-				WHEN COUNT(
-					CASE
-						WHEN sex_ploidy_category = 'No Data' THEN 1
-					END
-				) OVER (
-					PARTITION BY
-						id_library
-				) > 2 THEN 'Incomplete Data'
-				ELSE 'Pass'
+				WHEN SUM(CASE WHEN sex_ploidy_category='Mismatch' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) > 2
+				THEN 'Fail'
+				WHEN SUM(CASE WHEN sex_ploidy_category='Mismatch' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) = 2
+					AND SUM(CASE WHEN sex_ploidy_category='No Data' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) = 0
+				THEN 'Pass'
+				WHEN SUM(CASE WHEN sex_ploidy_category='Mismatch' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) = 1
+					AND SUM(CASE WHEN sex_ploidy_category='No Data' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) < 2
+				THEN 'Pass'
+				WHEN SUM(CASE WHEN sex_ploidy_category='Mismatch' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) = 0
+					AND SUM(CASE WHEN sex_ploidy_category='No Data' THEN 1 ELSE 0 END)
+						OVER (PARTITION BY id_library) < 3
+				THEN 'Pass'
+				ELSE 'Incomplete Data'
 			END AS batch_sex_category
 		FROM
 			(
@@ -495,6 +498,8 @@ CREATE INDEX ploidy_missing_idx ON gold_qc_new (ploidy_missing);
 CREATE INDEX qc_strict_status_idx ON gold_qc_new (qc_strict_status);
 
 CREATE INDEX qc_strict_progress_idx ON gold_qc_new (qc_strict_progress);
+
+CREATE INDEX qc_coverage_tier_idx ON gold_qc_new (qc_coverage_tier);`
 
 RENAME TABLE gold_qc TO gold_qc_old,
 gold_qc_new TO gold_qc;
