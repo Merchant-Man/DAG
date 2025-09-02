@@ -1155,7 +1155,7 @@ CREATE TABLE illumina_bssh_runs(
     , flowcell_barcode TEXT
     , reagent_barcode TEXT
     , status TEXT
-    , id_library TEXT
+    , id_library VARCHAR(32)
     , run_date_created TEXT
     , total_flowcell_yield_Gbps TEXT
     , created_at datetime

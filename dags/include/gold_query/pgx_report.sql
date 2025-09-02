@@ -5,7 +5,7 @@
 -- Created  :   24-02-2025
 -- Changes  :   13-06-2025 Adding indexes for performance improvement
 				30-06-2025 Adding pattern to prevent unlucky read access
-				
+				30-08-2025 Adding patient category
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -13,12 +13,13 @@
 DROP TABLE IF EXISTS gold_pgx_report_new;
 CREATE TABLE gold_pgx_report_new(
 SELECT
-    *
+    t1.*
     ,CASE
         WHEN pgx_input_creation_date IS NOT NULL AND (eng_report_creation_date IS NULL AND ind_report_creation_date IS NULL ) THEN "Failed Run"
         WHEN pgx_input_creation_date IS NOT NULL AND (eng_report_creation_date IS NOT NULL OR ind_report_creation_date IS NOT NULL ) THEN "Successful Run"
         WHEN pgx_input_creation_date IS NULL AND (eng_report_creation_date IS  NULL AND ind_report_creation_date IS NULL ) THEN "Uncompleted Run"
     END AS pgx_status
+    ,t2.participant_type
 FROM (
 	SELECT
 		gold_qc.id_repository,
@@ -63,7 +64,9 @@ FROM
 	superset_dev.staging_pgx_report_status) t WHERE rn = 1) prs ON gold_qc.id_repository = prs.id_repository
 	WHERE
 		gold_qc.qc_strict_status = "Pass"
-) t
+) t1
+LEFT JOIN
+	staging_demography t2 ON t1.id_subject = t2.id_subject
 );
 
 CREATE INDEX id_repository_idx

@@ -1,15 +1,11 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.models import Variable
 from datetime import datetime, timedelta
 from utils.utils import silver_transform_to_db
 from utils.bssh import fetch_bclconvert_runs_and_biosamples, fetch_demux_qs_ica_to_s3
 from utils.illumina_transform import transform_demux_data, transform_qs_data, transform_bssh_data
 import os
-# ----------------------------
-# Constants and Config
-# ----------------------------
 
 AWS_CONN_ID = "aws"
 RDS_SECRET = Variable.get("RDS_SECRET")
@@ -164,5 +160,5 @@ qs_silver_transform_to_db_task = PythonOperator(
     provide_context=True
 )
 
-bssh_fetch_and_dump_task >> [bssh_run_silver_transform_to_db_task, bssh_biosample_silver_transform_to_db_task]
-demux_qs_fetch_and_dump_task >> [demux_silver_transform_to_db_task, qs_silver_transform_to_db_task]
+bssh_fetch_and_dump_task >> [bssh_run_silver_transform_to_db_task, bssh_biosample_silver_transform_to_db_task] #type: ignore
+demux_qs_fetch_and_dump_task >> [demux_silver_transform_to_db_task, qs_silver_transform_to_db_task] #type: ignore

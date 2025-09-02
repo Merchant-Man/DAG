@@ -51,4 +51,4 @@ with dag:
         provide_context=True
     )
 
-sync_qc_files_to_mqc_bucket_task >> create_pl_mqc_samplesheets_task
+sync_qc_files_to_mqc_bucket_task >> create_pl_mqc_samplesheets_task  # type: ignore
