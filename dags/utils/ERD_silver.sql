@@ -1237,3 +1237,44 @@ CREATE INDEX id_repository_idx
 ON staging_illumina_primary(id_repository);
 CREATE INDEX id_library_idx
 ON staging_illumina_primary(id_library);
+
+CREATE TABLE simbiox_center_of_patient (
+    id VARCHAR(36) PRIMARY KEY
+    , id_patient VARCHAR(36)
+    , origin_code_repository VARCHAR(32) 
+    , research_id VARCHAR(36)
+    , project_id VARCHAR(36)
+    , id_biobank VARCHAR(36)
+    , created_at datetime
+    , updated_at datetime
+);
+CREATE INDEX id_patient_idx
+ON simbiox_center_of_patient(id_patient);
+CREATE INDEX origin_code_repository_idx
+ON simbiox_center_of_patient(origin_code_repository);
+CREATE INDEX research_id_idx
+ON simbiox_center_of_patient(research_id);
+CREATE INDEX project_id_idx
+ON simbiox_center_of_patient(project_id);
+CREATE INDEX id_biobank_idx
+ON simbiox_center_of_patient(id_biobank);
+
+CREATE TABLE simbiox_data_project (
+	id_project varchar(255) PRIMARY KEY,
+	id_pi varchar(50),
+	institution varchar(50),
+	ket_institution text,
+	datamanager text,
+	teknisi text,
+	tim text,
+	titleoftheproject text,
+	startproject DATE,
+	endproject DATE,
+	descriptionofproject text,
+	projectfunding text,
+	create_time datetime,
+	create_by varchar(255),
+	id_biobank varchar(64),
+	id_urut text,
+	project_kode varchar(255)
+);

@@ -9,7 +9,7 @@ import pandas as pd
 
 AWS_CONN_ID = "aws"
 SIMBIOX_CONN_ID = "simbiox-prod"
-TABLE_LIST = ["tbl_transfer", "tbl_transfer_formulir", "tbl_log_visit_biospc"]
+TABLE_LIST = ["tbl_transfer", "tbl_transfer_formulir", "tbl_log_visit_biospc", "tbl_center_of_patient", "tbl_data_project"]
 API_TEMPLATE = "index.php/api/Table/get"
 OBJECT_PATH_PREFIX = "simbiox"
 
@@ -101,4 +101,4 @@ for table in TABLE_LIST:
         provide_context=True
     )
 
-    fetch_and_dump_task >> silver_transform_to_db_task
+    fetch_and_dump_task >> silver_transform_to_db_task # type: ignore
