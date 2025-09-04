@@ -12,6 +12,38 @@ import re
 import ast
 
 
+def transform_diseases_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    temp_df = pd.DataFrame()
+
+    for _, row in df.iterrows():
+        dis_df = pd.DataFrame([json.loads(row["diseases"].replace("'", '"'))])
+        hub_df = pd.DataFrame([json.loads(row["hub"].replace("'", '"'))])
+        temp_df = pd.concat(
+            [temp_df, pd.concat([dis_df, hub_df], axis=1)], axis=0)
+        
+    df = temp_df.drop_duplicates()
+
+    print(df.head())
+    print(df.columns)
+
+    df = df.astype(str)
+    df = df.fillna('')
+    return df
+
+
+def transform_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    # Remove duplicates
+    df = df.drop_duplicates()
+
+    print(df.head())
+    print(df.columns)
+
+    # Need to fillna so that the mysql connector can insert the data.
+    df = df.astype(str)
+    df = df.fillna('')
+    return df
+
+
 def transform_data_sharing_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     # Remove duplicates
     df = df.drop_duplicates()
@@ -109,7 +141,8 @@ def transform_ethical_clearance_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
     df = df.drop_duplicates()
     df = df.astype(str)
     df = df.fillna('')
-    df.rename(columns={"created_at": "creation_date","updated_at": "updation_date"}, inplace=True)
+    df.rename(columns={"created_at": "creation_date",
+              "updated_at": "updation_date"}, inplace=True)
     df["created_at"] = ts
     df["updated_at"] = ts
     return df
