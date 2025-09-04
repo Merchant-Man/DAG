@@ -1278,3 +1278,24 @@ CREATE TABLE simbiox_data_project (
 	id_urut text,
 	project_kode varchar(255)
 );
+
+CREATE TABLE phenovar_group(
+    id VARCHAR(36) PRIMARY KEY,
+    `name` TEXT,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36),
+    created_at DATETIME,
+    updated_at DATETIME
+);
+
+CREATE TABLE phenovar_master_values(
+    id VARCHAR(36) PRIMARY KEY,
+    category_name TEXT,
+    input_type VARCHAR(32),
+    value_have_poin BOOLEAN,
+    answer JSON,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36),
+    created_at DATETIME,
+    updated_at DATETIME
+);

@@ -14,6 +14,7 @@ from utils.phenovar_transform import (
     transform_ethical_clearance_data,
     transform_form_data,
     transform_diseases_data,
+    transform_master_values_data,
     transform_data #usual transform to remove nan
 )
 from kubernetes.client import models as k8s  # optional (for resources/imagePullSecrets)
@@ -84,6 +85,21 @@ ENDPOINTS = {
         "data_end_point": "api/v1/institutions?perpage=1000",
         "object_path": "phenovar/institutions",
         "query_file": "phenovar_institutions_loader.sql"
+    },
+    "project": {
+        "data_end_point": "api/v1/project?perpage=1000",
+        "object_path": "phenovar/project",
+        "query_file": "phenovar_project_loader.sql"
+    },
+    "group": {
+        "data_end_point": "api/v1/group?perpage=10000&detail=false",
+        "object_path": "phenovar/group",
+        "query_file": "phenovar_group_loader.sql"
+    },
+    "master_values": {
+        "data_end_point": "api/v1/master_values?perpage=100000",
+        "object_path": "phenovar/master_values",
+        "query_file": "phenovar_master_values_loader.sql"
     }
 }
 
@@ -199,6 +215,18 @@ fetch_and_dump_configs = {
     "institutions": {
         "method_request": "GET",
         "extra_kwargs": {}
+    },
+    "project": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "group": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "master_values": {
+        "method_request": "GET",
+        "extra_kwargs": {}
     }
 }
 
@@ -249,7 +277,7 @@ def create_silver_transform_task(key: str, transform_func: Any) -> PythonOperato
 
 # Create fetch_and_dump tasks and the respective silver_transform tasks.
 fetch_task_keys = ["demography", "category", "variable",
-                   "digital_consent", "data_sharing", "ethical_clearance", "section", "form", "hub","diseases","institutions"]
+                   "digital_consent", "data_sharing", "ethical_clearance", "section", "form", "hub", "diseases", "institutions", "project", "group", "master_values"]
 
 tasks_fetch = {}
 tasks_silver = {}
@@ -266,7 +294,10 @@ transform_funcs = {
     "form": transform_form_data,
     "hub": transform_data,
     "diseases": transform_diseases_data,
-    "institutions": transform_data
+    "institutions": transform_data,
+    "project": transform_data,
+    "group": transform_data,
+    "master_values": transform_master_values_data
 }
 
 for key in fetch_task_keys:
@@ -285,3 +316,6 @@ tasks_fetch["form"] >> tasks_silver["form"]  # type: ignore
 tasks_fetch["hub"] >> tasks_silver["hub"]  # type: ignore 
 tasks_fetch["diseases"] >> tasks_silver["diseases"]  # type: ignore 
 tasks_fetch["institutions"] >> tasks_silver["institutions"]  # type: ignore 
+tasks_fetch["project"] >> tasks_silver["project"]  # type: ignore 
+tasks_fetch["group"] >> tasks_silver["group"]  # type: ignore
+tasks_fetch["master_values"] >> tasks_silver["master_values"]  # type: ignore
