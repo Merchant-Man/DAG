@@ -12,7 +12,9 @@ from utils.phenovar_transform import (
     transform_digital_consent_data,
     transform_data_sharing_data,
     transform_ethical_clearance_data,
-    transform_form_data
+    transform_form_data,
+    transform_diseases_data,
+    transform_data #usual transform to remove nan
 )
 from kubernetes.client import models as k8s  # optional (for resources/imagePullSecrets)
 
@@ -67,6 +69,21 @@ ENDPOINTS = {
         "data_end_point": "api/v1/ethical?perpage=100000",
         "object_path": "phenovar/ethical_clearance",  # inferred object path
         "query_file": "phenovar_ethical_clearance_loader.sql"
+    },
+    "hub": {
+        "data_end_point": "api/v1/hub?perpage=1000",
+        "object_path": "phenovar/hub",
+        "query_file": "phenovar_hub_loader.sql"
+    },
+    "diseases": {
+        "data_end_point": "api/v1/diseases?perpage=1000",
+        "object_path": "phenovar/diseases",
+        "query_file": "phenovar_diseases_loader.sql"
+    },
+    "institutions": {
+        "data_end_point": "api/v1/institutions?perpage=1000",
+        "object_path": "phenovar/institutions",
+        "query_file": "phenovar_institutions_loader.sql"
     }
 }
 
@@ -170,6 +187,18 @@ fetch_and_dump_configs = {
     "ethical_clearance": {
         "method_request": "GET",
         "extra_kwargs": {}
+    },
+    "hub": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "diseases": {
+        "method_request": "GET",
+        "extra_kwargs": {}
+    },
+    "institutions": {
+        "method_request": "GET",
+        "extra_kwargs": {}
     }
 }
 
@@ -220,7 +249,7 @@ def create_silver_transform_task(key: str, transform_func: Any) -> PythonOperato
 
 # Create fetch_and_dump tasks and the respective silver_transform tasks.
 fetch_task_keys = ["demography", "category", "variable",
-                   "digital_consent", "data_sharing", "ethical_clearance", "section", "form"]
+                   "digital_consent", "data_sharing", "ethical_clearance", "section", "form", "hub","diseases","institutions"]
 
 tasks_fetch = {}
 tasks_silver = {}
@@ -234,7 +263,10 @@ transform_funcs = {
     "data_sharing": transform_data_sharing_data,
     "ethical_clearance": transform_ethical_clearance_data,
     "section": None,
-    "form": transform_form_data
+    "form": transform_form_data,
+    "hub": transform_data,
+    "diseases": transform_diseases_data,
+    "institutions": transform_data
 }
 
 for key in fetch_task_keys:
@@ -250,3 +282,6 @@ tasks_fetch["data_sharing"] >> tasks_silver["data_sharing"]  # type: ignore
 tasks_fetch["ethical_clearance"] >> tasks_silver["ethical_clearance"] # type: ignore
 tasks_fetch["section"] >> tasks_silver["section"]  # type: ignore
 tasks_fetch["form"] >> tasks_silver["form"]  # type: ignore 
+tasks_fetch["hub"] >> tasks_silver["hub"]  # type: ignore 
+tasks_fetch["diseases"] >> tasks_silver["diseases"]  # type: ignore 
+tasks_fetch["institutions"] >> tasks_silver["institutions"]  # type: ignore 
