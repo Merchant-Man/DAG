@@ -10,6 +10,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.types import VARCHAR, DATETIME
 import re
 import ast
+import sys
+sys.path.append(".")
+from .utils import to_json_text
+
+def transform_master_values_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:
+    df.drop_duplicates(inplace=True)
+
+    df['answer'] = df['answer'].apply(to_json_text)
+
+    print(df.head())
+    print(df.columns)
+    print(df["answer"])
+
+    df = df.astype(str)
+    df = df.fillna('')
+    return df
 
 
 def transform_diseases_data(df: pd.DataFrame, ts: str) -> pd.DataFrame:

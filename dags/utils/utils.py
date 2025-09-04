@@ -11,6 +11,7 @@ import re
 from airflow.hooks.base import BaseHook
 import logging
 from pandas.errors import EmptyDataError 
+import ast
 
 default_retry_args = dict(
     wait=tenacity.wait_exponential(),
@@ -489,3 +490,27 @@ def silver_transform_to_db(aws_conn_id: str, bucket_name: str, object_path: str,
             raise ValueError(e)
 
     conn.close()
+
+def to_json_text(v):
+    # Treat NaN/None as null (or '[]' if you prefer an empty array)
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return 'null'
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False, separators=(',', ':'))
+    if isinstance(v, str):
+        s = v.strip()
+        # If it already looks like JSON, validate it
+        try:
+            json.loads(s)
+            return s
+        except json.JSONDecodeError:
+            pass
+        # Try converting from Python repr to JSON
+        try:
+            obj = ast.literal_eval(s)  # safe-ish for dict/list/str/num
+            return json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
+        except Exception:
+            # Fallback: store as a JSON string (quoted text)
+            return json.dumps(s, ensure_ascii=False)
+    # Numbers/bools/etc.
+    return json.dumps(v, ensure_ascii=False)
