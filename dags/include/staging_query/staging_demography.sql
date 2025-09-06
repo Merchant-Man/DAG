@@ -825,7 +825,13 @@ INSERT INTO
 					1400 target
 			)
 		SELECT
-			*
+			t1.*,
+			CASE 
+				# This is important since we do not have 38 provinces in superset
+				WHEN t2.iso_name = "ID-PD" THEN "ID-PB"
+				WHEN t2.iso_name IN ("ID-PS", "ID-PT", "ID-PE") THEN "ID-PA"
+				ELSE t2.iso_name
+			END province_iso_code 
 		FROM
 			(
 				SELECT DISTINCT
@@ -945,8 +951,10 @@ INSERT INTO
 					LEFT JOIN agg_biosample t4 ON t1.id_subject = t4.id_subject
 					LEFT JOIN sequncing_and_binf_status t5 ON t1.id_subject = t5.id_subject
 					LEFT JOIN target t6 ON t2.hospital_name = t6.hospital_name
-			) t
+			) t1
+		LEFT JOIN provinsi t2
+		ON t1.province = UPPER(t2.`name`)
 		WHERE
-			t.rn = 1
+			t1.rn = 1
 	);
 COMMIT;
