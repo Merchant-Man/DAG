@@ -26,6 +26,7 @@ dag = DAG(
     default_args=default_args,
     description='Extract specific columns from RDS and load to DynamoDB for satudna',
     schedule_interval=timedelta(days=1),
+    catchup=False
 )
 
 def fetch_from_rds(**context):
@@ -104,4 +105,4 @@ load_dynamo_data = PythonOperator(
     dag=dag,
 )
 
-fetch_rds_data >> load_dynamo_data
+fetch_rds_data >> load_dynamo_data # type: ignore

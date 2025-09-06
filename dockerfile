@@ -1,4 +1,4 @@
-FROM apache/airflow:2.8.4
+FROM apache/airflow:2.10.5
 
 # Adding installation for `apt` pacakges. Please uncomment the following three lines:
 USER root
