@@ -2,9 +2,9 @@ import pandas as pd
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from sqlalchemy import create_engine, Table, MetaData
+from sqlalchemy import create_engine
 from sqlalchemy.dialects.mysql import insert
 from datetime import datetime, timedelta
 import io
@@ -34,6 +34,7 @@ dag = DAG(
     default_args=default_args,
     description='ETL pipeline to merge CSV files from S3 to RDS',
     schedule_interval=timedelta(days=1),
+    catchup=False
 )
 
 
@@ -43,26 +44,29 @@ def fetch_data_from_s3(**kwargs):
     try:
         csv_obj = s3.get_key(key=key, bucket_name=S3_DWH_SILVER)
         df = pd.read_csv(io.BytesIO(csv_obj.get()['Body'].read()))
-        
+
         kwargs['ti'].xcom_push(key=key, value=df.to_dict(orient='records'))
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
+
 
 def upload_to_rds(**kwargs):
     key = kwargs['key']
     task = kwargs['task']
 
     engine = create_engine(RDS_SECRET)
-    df_records = kwargs['ti'].xcom_pull(task_ids=f'fetch_data_task_{task}', key=key)
-    
+    df_records = kwargs['ti'].xcom_pull(
+        task_ids=f'fetch_data_task_{task}', key=key)
+
     df = pd.DataFrame(df_records)
     table_name = key.replace('/', '_').replace('.csv', '')
-    
+
     if not df.empty:
         with engine.connect() as conn:
             df.to_sql(table_name, con=conn, if_exists='replace', index=False)
             print(f"Table {table_name} replaced.")
+
 
 for key in keys:
     task = key.replace('/', '_').replace('.csv', '')
@@ -83,4 +87,4 @@ for key in keys:
         dag=dag,
     )
 
-    fetch_data_task >> upload_to_rds_task
+    fetch_data_task >> upload_to_rds_task # type: ignore
