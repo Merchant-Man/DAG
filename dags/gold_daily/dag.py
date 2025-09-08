@@ -27,6 +27,7 @@ SKI_FIX_ID_REPO = "staging_fix_ski_id_repo.sql"
 SIMBIOX_TRANSFER_STAG = "staging_simbiox_transfer.sql"
 SIMBIOX_TRANSFER_REPORT = "simbiox_transfer.sql"
 SHEETS_SEQUENCING_REPORT = "sheet_sequencing.sql"
+PGX_TOP_GENES_REPORT = "pgx_top_genes_distribution.sql"
 
 default_args = {
     'owner': 'bgsi-data',
@@ -74,6 +75,8 @@ simbiox_transfer_report_query = load_query(
     "gold_query", SIMBIOX_TRANSFER_REPORT)
 sheets_sequencing_query = load_query(
     "gold_query", SHEETS_SEQUENCING_REPORT)
+pgx_top_genes_query = load_query(
+    "gold_query", PGX_TOP_GENES_REPORT)
 
 with dag:
     # Create sensors with similar parameters using a loop.
@@ -202,13 +205,19 @@ with dag:
             sql=pgx_report_query
         )
 
+        gold_pgx_top_genes_task = SQLExecuteQueryOperator(
+            task_id="pgx_top_genes",
+            conn_id=conn_id,
+            sql=pgx_top_genes_query
+        )
+
         gold_sheet_sequencing_task = SQLExecuteQueryOperator(
             task_id="sheet_sequencing",
             conn_id=conn_id,
             sql=sheets_sequencing_query
         )
 
-        staging_illumina_primary_task
+        staging_illumina_primary_task # type: ignore
 
         staging_ski_fix_id_repo_task >> [
             staging_simbiox_task, staging_simbiox_transfer_task, gold_sheet_sequencing_task]  # type: ignore
@@ -222,6 +231,7 @@ with dag:
 
         [gold_qc_task, sensors["pgx_report"], staging_demography_task
          ] >> gold_pgx_report_task  # type: ignore
+        [staging_demography_task, sensors["pgx_report"]] >> gold_pgx_top_genes_task  # type: ignore
         [gold_pgx_report_task, gold_qc_task] >> onq_lims_analysis_report_task  # type: ignore
         staging_simbiox_transfer_task >> gold_simbiox_transfer_task  # type: ignore
         gold_simbiox_transfer_task >> staging_biosample_latest_transfer_task # type: ignore
