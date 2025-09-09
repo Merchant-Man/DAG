@@ -15,6 +15,7 @@
 				- 25-08-2025: Renata Triwijaya - Adding is_excluded column from staging_demography.
 				- 01-09-2025: Renata Triwijaya - Fixing batch_sex_category to factor in total No Data alongside mismatches.
 				- 08-09-2025: Renata Triwijaya - Adjust ont_yield_status threshold logic to split <90GB into 60–90GB (topup) and <60GB (reseq).
+				- 09-09-2025: Gianfranco - Adjust coverage-category to seperate coverage value 0 as fail, and coverage null and no data
 ---------------------------------------------------------------------------------------------------------------------------------
 */
 -- Your SQL code goes here 
