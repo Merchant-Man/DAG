@@ -200,10 +200,9 @@ WITH
 			CASE
 				WHEN coverage >= 30
 				AND at_least_10x >= 85 THEN 'Pass'
-				# WHEN (coverage IS NULL OR coverage = 0)
 				WHEN coverage IS NULL AND (at_least_10x IS NULL OR at_least_10x = 0) THEN 'No Data'
-    				WHEN coverage = 0 AND (at_least_10x IS NULL OR at_least_10x = 0) THEN 'Fail'
-				ELSE 'Fail'
+    			WHEN (cram_size < 1e9 AND cram IS NOT NULL AND cram <> 'nan' AND vcf IS NOT NULL AND vcf <> 'nan' AND coverage = 0) THEN 'Fail'
+				ELSE 'No Data'
 			END AS coverage_category,
 
 			CASE
